@@ -8,7 +8,7 @@ Files:
 - volumes.py: python script that has functions to read in binary float volumes (.fvols)
 - requirements.txt: use a venv and pip install -r to install these. Should work with code (last checked April 12, 2024)
 
-Usage: python3 dv-train-nonbinary.py <SIM> <L> <DEPTH> <FILTERS> <UNIFORM_FLAG> <BATCHNORM> <DROPOUT> <LOSS>, 
+Usage: python3 dv-train-nonbinary.py SIM L DEPTH FILTERS UNIFORM_FLAG BATCHNORM DROPOUT LOSS, 
         where GRID is the number of grid cells in the box, L is the interparticle separation in Mpc/h,
         DEPTH is the depth of the U-Net, FILTERS is the number of filters in the first layer,
         and UNIFORM_FLAG is 1 if you want to use identical masses for all subhaloes, 0 if not.
