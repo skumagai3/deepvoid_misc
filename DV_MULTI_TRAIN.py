@@ -26,10 +26,16 @@ tf.random.set_seed(12)
 class_labels = ['void','wall','fila','halo']
 N_CLASSES = 4
 ### NOTE CHANGE THIS TO WHEREVER THE DATA IS STORED NOTE ###
-path_to_data = '/ifs/groups/vogeleyGrp/data/TNG/' # path to TNG
-path_to_BOL = '/ifs/groups/vogeleyGrp/data/Bolshoi/' # path to Bolshoi
-FIG_DIR_PATH = '/ifs/groups/vogeleyGrp/nets/figs/' # path to figs save dir
-FILE_OUT = '/ifs/groups/vogeleyGrp/nets/models/' # path to models save dir
+# Picotte paths:
+#path_to_data = '/ifs/groups/vogeleyGrp/data/TNG/' # path to TNG
+#path_to_BOL = '/ifs/groups/vogeleyGrp/data/Bolshoi/' # path to Bolshoi
+#FIG_DIR_PATH = '/ifs/groups/vogeleyGrp/nets/figs/' # path to figs save dir
+#FILE_OUT = '/ifs/groups/vogeleyGrp/nets/models/' # path to models save dir
+# Saturn paths:
+path_to_data = '/Users/samkumagai/Desktop/deepvoid/simulations/IllustrisTNG/' # path to TNG
+path_to_BOL = '/Users/samkumagai/Desktop/deepvoid/simulations/Bolshoi/' # path to Bolshoi
+FIG_DIR_PATH = '/Users/samkumagai/Desktop/deepvoid/figs/' # path to figs save dir
+FILE_OUT = '/Users/samkumagai/Desktop/deepvoid/model_weights/' # path to models save dir
 #===============================================================
 # arg parsing:
 #===============================================================
