@@ -25,7 +25,8 @@ tf.random.set_seed(12)
 #===============================================================
 class_labels = ['void','wall','fila','halo']
 N_CLASSES = 4
-path_to_data = '/ifs/groups/vogeleyGrp/data/TNG/'
+# NOTE CHANGE THIS TO WHEREVER THE DATA IS STORED NOTE:
+path_to_data = '/ifs/groups/vogeleyGrp/data/TNG/' 
 path_to_BOL = '/ifs/groups/vogeleyGrp/data/Bolshoi/'
 # Path to models
 FILE_OUT = '/ifs/groups/vogeleyGrp/nets/models/'
@@ -221,7 +222,7 @@ batch_size = 8; print('batch_size: ',batch_size)
 #===============================================================
 print('>>> Training')
 # set up callbacks
-metrics = nets.ComputeMetrics((X_test,Y_test),avg='macro')
+metrics = nets.ComputeMetrics((X_test,Y_test), N_epochs = 10, avg='macro')
 model_chkpt = nets.ModelCheckpoint(FILE_OUT + MODEL_NAME, monitor='val_loss',
                                    save_best_only=True,verbose=1)
 log_dir = "logs/fit/" + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") 
@@ -230,8 +231,9 @@ reduce_lr = nets.ReduceLROnPlateau(monitor='val_loss',factor=0.25,patience=lr_pa
                                    verbose=1,min_lr=1e-6)
 early_stop = nets.EarlyStopping(monitor='val_loss',patience=patience,restore_best_weights=True)
 callbacks = [metrics,model_chkpt,reduce_lr,tb_call,early_stop]
-history = model.fit(X_train, Y_train, batch_size = batch_size, epochs = epochs, verbose = 2,
-                    shuffle = True, callbacks=callbacks)
+history = model.fit(X_train, Y_train, batch_size = batch_size, epochs = epochs, 
+                    validation_data=(X_test,Y_test), verbose = 2, shuffle = True,
+                    callbacks=callbacks)
 #===============================================================
 # Check if figs directory exists, if not, create it:
 #===============================================================
