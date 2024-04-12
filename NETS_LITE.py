@@ -18,11 +18,12 @@ import numpy as np
 from scipy import ndimage as ndi
 from keras.models import Model, load_model
 from tensorflow.keras.optimizers import Adam
-from tensorflow.keras.utils.layer_utils import count_params
+#from tensorflow.keras.utils.layer_utils import count_params # doesnt work?
+from tensorflow.python.keras.utils import layer_utils
 from keras.utils import to_categorical
 from keras.layers import Input, Conv3D, MaxPooling3D, Conv3DTranspose, UpSampling3D, Concatenate, BatchNormalization, Activation, Dropout
 from keras import backend as K
-from keras.metrics import CategoricalCrossentropy
+from keras.losses import CategoricalCrossentropy
 from keras.callbacks import Callback, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, TensorBoard
 
 from sklearn.metrics import precision_recall_fscore_support, balanced_accuracy_score, roc_auc_score, matthews_corrcoef
@@ -334,8 +335,8 @@ def unet_3d(input_shape, num_classes, initial_filters=32, depth=4, activation='r
   
   model = Model(inputs=inputs, outputs=outputs, name=model_name)
   # calculate number of parameters:
-  trainable_ps = count_params(model.trainable_weights)
-  nontrainable_ps = count_params(model.non_trainable_weights)
+  trainable_ps = layer_utils.count_params(model.trainable_weights)
+  nontrainable_ps = layer_utils.count_params(model.non_trainable_weights)
   print(f'Total params: {trainable_ps + nontrainable_ps}')
   print(f'Trainable params: {trainable_ps}')
   print(f'Non-trainable params: {nontrainable_ps}')

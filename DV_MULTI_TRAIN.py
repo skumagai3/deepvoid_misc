@@ -215,20 +215,30 @@ elif LOSS == 'DICE_VOID':
 #===============================================================
 # Multiprocessing
 #===============================================================
-strategy = tf.distribute.MirroredStrategy()
-print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
-with strategy.scope():
-    model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
-                         batch_normalization=BATCHNORM,
-                         dropout_rate=DROPOUT,
-                         model_name=MODEL_NAME)
-    model.compile(optimizer=nets.Adam(learning_rate=LR),
-                                      loss=loss,
-                                      metrics=['accuracy'])
+MULTIPROCESSING = False ### NOTE set to True for distributed training on HPC GPUs
+if MULTIPROCESSING:
+  strategy = tf.distribute.MirroredStrategy()
+  print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
+  with strategy.scope():
+      model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
+                          batch_normalization=BATCHNORM,
+                          dropout_rate=DROPOUT,
+                          model_name=MODEL_NAME)
+      model.compile(optimizer=nets.Adam(learning_rate=LR),
+                                        loss=loss,
+                                        metrics=['accuracy'])
+else:
+  model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
+                        batch_normalization=BATCHNORM,
+                        dropout_rate=DROPOUT,
+                        model_name=MODEL_NAME)
+  model.compile(optimizer=nets.Adam(learning_rate=LR),
+                                        loss=loss,
+                                        metrics=['accuracy'])
 model.summary()
 # get trainable parameters:
-trainable_ps = nets.count_params(model.trainable_weights)
-nontrainable_ps = nets.count_params(model.non_trainable_weights)
+trainable_ps = nets.layer_utils.count_params(model.trainable_weights)
+nontrainable_ps = nets.layer_utils.count_params(model.non_trainable_weights)
 hp_dict['trainable_params'] = trainable_ps
 hp_dict['nontrainable_params'] = nontrainable_ps
 hp_dict['total_params'] = trainable_ps + nontrainable_ps
