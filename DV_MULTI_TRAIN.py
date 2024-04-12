@@ -21,15 +21,15 @@ nets.K.set_image_data_format('channels_last')
 np.random.seed(12)
 tf.random.set_seed(12)
 #===============================================================
-# Set parameters
+# Set parameters and paths
 #===============================================================
 class_labels = ['void','wall','fila','halo']
 N_CLASSES = 4
-# NOTE CHANGE THIS TO WHEREVER THE DATA IS STORED NOTE:
-path_to_data = '/ifs/groups/vogeleyGrp/data/TNG/' 
-path_to_BOL = '/ifs/groups/vogeleyGrp/data/Bolshoi/'
-# Path to models
-FILE_OUT = '/ifs/groups/vogeleyGrp/nets/models/'
+### NOTE CHANGE THIS TO WHEREVER THE DATA IS STORED NOTE ###
+path_to_data = '/ifs/groups/vogeleyGrp/data/TNG/' # path to TNG
+path_to_BOL = '/ifs/groups/vogeleyGrp/data/Bolshoi/' # path to Bolshoi
+FIG_DIR_PATH = '/ifs/groups/vogeleyGrp/nets/figs/' # path to figs save dir
+FILE_OUT = '/ifs/groups/vogeleyGrp/nets/models/' # path to models save dir
 #===============================================================
 # arg parsing:
 #===============================================================
@@ -64,10 +64,24 @@ print('DROPOUT = ',DROPOUT)
 print('LOSS = ',LOSS)
 print('#############################################')
 #===============================================================
-# Set filenames based on simulation, L, and UNIFORM_FLAG
+# Set filenames based on simulation, L, and UNIFORM_FLAG.
+# FILE_DEN is the density field, FILE_MASK is the mask field.
+# FILENAMES!!!
+### TNG ### 
+# full DM density [L=0.33 Mpc/h]: DM_DEN_snap99_Nm=512.fvol
+# subhalo density: subs1_mass_Nm512_L{L}_d_None_smooth.fvol
+# uniform subhalo density: subs1_mass_Nm512_L{L}_d_None_smooth_uniform.fvol
+# mask: TNG300-3-Dark-mask-Nm=512-th=0.65-sig=2.4.fvol
+# TNG Lambdas: 1, 3, 5, 7, 10, 12, 15
+
+### Bolshoi ###
+# full DM density [L=0.122 Mpc/h]: Bolshoi_halo_CIC_640_L=0.122.fvol
+# subhalo density: Bolshoi_halo_CIC_640_L={L}.0.fvol
+# mask: Bolshoi_bolshoi.delta416_mask_Nm=640_sig=0.916_thresh=0.65.fvol
+# Bolshoi Lambdas: 2, 3, 5, 7, 10, 15
 #===============================================================
 th = 0.65 # eigenvalue threshold NOTE SET THRESHOLD HERE
-### TNG ###
+### TNG ### 
 if SIM == 'TNG':
   GRID = 512 
   SUBGRID = 128
@@ -88,7 +102,9 @@ if SIM == 'TNG':
   ### Mask field:
   sig = 2.4 # PHI smooothing scale in code units NOTE CHANGES WITH NM
   FILE_MASK = path_to_data + f'TNG300-3-Dark-mask-Nm={GRID}-th={th}-sig={sig}.fvol'
-  FILE_FIG = '/ifs/groups/vogeleyGrp/nets/figs/TNG_multi/'
+  FILE_FIG = FIG_DIR_PATH + 'TNG_multiclass/'
+  if not os.path.exists(FILE_FIG):
+    os.makedirs(FILE_FIG)
 ### Bolshoi ###
 elif SIM == 'BOL':
   GRID = 640
@@ -96,13 +112,15 @@ elif SIM == 'BOL':
   OFF = 64
   UNIFORM_FLAG = False # don't have this for Bolshoi, so set to False
   if L == 0.122:
-    FILE_DEN = path_to_BOL + f'deltas/bolshoi.delta416.Nm={GRID}.fvol'
+    FILE_DEN = path_to_BOL + f'Bolshoi_halo_CIC_{GRID}_L=0.122.fvol'
   else:
     FILE_DEN = path_to_BOL + f'Bolshoi_halo_CIC_{GRID}_L={L}.0.fvol'
   ### Mask field:
   sig = 0.916 # PHI smooothing scale in code units NOTE CHANGES WITH NM
   FILE_MASK = path_to_BOL + f'Bolshoi_bolshoi.delta416_mask_Nm={GRID}_sig={sig}_thresh={th}.fvol'
-  FILE_FIG = '/ifs/groups/vogeleyGrp/nets/figs/Bolshoi/'
+  FILE_FIG = FIG_DIR_PATH + 'Bolshoi_multiclass/'
+  if not os.path.exists(FILE_FIG):
+    os.makedirs(FILE_FIG)
 # if L = 0.33 and SIM = TNG, error out, same for L = 0.122 and SIM = BOL:
 if L == 0.33 and SIM == 'BOL':
   print('ERROR: L = 0.33 and SIM = BOL. L for full DM Bolshoi is 0.122.')
