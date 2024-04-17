@@ -177,7 +177,24 @@ if LOSS == 'CCE':
 elif LOSS == 'FOCAL_CCE':
   MODEL_NAME += '_FOCAL'
 DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
-
+#===============================================================
+# Save training and test arrays for later preds:
+#===============================================================
+if SIM == 'TNG':
+  FILE_X_TEST = path_to_data + MODEL_NAME + '_X_test.npy'
+  FILE_Y_TEST = path_to_data + MODEL_NAME + '_Y_test.npy'
+if SIM == 'BOL':
+  FILE_X_TEST = path_to_BOL + MODEL_NAME + '_X_test.npy'
+  FILE_Y_TEST = path_to_BOL + MODEL_NAME + '_Y_test.npy'
+SAVE_VAL_DATA = True # should only need to do once. make sure seed is set!
+if SAVE_VAL_DATA:
+  np.save(FILE_X_TEST,X_test,allow_pickle=True)
+  np.save(FILE_Y_TEST,Y_test,allow_pickle=True)
+  print(f'>>> Saved X_test to {FILE_X_TEST}')
+  print(f'>>> Saved Y_test to {FILE_Y_TEST}')
+#===============================================================
+# Save hyperparameters to txt file
+#===============================================================
 hp_dict = {}
 hp_dict['notes'] = f'trained on multi-class mask, threshold={th}, sigma={sig}, L={L}, Nm={GRID}'
 
