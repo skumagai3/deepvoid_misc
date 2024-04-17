@@ -41,7 +41,7 @@ FILE_OUT = '/Users/samkumagai/Desktop/deepvoid/model_weights/' # path to models 
 #===============================================================
 if len(sys.argv) != 9:
   print('''Usage: python3 dv-train-nonbinary.py <SIM> <L> <DEPTH> <FILTERS> <UNIFORM_FLAG> <BATCHNORM> <DROPOUT> <LOSS>, 
-        where GRID is the number of grid cells in the box, L is the interparticle separation in Mpc/h,
+        where SIM is BOL or TNG, L is the interparticle separation in Mpc/h,
         DEPTH is the depth of the U-Net, FILTERS is the number of filters in the first layer,
         and UNIFORM_FLAG is 1 if you want to use identical masses for all subhaloes, 0 if not.
         BATCHNORM is 1 if you want to use batch normalization, 0 if not.
@@ -232,20 +232,30 @@ elif LOSS == 'DICE_VOID':
 #===============================================================
 # Multiprocessing
 #===============================================================
-strategy = tf.distribute.MirroredStrategy()
-print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
-with strategy.scope():
-    model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
-                         batch_normalization=BATCHNORM,
-                         dropout_rate=DROPOUT,
-                         model_name=MODEL_NAME)
-    model.compile(optimizer=nets.Adam(learning_rate=LR),
-                                      loss=loss,
-                                      metrics=['accuracy'])
+MULTIPROCESSING = False ### NOTE set to True for distributed training on HPC GPUs
+if MULTIPROCESSING:
+  strategy = tf.distribute.MirroredStrategy()
+  print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
+  with strategy.scope():
+      model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
+                          batch_normalization=BATCHNORM,
+                          dropout_rate=DROPOUT,
+                          model_name=MODEL_NAME)
+      model.compile(optimizer=nets.Adam(learning_rate=LR),
+                                        loss=loss,
+                                        metrics=['accuracy'])
+else:
+  model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
+                        batch_normalization=BATCHNORM,
+                        dropout_rate=DROPOUT,
+                        model_name=MODEL_NAME)
+  model.compile(optimizer=nets.Adam(learning_rate=LR),
+                                        loss=loss,
+                                        metrics=['accuracy'])
 model.summary()
 # get trainable parameters:
-trainable_ps = nets.count_params(model.trainable_weights)
-nontrainable_ps = nets.count_params(model.non_trainable_weights)
+trainable_ps = nets.layer_utils.count_params(model.trainable_weights)
+nontrainable_ps = nets.layer_utils.count_params(model.non_trainable_weights)
 hp_dict['trainable_params'] = trainable_ps
 hp_dict['nontrainable_params'] = nontrainable_ps
 hp_dict['total_params'] = trainable_ps + nontrainable_ps
