@@ -16,4 +16,4 @@ Usage: python3 dv-train-nonbinary.py SIM L DEPTH FILTERS UNIFORM_FLAG BATCHNORM 
         DROPOUT is the dropout rate, and LOSS is the loss function to use.
         LOSS is one of 'CCE', 'FOCAL_CCE', 'DICE_AVG', or 'DICE_VOID'
 
-(NOTE: only CCE and FOCAL_CCE are implemented.
+(NOTE: only CCE and FOCAL_CCE are implemented.)
