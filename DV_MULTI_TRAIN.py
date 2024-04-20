@@ -18,8 +18,9 @@ nets.K.set_image_data_format('channels_last')
 #===============================================================
 # Set random seed
 #===============================================================
-np.random.seed(12)
-tf.random.set_seed(12)
+seed = 12
+np.random.seed(seed)
+tf.random.set_seed(seed)
 #===============================================================
 # Set parameters and paths
 #===============================================================
@@ -32,10 +33,15 @@ N_CLASSES = 4
 #FIG_DIR_PATH = '/ifs/groups/vogeleyGrp/nets/figs/' # path to figs save dir
 #FILE_OUT = '/ifs/groups/vogeleyGrp/nets/models/' # path to models save dir
 # Saturn paths:
-path_to_data = '/Users/samkumagai/Desktop/deepvoid/simulations/IllustrisTNG/' # path to TNG
-path_to_BOL = '/Users/samkumagai/Desktop/deepvoid/simulations/Bolshoi/' # path to Bolshoi
-FIG_DIR_PATH = '/Users/samkumagai/Desktop/deepvoid/figs/' # path to figs save dir
-FILE_OUT = '/Users/samkumagai/Desktop/deepvoid/model_weights/' # path to models save dir
+#path_to_data = '/Users/samkumagai/Desktop/deepvoid/simulations/IllustrisTNG/' # path to TNG
+#path_to_BOL = '/Users/samkumagai/Desktop/deepvoid/simulations/Bolshoi/' # path to Bolshoi
+#FIG_DIR_PATH = '/Users/samkumagai/Desktop/deepvoid/figs/' # path to figs save dir
+#FILE_OUT = '/Users/samkumagai/Desktop/deepvoid/model_weights/' # path to models save dir
+# Banquo paths:
+path_to_TNG = '/Users/samkumagai/Desktop/Drexel/DeepVoid/Data/TNG300-1/' # path to TNG
+path_to_BOL = '/Users/samkumagai/Desktop/Drexel/DeepVoid/Data/Bolshoi/' # path to Bolshoi
+FIG_DIR_PATH = '/Users/samkumagai/Desktop/Drexel/DeepVoid/figs/P1_FIGS/' # path to figs save dir
+FILE_OUT = '/Users/samkumagai/Desktop/Drexel/DeepVoid/models/' # path to models save dir
 #===============================================================
 # arg parsing:
 #===============================================================
@@ -60,6 +66,7 @@ UNIFORM_FLAG = bool(int(sys.argv[5]))
 BATCHNORM = bool(int(sys.argv[6]))
 DROPOUT = float(sys.argv[7])
 LOSS = str(sys.argv[8])
+print('#############################################')
 print('>>> Parameters:')
 print('Simulation = ', SIM); 
 print('L = ',L); 
@@ -94,11 +101,11 @@ if SIM == 'TNG':
   OFF = 64
   ### TNG Density field:
   # FULL (L=0.33 Mpc/h)
-  FILE_DEN_FULL = path_to_data + f'DM_DEN_snap99_Nm={GRID}.fvol'
+  FILE_DEN_FULL = path_to_TNG + f'DM_DEN_snap99_Nm={GRID}.fvol'
   if UNIFORM_FLAG == True:
-    FILE_DEN_SUBS = path_to_data + f'subs1_mass_Nm{GRID}_L{L}_d_None_smooth_uniform.fvol'
+    FILE_DEN_SUBS = path_to_TNG + f'subs1_mass_Nm{GRID}_L{L}_d_None_smooth_uniform.fvol'
   if UNIFORM_FLAG == False:
-    FILE_DEN_SUBS = path_to_data + f'subs1_mass_Nm{GRID}_L{L}_d_None_smooth.fvol'
+    FILE_DEN_SUBS = path_to_TNG + f'subs1_mass_Nm{GRID}_L{L}_d_None_smooth.fvol'
   if L <= 0.33:
     FILE_DEN = FILE_DEN_FULL
     L = 0.33 # full DM interparticle separation for TNG300-3-Dark
@@ -107,7 +114,7 @@ if SIM == 'TNG':
     FILE_DEN = FILE_DEN_SUBS
   ### Mask field:
   sig = 2.4 # PHI smooothing scale in code units NOTE CHANGES WITH NM
-  FILE_MASK = path_to_data + f'TNG300-3-Dark-mask-Nm={GRID}-th={th}-sig={sig}.fvol'
+  FILE_MASK = path_to_TNG + f'TNG300-3-Dark-mask-Nm={GRID}-th={th}-sig={sig}.fvol'
   FILE_FIG = FIG_DIR_PATH + 'TNG_multiclass/'
   if not os.path.exists(FILE_FIG):
     os.makedirs(FILE_FIG)
@@ -149,8 +156,11 @@ print('Labels shape: ',labels.shape)
 # Y_train is the corresponding mask subcubes
 # X_test is the density subcubes used to validate the model
 # Y_test is the corresponding mask subcubes
-X_train, X_test, Y_train, Y_test = nets.train_test_split(features,labels,test_size=0.2)
-print('>>> Split into training and validation sets')
+test_size = 0.2
+X_train, X_test, Y_train, Y_test = nets.train_test_split(features,labels,
+                                                         test_size=test_size,
+                                                         random_state=seed)
+print(f'>>> Split into training ({(1-test_size)*100}%) and validation ({test_size*100}) sets')
 print('X_train shape: ',X_train.shape); print('Y_train shape: ',Y_train.shape)
 print('X_test shape: ',X_test.shape); print('Y_test shape: ',Y_test.shape)
 print('>>> Converting to one-hot encoding')
@@ -176,17 +186,18 @@ if LOSS == 'CCE':
   pass
 elif LOSS == 'FOCAL_CCE':
   MODEL_NAME += '_FOCAL'
+### NOTE: add support for more loss functions here NOTE ###
 DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 #===============================================================
 # Save training and test arrays for later preds:
 #===============================================================
 if SIM == 'TNG':
-  FILE_X_TEST = path_to_data + MODEL_NAME + '_X_test.npy'
-  FILE_Y_TEST = path_to_data + MODEL_NAME + '_Y_test.npy'
+  FILE_X_TEST = path_to_TNG + MODEL_NAME + '_X_test.npy'
+  FILE_Y_TEST = path_to_TNG + MODEL_NAME + '_Y_test.npy'
 if SIM == 'BOL':
   FILE_X_TEST = path_to_BOL + MODEL_NAME + '_X_test.npy'
   FILE_Y_TEST = path_to_BOL + MODEL_NAME + '_Y_test.npy'
-SAVE_VAL_DATA = True # should only need to do once. make sure seed is set!
+SAVE_VAL_DATA = False # should only need to do once. make sure seed is set!
 if SAVE_VAL_DATA:
   np.save(FILE_X_TEST,X_test,allow_pickle=True)
   np.save(FILE_Y_TEST,Y_test,allow_pickle=True)
@@ -237,13 +248,13 @@ if MULTIPROCESSING:
   strategy = tf.distribute.MirroredStrategy()
   print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
   with strategy.scope():
-      model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
-                          batch_normalization=BATCHNORM,
-                          dropout_rate=DROPOUT,
-                          model_name=MODEL_NAME)
-      model.compile(optimizer=nets.Adam(learning_rate=LR),
-                                        loss=loss,
-                                        metrics=['accuracy'])
+    model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
+                        batch_normalization=BATCHNORM,
+                        dropout_rate=DROPOUT,
+                        model_name=MODEL_NAME)
+    model.compile(optimizer=nets.Adam(learning_rate=LR),
+                                      loss=loss,
+                                      metrics=['accuracy'])
 else:
   model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
                         batch_normalization=BATCHNORM,
@@ -293,6 +304,7 @@ if not os.path.exists(FIG_DIR):
   os.makedirs(FIG_DIR)
   print('>>> Created directory for figures: ',FIG_DIR)
 # plot metrics here NOTE need new function for this...
+
 #===============================================================
 # Predict, record metrics, and plot metrics on TEST DATA
 #===============================================================
