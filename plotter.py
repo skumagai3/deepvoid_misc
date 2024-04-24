@@ -43,15 +43,19 @@ def Mpc_to_cou(x,Nm,boxsize=205.):
     return d.astype(int)
 def cou_to_Mpc(x,Nm,boxsize=205.):
     return x * (boxsize/Nm)
-def set_window(b,t,Nm,ax,boxsize=205.,nticks=7,fix=True):
+def set_window(b,t,Nm,ax,boxsize=205.,nticks=7,fix=True,Latex=False):
     b_cou = Mpc_to_cou(b,Nm,boxsize)
     t_cou = Mpc_to_cou(t,Nm,boxsize)
     if fix:
         t_cou -= 1
     ax.set_xlim(b_cou,t_cou)
     ax.set_ylim(b_cou,t_cou)
-    ax.set_xlabel(r'$h^{-1}$ Mpc')
-    ax.set_ylabel(r'$h^{-1}$ Mpc')
+    if Latex:
+        ax.set_xlabel(r'$h^{-1}$ Mpc')
+        ax.set_ylabel(r'$h^{-1}$ Mpc')
+    else:
+        ax.set_xlabel('Mpc/h')
+        ax.set_ylabel('Mpc/h')
     ax.set_xticks(np.linspace(b_cou,t_cou,nticks))
     ax.set_yticks(np.linspace(b_cou,t_cou,nticks))
     ax.set_xticklabels(np.round(np.linspace(b,t,nticks)))
@@ -616,26 +620,28 @@ def plot_training_metric_to_ax(ax,history,metric,N_epoch_skip,GRID=True,**kwargs
     # detemine number of epochs:
     epochs = len(history.epoch)
     full_epochs = np.arange(0,epochs)
-    epoch_labels = [f'{i}' for i in full_epochs]
-    skip_epochs = np.arange(0,epochs,N_epoch_skip)
-    skip_labels = [f'{i}' for i in skip_epochs]
+    mask = np.isfinite(np.array(history.history[metric]).astype(np.double))
+    full_epochs = full_epochs[mask]
+    #epoch_labels = [f'{i}' for i in full_epochs]
+    #skip_epochs = np.arange(0,epochs,N_epoch_skip)
+    #skip_labels = [f'{i}' for i in skip_epochs]
     # skip val_loss, val_acc.
     if metric == 'loss' or metric == 'val_loss':
         ax.plot(full_epochs,history.history['loss'],label='Train',**kwargs)
         ax.plot(full_epochs,history.history['val_loss'],label='Test',**kwargs)
         ax.set_title(f'Model Loss')
         ax.legend()
-        ax.set_xticks(full_epochs, labels=epoch_labels)
+        #ax.set_xticks(full_epochs, labels=epoch_labels)
     elif metric == 'accuracy' or metric == 'val_accuracy':
         ax.plot(full_epochs,history.history['accuracy'],label='Train',**kwargs)
         ax.plot(full_epochs,history.history['val_accuracy'],label='Test',**kwargs)
         ax.set_title(f'Model Accuracy')
         ax.legend()
-        ax.set_xticks(full_epochs, labels=epoch_labels)
+        #ax.set_xticks(full_epochs, labels=epoch_labels)
     else:
-        ax.plot(skip_epochs,history.history[metric],**kwargs)
+        ax.plot(full_epochs,np.array(history.history[metric]).astype(np.double)[mask],**kwargs)
         ax.set_title(f'Model {metric}')
-        ax.set_xticks(skip_epochs, labels=skip_labels)
+        #ax.set_xticks(skip_epochs, labels=skip_labels)
     ax.set_xlabel('Epoch')
     ax.set_ylabel(metric)
     if GRID:

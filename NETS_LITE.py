@@ -24,7 +24,7 @@ from keras.utils import to_categorical
 from keras.layers import Input, Conv3D, MaxPooling3D, Conv3DTranspose, UpSampling3D, Concatenate, BatchNormalization, Activation, Dropout
 from keras import backend as K
 from keras.losses import CategoricalCrossentropy
-from keras.callbacks import Callback, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, TensorBoard
+from keras.callbacks import Callback, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, TensorBoard, CSVLogger
 
 from sklearn.metrics import precision_recall_fscore_support, balanced_accuracy_score, roc_auc_score, matthews_corrcoef
 from sklearn.model_selection import train_test_split
@@ -121,7 +121,18 @@ def assemble_cube2(Y_pred,GRID,SUBGRID,OFF):
 # For loading training and testing data for training
 # if loading data for regression, ensure classification=False!!
 #---------------------------------------------------------
-def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc, classification=True, sigma=None, binary_mask=False):
+def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=True, sigma=None, binary_mask=False):
+  '''
+  Function that loads the density and mask files, splits into subcubes of size
+  SUBGRID, rotates by 90 degrees three times, and returns the X and Y data.
+  FILE_DEN: str filepath to density field.
+  FILE_MASK: str filepath to mask field.
+  SUBGRID: int size of subcubes.
+  preproc: str preprocessing method. 'mm' for minmax, 'std' for standardize.
+  classification: bool whether or not you're doing classification. def True.
+  sigma: float sigma for Gaussian smoothing. def None.
+  binary_mask: bool whether or not to convert mask to binary. def False. 
+  '''
   print(f'Reading volume: {FILE_DEN}... ')
   den = volumes.read_fvolume(FILE_DEN)
   if sigma is not None:
@@ -372,7 +383,7 @@ class ComputeMetrics(Callback):
     if epoch % self.N_epochs == 0:
       X_test = self.validation_data[0]; Y_test = self.validation_data[1]
       Y_pred = self.model.predict(X_test,verbose=0)
-      _val_loss, _val_acc = self.model.evaluate(X_test,Y_test,verbose=0)
+      #_val_loss, _val_acc = self.model.evaluate(X_test,Y_test,verbose=0)
       _val_ROC_AUC = roc_auc_score(Y_test.reshape(-1,4),Y_pred.reshape(-1,4),average=self.avg,multi_class='ovr')
       Y_test = np.argmax(Y_test,axis=-1); Y_test = np.expand_dims(Y_test,axis=-1)
       Y_pred = np.argmax(Y_pred,axis=-1); Y_pred = np.expand_dims(Y_pred,axis=-1)
@@ -382,8 +393,8 @@ class ComputeMetrics(Callback):
       _val_matt_corrcoef = matthews_corrcoef(Y_test,Y_pred)
       _val_void_precision, _val_void_recall, _val_void_f1, _val_void_support = precision_recall_fscore_support(Y_test,Y_pred,beta=self.beta,average=self.avg,zero_division=0.0)
 
-      logs['val_loss'] = _val_loss
-      logs['val_acc'] = _val_acc
+      #logs['val_loss'] = _val_loss
+      #logs['val_acc'] = _val_acc
       logs['val_balanced_acc'] = _val_balanced_acc
       logs['val_f1'] = _val_f1
       logs['val_recall'] = _val_recall
@@ -397,6 +408,19 @@ class ComputeMetrics(Callback):
 
       #print(f' - Balanced Acc: {_val_balanced_acc:.4f} - F1: {_val_f1:.4f} - Precision: {_val_precision:.4f} - Recall: {_val_recall:.4f} - ROC AUC: {_val_ROC_AUC:.4f} \nMatt Corr Coef: {_val_matt_corrcoef:.4f} - Void F1: {_val_void_f1:.4f} - Void Recall: {_val_void_recall:.4f} - Void Precision: {_val_void_precision:.4f}')
       return
+    else:
+      #logs['val_loss'] = np.nan
+      #logs['val_acc'] = np.nan
+      logs['val_balanced_acc'] = np.nan
+      logs['val_f1'] = np.nan
+      logs['val_recall'] = np.nan
+      logs['val_precision'] = np.nan
+      logs['val_ROC_AUC'] = np.nan
+      logs['val_matt_corrcoef'] = np.nan
+      logs['val_void_f1'] = np.nan
+      logs['val_void_recall'] = np.nan
+      logs['val_void_precision'] = np.nan
+      gc.collect()
 #---------------------------------------------------------
 # Scoring functions for multi-class classification
 #---------------------------------------------------------
@@ -426,7 +450,7 @@ def CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG):
   plt.rcParams.update({'font.size': 14})
   cm = confusion_matrix(y_true.flatten(), y_pred.flatten(),
                         labels=[0,1,2,3],normalize='true')
-  class_report = classification_report(y_true.flatten(), y_pred.flatten(),labels=class_labels,output_dict=True)
+  class_report = classification_report(y_true.flatten(), y_pred.flatten(),labels=[0,1,2,3],output_dict=True)
   # write confusion matrix to hyperparameters txt file:
   with open(FILE_HPTXT, 'a') as f:
     f.write('\nConfusion matrix: \n')
@@ -607,7 +631,7 @@ def run_predict_model(model, X_test, batch_size):
   Y_pred = np.concatenate(Y_pred, axis=0)
   Y_pred = np.argmax(Y_pred, axis=-1); Y_pred = np.expand_dims(Y_pred, axis=-1)
   return Y_pred
-def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, GRID=512, BOXSIZE=205, BOLSHOI_FLAG=False, TRAIN_SCORE=False, COMPILE=False):
+def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, GRID=512, SUBGRID=128, OFF=64, BOXSIZE=205, BOLSHOI_FLAG=False, TRAIN_SCORE=False, COMPILE=False):
   '''
   Save image of density, mask, and predicted mask. Using save_scores_from_fvol,
   saves F1 scores, confusion matrix to MODEL_NAME_hps.txt and plots confusion matrix.
@@ -616,13 +640,13 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, GRID=512, B
   FILE_MSK: str mask filepath.
   FILE_MODEL: str model filepath. should be the same as MODEL_OUT+MODEL_NAME
   FILE_FIG: str where to save figures. default to TNG_multi
+  FILE_PRED: str where to save prediction.
   save_4channel: bool before argmax whether or not to save 4-channel prediction
   BOLSHOI_FLAG: bool whether you're working w/ Bolshoi data or not. def TNG mode
   TRAIN_SCORE: bool whether you're scoring on training data or not. def false
   COMPILE: bool whether or not to compile the model. def False to get around
   custom objects error.
   '''
-  SUBGRID = 128; OFF = 64
   MODEL_NAME = FILE_MODEL.split('/')[-1]
   DELTA_NAME = FILE_DEN.split('/')[-1]
   FILE_HPTXT = FILE_MODEL + '_hps.txt'
@@ -634,15 +658,15 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, GRID=512, B
     model = load_model(FILE_MODEL, compile=False)
 
   X_test = load_dataset(FILE_DEN,SUBGRID,OFF,preproc='mm')
-  Y_pred, Y_test = run_predict_model(model, X_test, Y_test, BATCH_SIZE)
+  Y_pred = run_predict_model(model, X_test, BATCH_SIZE)
   Y_pred = assemble_cube2(Y_pred,GRID,SUBGRID,OFF)
 
   ### write out prediction
   PRED_NAME = MODEL_NAME + '-pred.fvol'
   if BOLSHOI_FLAG == True:
     PRED_NAME = MODEL_NAME + '-pred-bolshoi.fvol'
-  volumes.write_fvolume(Y_pred, '/ifs/groups/vogeleyGrp/nets/preds/'+PRED_NAME)
-  print(f'Wrote prediction to /ifs/groups/vogeleyGrp/nets/preds/{PRED_NAME}')
+  volumes.write_fvolume(Y_pred, FILE_PRED+PRED_NAME)
+  print(f'Wrote prediction to {FILE_PRED+PRED_NAME}')
   
   # if BOLSHOI, change model name for figure filenames:
   if BOLSHOI_FLAG == True:
@@ -654,46 +678,47 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, GRID=512, B
     print(f'Created folder {FILE_FIG}')
 
   ### plot comparison plot of den, mask, pred mask to FILE_FIG:
-  #FILE_MSK = '/ifs/groups/vogeleyGrp/data/TNG/alonso_mask_th=0.65_sig=2.3.fvol'
   den_cmap = 'gray' # default for full DM particle density
-  if FILE_DEN != '/ifs/groups/vogeleyGrp/data/TNG/DM_DEN_snap99_Nm=512.fvol':
-    den_cmap = 'gray_r'
   d = volumes.read_fvolume(FILE_DEN); d = d/np.mean(d) # delta+1
   m = volumes.read_fvolume(FILE_MSK)
-  plt.rcParams.update({'font.size': 20})
+  #plt.rcParams.update({'font.size': 20})
   fig,ax = plt.subplots(1,3,figsize=(28,12),tight_layout=True)
-  i = 300
-  ax[0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
+  i = GRID//3
+  #ax[0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
+  ax[0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
   ax[1].set_title('Predicted Mask')
   ax[2].set_title('True Mask')
   plotter.plot_arr(d,i,ax=ax[0],cmap=den_cmap,logged=True)
   plotter.plot_arr(Y_pred,i,ax=ax[1],cmap='viridis',cb=False)
   plotter.plot_arr(m,i,ax=ax[2],cmap='viridis',cb=False)
   for axis in ax:
-    plotter.set_window(0,BOXSIZE,GRID,axis,BOXSIZE)
+    plotter.set_window(0,BOXSIZE,GRID,axis,BOXSIZE,Latex=False)
   plt.savefig(FILE_FIG+MODEL_NAME+'-pred-comp.png',facecolor='white',bbox_inches='tight')
   print(f'Saved comparison plot to {FILE_FIG+MODEL_NAME}-pred-comp.png')
 
   ### plot 3x3 plot of 3 adjacent slices of same comparison^^:
   fig,ax = plt.subplots(3,3,figsize=(28,28),tight_layout=True)
-  i = 200
+  i = GRID//2
   step = 5
   # i - step slice:
-  ax[0,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
+  #ax[0,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
+  ax[0,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
   ax[0,1].set_title(f'Predicted Mask\nSlice {i-step}')
   ax[0,2].set_title(f'True Mask\nSlice {i-step}')
   plotter.plot_arr(d,i-step,ax=ax[0,0],cmap=den_cmap,logged=True)
   plotter.plot_arr(Y_pred,i-step,ax=ax[0,1],cmap='viridis',cb=False)
   plotter.plot_arr(m,i-step,ax=ax[0,2],cmap='viridis',cb=False)
   # i slice:
-  ax[1,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
+  #ax[1,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
+  ax[1,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
   ax[1,1].set_title(f'Predicted Mask\nSlice {i}')
   ax[1,2].set_title(f'True Mask\nSlice {i}')
   plotter.plot_arr(d,i,ax=ax[1,0],cmap=den_cmap,logged=True)
   plotter.plot_arr(Y_pred,i,ax=ax[1,1],cmap='viridis',cb=False)
   plotter.plot_arr(m,i,ax=ax[1,2],cmap='viridis',cb=False)
   # i + step slice:
-  ax[2,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
+  #ax[2,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
+  ax[2,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
   ax[2,1].set_title(f'Predicted Mask\nSlice {i+step}')
   ax[2,2].set_title(f'True Mask\nSlice {i+step}')
   plotter.plot_arr(d,i+step,ax=ax[2,0],cmap=den_cmap,logged=True)
@@ -701,7 +726,7 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, GRID=512, B
   plotter.plot_arr(m,i+step,ax=ax[2,2],cmap='viridis',cb=False)
   # fix axis labels to be Mpc/h:
   for axis in ax.flatten():
-    plotter.set_window(0,BOXSIZE,GRID,axis,BOXSIZE)
+    plotter.set_window(0,BOXSIZE,GRID,axis,BOXSIZE,Latex=False)
   plt.savefig(FILE_FIG+MODEL_NAME+'-pred-comp-3x3.png',facecolor='white',bbox_inches='tight')
   print(f'Saved 3x3 comparison plot to {FILE_FIG+MODEL_NAME}-pred-comp-3x3.png')
 

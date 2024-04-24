@@ -27,17 +27,17 @@ tf.random.set_seed(seed)
 class_labels = ['void','wall','fila','halo']
 N_CLASSES = 4
 ### NOTE CHANGE THIS TO WHEREVER THE DATA IS STORED NOTE ###
-# Picotte paths:
+### Picotte paths:
 #path_to_data = '/ifs/groups/vogeleyGrp/data/TNG/' # path to TNG
 #path_to_BOL = '/ifs/groups/vogeleyGrp/data/Bolshoi/' # path to Bolshoi
 #FIG_DIR_PATH = '/ifs/groups/vogeleyGrp/nets/figs/' # path to figs save dir
 #FILE_OUT = '/ifs/groups/vogeleyGrp/nets/models/' # path to models save dir
-# Saturn paths:
+### Saturn paths:
 #path_to_data = '/Users/samkumagai/Desktop/deepvoid/simulations/IllustrisTNG/' # path to TNG
 #path_to_BOL = '/Users/samkumagai/Desktop/deepvoid/simulations/Bolshoi/' # path to Bolshoi
 #FIG_DIR_PATH = '/Users/samkumagai/Desktop/deepvoid/figs/' # path to figs save dir
 #FILE_OUT = '/Users/samkumagai/Desktop/deepvoid/model_weights/' # path to models save dir
-# Banquo paths:
+### Banquo paths:
 path_to_TNG = '/Users/samkumagai/Desktop/Drexel/DeepVoid/Data/TNG300-1/' # path to TNG
 path_to_BOL = '/Users/samkumagai/Desktop/Drexel/DeepVoid/Data/Bolshoi/' # path to Bolshoi
 FIG_DIR_PATH = '/Users/samkumagai/Desktop/Drexel/DeepVoid/figs/P1_FIGS/' # path to figs save dir
@@ -160,7 +160,7 @@ test_size = 0.2
 X_train, X_test, Y_train, Y_test = nets.train_test_split(features,labels,
                                                          test_size=test_size,
                                                          random_state=seed)
-print(f'>>> Split into training ({(1-test_size)*100}%) and validation ({test_size*100}) sets')
+print(f'>>> Split into training ({(1-test_size)*100}%) and validation ({test_size*100}%) sets')
 print('X_train shape: ',X_train.shape); print('Y_train shape: ',Y_train.shape)
 print('X_test shape: ',X_test.shape); print('Y_test shape: ',Y_test.shape)
 print('>>> Converting to one-hot encoding')
