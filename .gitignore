@@ -20,6 +20,9 @@ var/
 .installed.cfg
 *.egg
 
+# TF Event files
+*.v2
+
 # Installer logs
 pip-log.txt
 pip-delete-this-directory.txt
