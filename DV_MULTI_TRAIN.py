@@ -40,36 +40,42 @@ N_CLASSES = 4
 #FIG_DIR_PATH = '/Users/samkumagai/Desktop/deepvoid/figs/' # path to figs save dir
 #FILE_OUT = '/Users/samkumagai/Desktop/deepvoid/model_weights/' # path to models save dir
 ### Banquo paths:
-path_to_TNG = '/Users/samkumagai/Desktop/Drexel/DeepVoid/Data/TNG300-1/' # path to TNG
-path_to_BOL = '/Users/samkumagai/Desktop/Drexel/DeepVoid/Data/Bolshoi/' # path to Bolshoi
-FIG_DIR_PATH = '/Users/samkumagai/Desktop/Drexel/DeepVoid/figs/P1_FIGS/' # path to figs save dir
-FILE_OUT = '/Users/samkumagai/Desktop/Drexel/DeepVoid/models/' # path to models save dir
-FILE_PRED = '/Users/samkumagai/Desktop/Drexel/DeepVoid/preds/' # path to predictions save dir
+#path_to_TNG = '/Users/samkumagai/Desktop/Drexel/DeepVoid/Data/TNG300-1/' # path to TNG
+#path_to_BOL = '/Users/samkumagai/Desktop/Drexel/DeepVoid/Data/Bolshoi/' # path to Bolshoi
+#FIG_DIR_PATH = '/Users/samkumagai/Desktop/Drexel/DeepVoid/figs/P1_FIGS/' # path to figs save dir
+#FILE_OUT = '/Users/samkumagai/Desktop/Drexel/DeepVoid/models/' # path to models save dir
+#FILE_PRED = '/Users/samkumagai/Desktop/Drexel/DeepVoid/preds/' # path to predictions save dir
 #===============================================================
 # arg parsing:
 #===============================================================
-if len(sys.argv) != 9:
-  print('''Usage: python3 dv-train-nonbinary.py <SIM> <L> <DEPTH> <FILTERS> <UNIFORM_FLAG> <BATCHNORM> <DROPOUT> <LOSS>, 
-        where SIM is BOL or TNG, L is the interparticle separation in Mpc/h,
+if len(sys.argv) != 11:
+  print('''Usage: python3 DV_MULTI_TRAIN.py <ROOT_DIR> <SIM> <L> <DEPTH> <FILTERS> <UNIFORM_FLAG> <BATCHNORM> <DROPOUT> <LOSS> <MULTI_FLAG>, 
+        where ROOT_DIR is your root directory where models, predictions, figures will be saved,
+        SIM is BOL or TNG, L is the interparticle separation in Mpc/h,
         DEPTH is the depth of the U-Net, FILTERS is the number of filters in the first layer,
         and UNIFORM_FLAG is 1 if you want to use identical masses for all subhaloes, 0 if not.
         BATCHNORM is 1 if you want to use batch normalization, 0 if not.
         DROPOUT is the dropout rate, and LOSS is the loss function to use.
-        LOSS is one of 'CCE', 'FOCAL_CCE', 'DICE_AVG', or 'DICE_VOID'.''')
+        LOSS is one of 'CCE', 'FOCAL_CCE', 'DICE_AVG', or 'DICE_VOID'.
+        MULTI_FLAG is 1 if you want to use multiprocessing, 0 if not.''')
   sys.exit()
-SIM = sys.argv[1]
-L = sys.argv[2]
+ROOT_DIR = str(sys.argv[1])
+SIM = sys.argv[2]
+L = sys.argv[3]
 if L == '0.33' or L == '0.122':
   L = float(L) # since it's a float in the FULL DENSITY filename
 else:
   L = int(L) # since it's an int in the SUBHALOES filename
-DEPTH = int(sys.argv[3])
-FILTERS = int(sys.argv[4])
-UNIFORM_FLAG = bool(int(sys.argv[5]))
-BATCHNORM = bool(int(sys.argv[6]))
-DROPOUT = float(sys.argv[7])
-LOSS = str(sys.argv[8])
+DEPTH = int(sys.argv[4])
+FILTERS = int(sys.argv[5])
+UNIFORM_FLAG = bool(int(sys.argv[6]))
+BATCHNORM = bool(int(sys.argv[7]))
+DROPOUT = float(sys.argv[8])
+LOSS = str(sys.argv[9])
+MULTI_FLAG = bool(int(sys.argv[10]))
 print('#############################################')
+print('>>> Running DV_MULTI_TRAIN.py')
+print('>>> Root directory: ',ROOT_DIR)
 print('>>> Parameters:')
 print('Simulation = ', SIM); 
 print('L = ',L); 
@@ -78,7 +84,22 @@ print('UNIFORM_FLAG = ',UNIFORM_FLAG)
 print('BATCHNORM = ',BATCHNORM)
 print('DROPOUT = ',DROPOUT)
 print('LOSS = ',LOSS)
+print('MULTI_FLAG = ',MULTI_FLAG)
 print('#############################################')
+#===============================================================
+# set paths
+#===============================================================
+path_to_TNG = ROOT_DIR + 'data/TNG/'
+path_to_BOL = ROOT_DIR + 'data/Bolshoi/'
+FIG_DIR_PATH = ROOT_DIR + 'figs/'
+FILE_OUT = ROOT_DIR + 'models/'
+FILE_PRED = ROOT_DIR + 'preds/'
+if not os.path.exists(FIG_DIR_PATH):
+  os.makedirs(FIG_DIR_PATH)
+if not os.path.exists(FILE_OUT):
+  os.makedirs(FILE_OUT)
+if not os.path.exists(FILE_PRED):
+  os.makedirs(FILE_PRED)
 #===============================================================
 # Set filenames based on simulation, L, and UNIFORM_FLAG.
 # FILE_DEN is the density field, FILE_MASK is the mask field.
@@ -246,8 +267,7 @@ elif LOSS == 'DICE_VOID':
 #===============================================================
 # Multiprocessing
 #===============================================================
-MULTIPROCESSING = False ### NOTE set to True for distributed training on HPC GPUs
-if MULTIPROCESSING:
+if MULTI_FLAG:
   strategy = tf.distribute.MirroredStrategy()
   print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
   with strategy.scope():
