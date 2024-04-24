@@ -689,10 +689,10 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
   ax[1].set_title('Predicted Mask')
   ax[2].set_title('True Mask')
   plotter.plot_arr(d,i,ax=ax[0],cmap=den_cmap,logged=True)
-  plotter.plot_arr(Y_pred,i,ax=ax[1],cmap='viridis',cb=False)
-  plotter.plot_arr(m,i,ax=ax[2],cmap='viridis',cb=False)
+  plotter.plot_arr(Y_pred,i,ax=ax[1],segmented_cb=True)
+  plotter.plot_arr(m,i,ax=ax[2],segmented_cb=True)
   for axis in ax:
-    plotter.set_window(0,BOXSIZE,GRID,axis,BOXSIZE,Latex=False)
+    plotter.set_window(b=0,t=BOXSIZE,Nm=GRID,ax=axis,boxsize=BOXSIZE,Latex=False)
   plt.savefig(FILE_FIG+MODEL_NAME+'-pred-comp.png',facecolor='white',bbox_inches='tight')
   print(f'Saved comparison plot to {FILE_FIG+MODEL_NAME}-pred-comp.png')
 
@@ -706,27 +706,27 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
   ax[0,1].set_title(f'Predicted Mask\nSlice {i-step}')
   ax[0,2].set_title(f'True Mask\nSlice {i-step}')
   plotter.plot_arr(d,i-step,ax=ax[0,0],cmap=den_cmap,logged=True)
-  plotter.plot_arr(Y_pred,i-step,ax=ax[0,1],cmap='viridis',cb=False)
-  plotter.plot_arr(m,i-step,ax=ax[0,2],cmap='viridis',cb=False)
+  plotter.plot_arr(Y_pred,i-step,ax=ax[0,1],segmented_cb=True)
+  plotter.plot_arr(m,i-step,ax=ax[0,2],segmented_cb=True)
   # i slice:
   #ax[1,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
   ax[1,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
   ax[1,1].set_title(f'Predicted Mask\nSlice {i}')
   ax[1,2].set_title(f'True Mask\nSlice {i}')
   plotter.plot_arr(d,i,ax=ax[1,0],cmap=den_cmap,logged=True)
-  plotter.plot_arr(Y_pred,i,ax=ax[1,1],cmap='viridis',cb=False)
-  plotter.plot_arr(m,i,ax=ax[1,2],cmap='viridis',cb=False)
+  plotter.plot_arr(Y_pred,i,ax=ax[1,1],segmented_cb=True)
+  plotter.plot_arr(m,i,ax=ax[1,2],segmented_cb=True)
   # i + step slice:
   #ax[2,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
   ax[2,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
   ax[2,1].set_title(f'Predicted Mask\nSlice {i+step}')
   ax[2,2].set_title(f'True Mask\nSlice {i+step}')
   plotter.plot_arr(d,i+step,ax=ax[2,0],cmap=den_cmap,logged=True)
-  plotter.plot_arr(Y_pred,i+step,ax=ax[2,1],cmap='viridis',cb=False)
-  plotter.plot_arr(m,i+step,ax=ax[2,2],cmap='viridis',cb=False)
+  plotter.plot_arr(Y_pred,i+step,ax=ax[2,1],segmented_cb=True)
+  plotter.plot_arr(m,i+step,ax=ax[2,2],segmented_cb=True)
   # fix axis labels to be Mpc/h:
   for axis in ax.flatten():
-    plotter.set_window(0,BOXSIZE,GRID,axis,BOXSIZE,Latex=False)
+    plotter.set_window(b=0,t=BOXSIZE,Nm=GRID,ax=axis,boxsize=BOXSIZE,Latex=False)
   plt.savefig(FILE_FIG+MODEL_NAME+'-pred-comp-3x3.png',facecolor='white',bbox_inches='tight')
   print(f'Saved 3x3 comparison plot to {FILE_FIG+MODEL_NAME}-pred-comp-3x3.png')
 

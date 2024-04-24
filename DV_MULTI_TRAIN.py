@@ -27,29 +27,11 @@ tf.random.set_seed(seed)
 #===============================================================
 class_labels = ['void','wall','fila','halo']
 N_CLASSES = 4
-### NOTE CHANGE THIS TO WHEREVER THE DATA IS STORED NOTE ###
-### Picotte paths:
-#path_to_data = '/ifs/groups/vogeleyGrp/data/TNG/' # path to TNG
-#path_to_BOL = '/ifs/groups/vogeleyGrp/data/Bolshoi/' # path to Bolshoi
-#FIG_DIR_PATH = '/ifs/groups/vogeleyGrp/nets/figs/' # path to figs save dir
-#FILE_OUT = '/ifs/groups/vogeleyGrp/nets/models/' # path to models save dir
-#FILE_PRED = '/ifs/groups/vogeleyGrp/nets/preds/' # path to predictions save dir
-### Saturn paths:
-#path_to_data = '/Users/samkumagai/Desktop/deepvoid/simulations/IllustrisTNG/' # path to TNG
-#path_to_BOL = '/Users/samkumagai/Desktop/deepvoid/simulations/Bolshoi/' # path to Bolshoi
-#FIG_DIR_PATH = '/Users/samkumagai/Desktop/deepvoid/figs/' # path to figs save dir
-#FILE_OUT = '/Users/samkumagai/Desktop/deepvoid/model_weights/' # path to models save dir
-### Banquo paths:
-#path_to_TNG = '/Users/samkumagai/Desktop/Drexel/DeepVoid/Data/TNG300-1/' # path to TNG
-#path_to_BOL = '/Users/samkumagai/Desktop/Drexel/DeepVoid/Data/Bolshoi/' # path to Bolshoi
-#FIG_DIR_PATH = '/Users/samkumagai/Desktop/Drexel/DeepVoid/figs/P1_FIGS/' # path to figs save dir
-#FILE_OUT = '/Users/samkumagai/Desktop/Drexel/DeepVoid/models/' # path to models save dir
-#FILE_PRED = '/Users/samkumagai/Desktop/Drexel/DeepVoid/preds/' # path to predictions save dir
 #===============================================================
 # arg parsing:
 #===============================================================
-if len(sys.argv) != 11:
-  print('''Usage: python3 DV_MULTI_TRAIN.py <ROOT_DIR> <SIM> <L> <DEPTH> <FILTERS> <UNIFORM_FLAG> <BATCHNORM> <DROPOUT> <LOSS> <MULTI_FLAG>, 
+if len(sys.argv) != 12:
+  print('''Usage: python3 DV_MULTI_TRAIN.py <ROOT_DIR> <SIM> <L> <DEPTH> <FILTERS> <UNIFORM_FLAG> <BATCHNORM> <DROPOUT> <LOSS> <MULTI_FLAG> <GRID>, 
         where ROOT_DIR is your root directory where models, predictions, figures will be saved,
         SIM is BOL or TNG, L is the interparticle separation in Mpc/h,
         DEPTH is the depth of the U-Net, FILTERS is the number of filters in the first layer,
@@ -57,9 +39,11 @@ if len(sys.argv) != 11:
         BATCHNORM is 1 if you want to use batch normalization, 0 if not.
         DROPOUT is the dropout rate, and LOSS is the loss function to use.
         LOSS is one of 'CCE', 'FOCAL_CCE', 'DICE_AVG', or 'DICE_VOID'.
-        MULTI_FLAG is 1 if you want to use multiprocessing, 0 if not.''')
+        MULTI_FLAG is 1 if you want to use multiprocessing, 0 if not.
+        GRID is the size of the density and mask fields on a side. For TNG,
+        GRID=512 (unless you want a lightweight model, then GRID=128), and for Bolshoi, GRID=640.''')
   sys.exit()
-ROOT_DIR = str(sys.argv[1])
+ROOT_DIR = sys.argv[1]
 SIM = sys.argv[2]
 L = sys.argv[3]
 if L == '0.33' or L == '0.122':
@@ -73,6 +57,7 @@ BATCHNORM = bool(int(sys.argv[7]))
 DROPOUT = float(sys.argv[8])
 LOSS = str(sys.argv[9])
 MULTI_FLAG = bool(int(sys.argv[10]))
+GRID = int(sys.argv[11])
 print('#############################################')
 print('>>> Running DV_MULTI_TRAIN.py')
 print('>>> Root directory: ',ROOT_DIR)
@@ -85,6 +70,7 @@ print('BATCHNORM = ',BATCHNORM)
 print('DROPOUT = ',DROPOUT)
 print('LOSS = ',LOSS)
 print('MULTI_FLAG = ',MULTI_FLAG)
+print('GRID = ',GRID)
 print('#############################################')
 #===============================================================
 # set paths
@@ -120,7 +106,7 @@ if not os.path.exists(FILE_PRED):
 th = 0.65 # eigenvalue threshold NOTE SET THRESHOLD HERE
 ### TNG ### 
 if SIM == 'TNG':
-  GRID = 512 
+  #GRID = 512 
   SUBGRID = 128
   OFF = 64
   ### TNG Density field:
@@ -130,7 +116,7 @@ if SIM == 'TNG':
     FILE_DEN_SUBS = path_to_TNG + f'subs1_mass_Nm{GRID}_L{L}_d_None_smooth_uniform.fvol'
   if UNIFORM_FLAG == False:
     FILE_DEN_SUBS = path_to_TNG + f'subs1_mass_Nm{GRID}_L{L}_d_None_smooth.fvol'
-  if L <= 0.33:
+  if L == 0.33:
     FILE_DEN = FILE_DEN_FULL
     L = 0.33 # full DM interparticle separation for TNG300-3-Dark
     UNIFORM_FLAG = False # doesnt affect full DM, so set to False
@@ -138,13 +124,16 @@ if SIM == 'TNG':
     FILE_DEN = FILE_DEN_SUBS
   ### Mask field:
   sig = 2.4 # PHI smooothing scale in code units NOTE CHANGES WITH NM
+  if GRID == 128:
+    sig = 0.6
+    SUBGRID = 32; OFF = 16
   FILE_MASK = path_to_TNG + f'TNG300-3-Dark-mask-Nm={GRID}-th={th}-sig={sig}.fvol'
-  FILE_FIG = FIG_DIR_PATH + 'TNG_multiclass/'
+  FILE_FIG = FIG_DIR_PATH + 'TNG/'
   if not os.path.exists(FILE_FIG):
     os.makedirs(FILE_FIG)
 ### Bolshoi ###
 elif SIM == 'BOL':
-  GRID = 640
+  #GRID = 640
   SUBGRID = 128
   OFF = 64
   UNIFORM_FLAG = False # don't have this for Bolshoi, so set to False
@@ -155,7 +144,7 @@ elif SIM == 'BOL':
   ### Mask field:
   sig = 0.916 # PHI smooothing scale in code units NOTE CHANGES WITH NM
   FILE_MASK = path_to_BOL + f'Bolshoi_bolshoi.delta416_mask_Nm={GRID}_sig={sig}_thresh={th}.fvol'
-  FILE_FIG = FIG_DIR_PATH + 'Bolshoi_multiclass/'
+  FILE_FIG = FIG_DIR_PATH + 'Bolshoi/'
   if not os.path.exists(FILE_FIG):
     os.makedirs(FILE_FIG)
 # if L = 0.33 and SIM = TNG, error out, same for L = 0.122 and SIM = BOL:
@@ -300,23 +289,24 @@ nets.save_dict_to_text(hp_dict,FILE_HPS)
 # Train
 # python3 -m tensorboard.main --logdir=./logs
 # (^^^^ cmd for tensorboard, must be on sciserver conda env)
-epochs = 300; print('epochs: ',epochs)
+epochs = 5; print('epochs: ',epochs)
 patience = 50; print('patience: ',patience)
 lr_patience = 25; print('learning rate patience: ',lr_patience)
 batch_size = 8; print('batch_size: ',batch_size)
+N_epochs_metric = 2; print(f'class metrics calculated every {N_epochs_metric} epochs')
 #===============================================================
 print('>>> Training')
 # set up callbacks
-metrics = nets.ComputeMetrics((X_test,Y_test), N_epochs = 10, avg='macro')
+metrics = nets.ComputeMetrics((X_test,Y_test), N_epochs = N_epochs_metric, avg='macro')
 model_chkpt = nets.ModelCheckpoint(FILE_OUT + MODEL_NAME, monitor='val_loss',
                                    save_best_only=True,verbose=2)
-log_dir = "logs/fit/" + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") 
-tb_call = nets.TensorBoard(log_dir=log_dir)
+#log_dir = "logs/fit/" + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") 
+#tb_call = nets.TensorBoard(log_dir=log_dir) # do we even need this if we CSV log?
 csv_logger = nets.CSVLogger(FILE_OUT+MODEL_NAME+'_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") + '_train_log.csv')
 reduce_lr = nets.ReduceLROnPlateau(monitor='val_loss',factor=0.25,patience=lr_patience, 
                                    verbose=1,min_lr=1e-6)
 early_stop = nets.EarlyStopping(monitor='val_loss',patience=patience,restore_best_weights=True)
-callbacks = [metrics,model_chkpt,reduce_lr,tb_call,early_stop,csv_logger]
+callbacks = [metrics,model_chkpt,reduce_lr,early_stop,csv_logger]
 history = model.fit(X_train, Y_train, batch_size = batch_size, epochs = epochs, 
                     validation_data=(X_test,Y_test), verbose = 2, shuffle = True,
                     callbacks=callbacks)
@@ -328,8 +318,7 @@ if not os.path.exists(FIG_DIR):
   os.makedirs(FIG_DIR)
   print('>>> Created directory for figures: ',FIG_DIR)
 FILE_METRICS = FIG_DIR + MODEL_NAME + '_metrics.png'
-plotter.plot_training_metrics_all(history,FILE_METRICS)
-
+plotter.plot_training_metrics_all(history,FILE_METRICS,savefig=True)
 #===============================================================
 # Predict, record metrics, and plot metrics on TEST DATA
 #===============================================================
@@ -346,10 +335,11 @@ nets.save_scores_from_fvol(Y_test.flatten(),Y_pred.flatten(),
 #========================================================================
 if SIM == 'TNG':
   nets.save_scores_from_model(FILE_DEN, FILE_MASK, FILE_OUT+MODEL_NAME, FIG_DIR, FILE_PRED,
-                              TRAIN_SCORE=False)
+                              GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,TRAIN_SCORE=False)
 elif SIM == 'BOL':
   nets.save_scores_from_model(FILE_DEN, FILE_MASK, FILE_OUT+MODEL_NAME, FIG_DIR, FILE_PRED,
-                              GRID=640,BOXSIZE=256,BOLSHOI_FLAG=True,TRAIN_SCORE=False)
+                              GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,BOXSIZE=256,BOLSHOI_FLAG=True,
+                              TRAIN_SCORE=False)
 print('>>> Finished predicting on training data')
 #===============================================================
 print('Finished training!')

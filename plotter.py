@@ -605,7 +605,7 @@ def show_image_row(imgs, plot_size, **kwargs):
 # plot_training_metric_to_ax: plots a training metric to an axis
 # plot_training_metrics_all: plots all training metrics
 #---------------------------------------------------------
-def plot_training_metric_to_ax(ax,history,metric,GRID=True,**kwargs):
+def plot_training_metric_to_ax(ax,history,metric,GRID=True,CSV_FLAG=False,**kwargs):
     '''
     Function to plot a metric from history.history. Special cases for
     'loss' and 'acc' are included. 
@@ -614,32 +614,40 @@ def plot_training_metric_to_ax(ax,history,metric,GRID=True,**kwargs):
     N_epoch_skip is the number of epochs that ALL metrics were computed on.
     i.e. if N_epoch_skip=3, then for every 3rd epoch metrics were computed.
     GRID is a boolean to determine if grid is plotted.
+    CSV_FLAG: bool, for plotting training metrics from a CSV file. Needs to
+    be added since the dict won't contain history.history.keys()
     '''
-    if metric not in history.history.keys():
-        raise ValueError(f'{metric} not found in history.history.keys()')
-    # detemine number of epochs:
-    epochs = len(history.epoch)
+    if not CSV_FLAG:
+        metric_dict = history.history
+        epochs = len(history.epoch)
+        if metric not in history.history.keys():
+            raise ValueError(f'{metric} not found in history.history.keys()')
+    else:
+        metric_dict = history
+        epochs = len(history['epoch'])
+        if metric not in history.keys():
+            raise ValueError(f'{metric} not found in dict.keys()')
     full_epochs = np.arange(0,epochs)
-    mask = np.isfinite(np.array(history.history[metric]).astype(np.double))
+    mask = np.isfinite(np.array(metric_dict[metric]).astype(np.double))
     full_epochs = full_epochs[mask]
     #epoch_labels = [f'{i}' for i in full_epochs]
     #skip_epochs = np.arange(0,epochs,N_epoch_skip)
     #skip_labels = [f'{i}' for i in skip_epochs]
     # skip val_loss, val_acc.
     if metric == 'loss' or metric == 'val_loss':
-        ax.plot(full_epochs,history.history['loss'],label='Train',**kwargs)
-        ax.plot(full_epochs,history.history['val_loss'],label='Test',**kwargs)
+        ax.plot(full_epochs,np.array(metric_dict['loss']).astype(float),label='Train',**kwargs)
+        ax.plot(full_epochs,np.array(metric_dict['val_loss']).astype(float),label='Test',**kwargs)
         ax.set_title(f'Model Loss')
         ax.legend()
         #ax.set_xticks(full_epochs, labels=epoch_labels)
     elif metric == 'accuracy' or metric == 'val_accuracy':
-        ax.plot(full_epochs,history.history['accuracy'],label='Train',**kwargs)
-        ax.plot(full_epochs,history.history['val_accuracy'],label='Test',**kwargs)
+        ax.plot(full_epochs,np.array(metric_dict['accuracy']).astype(float),label='Train',**kwargs)
+        ax.plot(full_epochs,np.array(metric_dict['val_accuracy']).astype(float),label='Test',**kwargs)
         ax.set_title(f'Model Accuracy')
         ax.legend()
         #ax.set_xticks(full_epochs, labels=epoch_labels)
     else:
-        ax.plot(full_epochs,np.array(history.history[metric]).astype(np.double)[mask],**kwargs)
+        ax.plot(full_epochs,np.array(metric_dict[metric]).astype(np.double)[mask],**kwargs)
         ax.set_title(f'Model {metric}')
         #ax.set_xticks(skip_epochs, labels=skip_labels)
     ax.set_xlabel('Epoch')
@@ -648,18 +656,24 @@ def plot_training_metric_to_ax(ax,history,metric,GRID=True,**kwargs):
         ax.grid()
 
 # create function to plot every single available metric from history.history:
-def plot_training_metrics_all(history,FILE_OUT,N_epochs_skip,aspect='rect',savefig=False,**kwargs):
+def plot_training_metrics_all(history,FILE_OUT,aspect='rect',savefig=False,CSV_FLAG=False,**kwargs):
     '''
     Function to plot all available metrics from history.history. 
     FILE_OUT is the filepath to save the plot. 
     N_epochs_skip is how often ALL metrics were computed. int.
     aspect is either 'rect' or 'square'.
     If savefig=True, the plot will be saved.
+    CSV_FLAG: bool, for plotting training metrics from a CSV file. Needs to
+    be added since the dictionary won't be history.history.
     '''
-    N_epochs_skip = int(N_epochs_skip)
-    metrics = list(history.history.keys())
+    if not CSV_FLAG:
+        metrics = list(history.history.keys())
+    else:
+        metrics = list(history.keys())
     # remove val_loss, val_acc, val_accuracy from metrics:
     skip_metrics = ['val_loss','val_acc','val_accuracy']
+    if CSV_FLAG:
+        skip_metrics.append('epoch')
     metrics = [metric for metric in metrics if metric not in skip_metrics]
     n_metrics = len(metrics)
     if aspect == 'square':
@@ -675,11 +689,11 @@ def plot_training_metrics_all(history,FILE_OUT,N_epochs_skip,aspect='rect',savef
         # if there is only one row or one column, ax will be a 1D array, so we need to handle this case:
         if n_rows == 1 or n_cols == 1:
             if n_rows == 1:
-                plot_training_metric_to_ax(ax[i],history,metric,**kwargs)
+                plot_training_metric_to_ax(ax[i],history,metric,CSV_FLAG=CSV_FLAG,**kwargs)
             else:
-                plot_training_metric_to_ax(ax[i],history,metric,**kwargs)
+                plot_training_metric_to_ax(ax[i],history,metric,CSV_FLAG=CSV_FLAG,**kwargs)
         else:
-            plot_training_metric_to_ax(ax[i//n_cols,i%n_cols],history,metric,**kwargs)
+            plot_training_metric_to_ax(ax[i//n_cols,i%n_cols],history,metric,CSV_FLAG=CSV_FLAG,**kwargs)
     # remove any empty axes:
     for i in range(n_metrics,len(ax.flatten())):
         fig.delaxes(ax.flatten()[i])
