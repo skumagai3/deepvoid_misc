@@ -22,7 +22,7 @@ Usage: python3 DV_MULTI_TRAIN.py <ROOT_DIR> <SIM> <L> <DEPTH> <FILTERS> <UNIFORM
 
 
 NOTE also that DV_MULTI_TRAIN expects the file structure to be as such:
-- ROOT_DIR
+ROOT_DIR
   - data
     - TNG
       - DM_DEN_snap99_Nm=512.fvol (full DM density)
