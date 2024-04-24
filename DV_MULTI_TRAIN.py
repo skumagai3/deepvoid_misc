@@ -12,6 +12,7 @@ import numpy as np
 import tensorflow as tf
 import NETS_LITE as nets
 import absl.logging
+import plotter
 absl.logging.set_verbosity(absl.logging.ERROR)
 print('TensorFlow version: ', tf.__version__)
 nets.K.set_image_data_format('channels_last')
@@ -32,6 +33,7 @@ N_CLASSES = 4
 #path_to_BOL = '/ifs/groups/vogeleyGrp/data/Bolshoi/' # path to Bolshoi
 #FIG_DIR_PATH = '/ifs/groups/vogeleyGrp/nets/figs/' # path to figs save dir
 #FILE_OUT = '/ifs/groups/vogeleyGrp/nets/models/' # path to models save dir
+#FILE_PRED = '/ifs/groups/vogeleyGrp/nets/preds/' # path to predictions save dir
 ### Saturn paths:
 #path_to_data = '/Users/samkumagai/Desktop/deepvoid/simulations/IllustrisTNG/' # path to TNG
 #path_to_BOL = '/Users/samkumagai/Desktop/deepvoid/simulations/Bolshoi/' # path to Bolshoi
@@ -42,6 +44,7 @@ path_to_TNG = '/Users/samkumagai/Desktop/Drexel/DeepVoid/Data/TNG300-1/' # path 
 path_to_BOL = '/Users/samkumagai/Desktop/Drexel/DeepVoid/Data/Bolshoi/' # path to Bolshoi
 FIG_DIR_PATH = '/Users/samkumagai/Desktop/Drexel/DeepVoid/figs/P1_FIGS/' # path to figs save dir
 FILE_OUT = '/Users/samkumagai/Desktop/Drexel/DeepVoid/models/' # path to models save dir
+FILE_PRED = '/Users/samkumagai/Desktop/Drexel/DeepVoid/preds/' # path to predictions save dir
 #===============================================================
 # arg parsing:
 #===============================================================
@@ -286,13 +289,14 @@ print('>>> Training')
 # set up callbacks
 metrics = nets.ComputeMetrics((X_test,Y_test), N_epochs = 10, avg='macro')
 model_chkpt = nets.ModelCheckpoint(FILE_OUT + MODEL_NAME, monitor='val_loss',
-                                   save_best_only=True,verbose=1)
+                                   save_best_only=True,verbose=2)
 log_dir = "logs/fit/" + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") 
 tb_call = nets.TensorBoard(log_dir=log_dir)
+csv_logger = nets.CSVLogger(FILE_OUT+MODEL_NAME+'_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") + '_train_log.csv')
 reduce_lr = nets.ReduceLROnPlateau(monitor='val_loss',factor=0.25,patience=lr_patience, 
                                    verbose=1,min_lr=1e-6)
 early_stop = nets.EarlyStopping(monitor='val_loss',patience=patience,restore_best_weights=True)
-callbacks = [metrics,model_chkpt,reduce_lr,tb_call,early_stop]
+callbacks = [metrics,model_chkpt,reduce_lr,tb_call,early_stop,csv_logger]
 history = model.fit(X_train, Y_train, batch_size = batch_size, epochs = epochs, 
                     validation_data=(X_test,Y_test), verbose = 2, shuffle = True,
                     callbacks=callbacks)
@@ -303,24 +307,28 @@ FIG_DIR = FILE_FIG + MODEL_NAME + '/'
 if not os.path.exists(FIG_DIR):
   os.makedirs(FIG_DIR)
   print('>>> Created directory for figures: ',FIG_DIR)
-# plot metrics here NOTE need new function for this...
+FILE_METRICS = FIG_DIR + MODEL_NAME + '_metrics.png'
+plotter.plot_training_metrics_all(history,FILE_METRICS)
 
 #===============================================================
 # Predict, record metrics, and plot metrics on TEST DATA
 #===============================================================
-Y_pred, Y_test = nets.run_predict_model(model,X_test,batch_size)
+Y_pred = nets.run_predict_model(model,X_test,batch_size)
 # adjust Y_test shape:
 Y_test = np.argmax(Y_test,axis=-1); Y_test = np.expand_dims(Y_test,axis=-1)
+nets.save_scores_from_fvol(Y_test.flatten(),Y_pred.flatten(),
+                           FILE_OUT+MODEL_NAME,FIG_DIR,
+                           FILE_DEN)
 #========================================================================
 # Predict and plot and record metrics on TRAINING DATA
 # with TRAIN_SCORE = False, all this does is predict on the entire 
 # data cube and save slices of the predicted mask 
 #========================================================================
 if SIM == 'TNG':
-  nets.save_scores_from_model(FILE_DEN, FILE_MASK, FILE_OUT+MODEL_NAME, FIG_DIR,
+  nets.save_scores_from_model(FILE_DEN, FILE_MASK, FILE_OUT+MODEL_NAME, FIG_DIR, FILE_PRED,
                               TRAIN_SCORE=False)
 elif SIM == 'BOL':
-  nets.save_scores_from_model(FILE_DEN, FILE_MASK, FILE_OUT+MODEL_NAME, FIG_DIR,
+  nets.save_scores_from_model(FILE_DEN, FILE_MASK, FILE_OUT+MODEL_NAME, FIG_DIR, FILE_PRED,
                               GRID=640,BOXSIZE=256,BOLSHOI_FLAG=True,TRAIN_SCORE=False)
 print('>>> Finished predicting on training data')
 #===============================================================

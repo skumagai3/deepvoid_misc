@@ -605,7 +605,7 @@ def show_image_row(imgs, plot_size, **kwargs):
 # plot_training_metric_to_ax: plots a training metric to an axis
 # plot_training_metrics_all: plots all training metrics
 #---------------------------------------------------------
-def plot_training_metric_to_ax(ax,history,metric,N_epoch_skip,GRID=True,**kwargs):
+def plot_training_metric_to_ax(ax,history,metric,GRID=True,**kwargs):
     '''
     Function to plot a metric from history.history. Special cases for
     'loss' and 'acc' are included. 
@@ -675,11 +675,11 @@ def plot_training_metrics_all(history,FILE_OUT,N_epochs_skip,aspect='rect',savef
         # if there is only one row or one column, ax will be a 1D array, so we need to handle this case:
         if n_rows == 1 or n_cols == 1:
             if n_rows == 1:
-                plot_training_metric_to_ax(ax[i],history,metric,N_epochs_skip,**kwargs)
+                plot_training_metric_to_ax(ax[i],history,metric,**kwargs)
             else:
-                plot_training_metric_to_ax(ax[i],history,metric,N_epochs_skip,**kwargs)
+                plot_training_metric_to_ax(ax[i],history,metric,**kwargs)
         else:
-            plot_training_metric_to_ax(ax[i//n_cols,i%n_cols],history,metric,N_epochs_skip,**kwargs)
+            plot_training_metric_to_ax(ax[i//n_cols,i%n_cols],history,metric,**kwargs)
     # remove any empty axes:
     for i in range(n_metrics,len(ax.flatten())):
         fig.delaxes(ax.flatten()[i])
