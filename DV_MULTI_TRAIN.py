@@ -289,11 +289,11 @@ nets.save_dict_to_text(hp_dict,FILE_HPS)
 # Train
 # python3 -m tensorboard.main --logdir=./logs
 # (^^^^ cmd for tensorboard, must be on sciserver conda env)
-epochs = 5; print('epochs: ',epochs)
+epochs = 3; print('epochs: ',epochs)
 patience = 50; print('patience: ',patience)
 lr_patience = 25; print('learning rate patience: ',lr_patience)
 batch_size = 8; print('batch_size: ',batch_size)
-N_epochs_metric = 2; print(f'class metrics calculated every {N_epochs_metric} epochs')
+N_epochs_metric = 10; print(f'class metrics calculated every {N_epochs_metric} epochs')
 #===============================================================
 print('>>> Training')
 # set up callbacks
@@ -322,12 +322,12 @@ plotter.plot_training_metrics_all(history,FILE_METRICS,savefig=True)
 #===============================================================
 # Predict, record metrics, and plot metrics on TEST DATA
 #===============================================================
-Y_pred = nets.run_predict_model(model,X_test,batch_size)
-# adjust Y_test shape:
+Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False)
+# since output argmax = False, Y_pred shape = [N_samples,SUBGRID,SUBGRID,SUBGRID,N_CLASSES]
+# adjust Y_test shape to be [N_samples,SUBGRID,SUBGRID,SUBGRID,1]:
 Y_test = np.argmax(Y_test,axis=-1); Y_test = np.expand_dims(Y_test,axis=-1)
-nets.save_scores_from_fvol(Y_test.flatten(),Y_pred.flatten(),
-                           FILE_OUT+MODEL_NAME,FIG_DIR,
-                           FILE_DEN)
+nets.save_scores_from_fvol(Y_test,Y_pred,
+                           FILE_OUT+MODEL_NAME,FIG_DIR)
 #========================================================================
 # Predict and plot and record metrics on TRAINING DATA
 # with TRAIN_SCORE = False, all this does is predict on the entire 

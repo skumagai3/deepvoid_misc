@@ -12,6 +12,7 @@ import sys
 sys.path.append('/ifs/groups/vogeleyGrp/nets/')
 import volumes
 import plotter
+from collections import Counter
 import matplotlib.pyplot as plt
 class_labels = ['Void','Wall','Filament','Halo']
 import numpy as np
@@ -26,6 +27,7 @@ from keras import backend as K
 from keras.losses import CategoricalCrossentropy
 from keras.callbacks import Callback, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, TensorBoard, CSVLogger
 
+from sklearn.preprocessing import label_binarize
 from sklearn.metrics import precision_recall_fscore_support, balanced_accuracy_score, roc_auc_score, matthews_corrcoef
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import f1_score, confusion_matrix, roc_curve, average_precision_score, auc, precision_recall_curve
@@ -228,9 +230,10 @@ def load_dataset(file_in, SUBGRID, OFF, preproc='mm',sigma=None):
     den = standardize(den); print('Ran preprocessing to scale density s.t. mean=0 and std dev = 1!')
   if preproc == None:
     pass
-  nbins = (den.shape[0] // SUBGRID) + 1 + 1 + 1
-  if den.shape[0] == 640:
-    nbins += 1
+  #nbins = (den.shape[0] // SUBGRID) + 1 + 1 + 1 # hacky way
+  #if den.shape[0] == 640:
+  #  nbins += 1
+  nbins = den.shape[0]//SUBGRID + (den.shape[0]//SUBGRID - 1)
   X_all = np.zeros(shape=(nbins**3, SUBGRID,SUBGRID,SUBGRID,1))
   
   cont  = 0
@@ -512,51 +515,92 @@ def population_hists(y_true, y_pred, FILE_MODEL, FILE_FIG, FILE_DEN, n_bins=50):
   plt.savefig(FILE_FIG+MODEL_NAME+'_hists.png',facecolor='white',bbox_inches='tight')
   print(f'Saved population hists of mask and pred to '+FILE_FIG+MODEL_NAME+'_hists.png')
      
-def ROC_curves(y_true, y_pred, FILE_MODEL, FILE_FIG):
+def ROC_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, micro=True, macro=True):
   '''
   Helper function for save_scores_from_fvol to plot ROC curves.
+  # NOTE USE SOFTMAX PROBABILITY OUTPUTS FOR Y_PRED!!!!!
+  # NOTE y_true, y_pred need to have be label binarized, aka shape=(N_samples, N_classes)
+  y_true: true labels. shape: (N_samples, N_classes)
+  y_pred: 4 channel probability outputs from softmax. shape: (N_samples, N_classes)
+  FILE_MODEL: str, model filepath
+  FILE_FIG: str, dir to save plot in
+  micro, macro: bools, whether to plot micro/macro avg ROC curve. AUC for micro
+  and macro will be saved to hyperparameters text anyway
   '''
   FILE_HPTXT = FILE_MODEL + '_hps.txt'
   MODEL_NAME = FILE_MODEL.split('/')[-1]
   # plot ROC curves:
   plt.rcParams.update({'font.size': 16})
-  fig, ax = plt.subplots(1,1,figsize=(8,8))
+  fig, ax = plt.subplots(1,1,figsize=(12,12))
   ax.axis('square')
-  ax.set_title('Class OvR ROC Curves')
+  ax.set_title('Multiclass One vs. Rest ROC Curves')
+  # plot chance level (AUC=0.5)
   ax.plot([0,1],[0,1],linestyle='--',lw=2,color='r',label='Chance level')
-  aucs = []
-  for i in range(len(class_labels)):
-    binary_m = (y_true == i).flatten(); binary_p = (y_pred == i).flatten()
-    fpr, tpr, threshs = roc_curve(binary_m, binary_p)
-    roc_auc = auc(fpr, tpr); aucs.append(roc_auc)
-    display = RocCurveDisplay(fpr=fpr,tpr=tpr,
-                              roc_auc=roc_auc,
-                              estimator_name=class_labels[i]+' OvR')
-    display.plot(ax=ax)
-  ax.legend(loc='best',prop={'size': 11})
+  N_classes = len(class_labels)
+  for i in range(N_classes):
+    _ = RocCurveDisplay.from_predictions(
+      y_true[:,i],
+      y_pred[:,i],
+      name=f'{class_labels[i]} ROC curve',
+      ax=ax
+    )
+  # add micro averaged ROC curve:
+  if micro:
+    _ = RocCurveDisplay.from_predictions(
+      y_true.ravel(),
+      y_pred.ravel(),
+      name='micro-avg ROC curve',
+      ax=ax,
+      linestyle=':'
+    )
+  if macro:
+    fpr, tpr, roc_auc = dict(), dict(), dict()
+    for i in range(N_classes):
+      fpr[i], tpr[i], _ = roc_curve(y_true[:,i],y_pred[:,i])
+      roc_auc[i] = auc(fpr[i],tpr[i])
+    fpr_grid = np.linspace(0.0,1.0,1000)
+    mean_tpr = np.zeros_like(fpr_grid)
+    for i in range(N_classes):
+      mean_tpr += np.interp(fpr_grid,fpr[i],tpr[i])
+    mean_tpr /= N_classes # avg over all classes
+    fpr['macro'] = fpr_grid
+    tpr['macro'] = mean_tpr
+    roc_auc['macro'] = auc(fpr['macro'],tpr['macro'])
+    ax.plot(fpr['macro'],tpr['macro'],label=f"macro-avg ROC (AUC = {roc_auc['macro']:.2f})",linestyle=':')
+  ax.legend(loc='best',prop={'size':11})
   ax.set_xlim(-0.05,1.05); ax.set_ylim(-0.05,1.05)
+  _ = ax.set(
+    xlabel = 'False Positive Rate',
+    ylabel = 'True Positive Rate'
+  )
   plt.savefig(FILE_FIG+MODEL_NAME+'_ROC_OvR.png',facecolor='white',bbox_inches='tight')
   print(f'Saved ROC OvR curves for each class to '+FILE_FIG+MODEL_NAME+'_ROC_OvR.png')
+  # write AUCs to hyperparameters txt file:
+  micro_auc = roc_auc_score(y_true.ravel(),y_pred.ravel(),average='micro')
+  class_aucs = roc_auc_score(y_true,y_pred,average=None,multi_class='ovr')
   with open(FILE_HPTXT, 'a') as f:
-    f.write('\n'+f'Average AUC: {np.mean(aucs)}\n')
-    for i in range(len(aucs)):
-      f.write('\n'+f'Class {class_labels[i]} AUC: {aucs[i]}\n')
+    f.write(f'\nMicro-averaged ROC AUC: {micro_auc:.2f}\n')
+    f.write(f'\nMacro-averaged ROC AUC: {roc_auc["macro"]:.2f}\n')
+    for i in range(len(class_aucs)):
+      f.write('\n'+f'Class {class_labels[i]} ROC AUC: {class_aucs[i]:.2f}\n')
 
-def PR_curves(y_true, y_pred, FILE_MODEL, FILE_FIG):
+def PR_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, chance_lvl=True):
   '''
-  helper function for save_scores_from_fvol to plot Prec-Recall curves.
+  function to plot Precision vs. Recall curves.
+  # NOTE USE SOFTMAX PROBABILITY OUTPUTS FOR Y_PRED!!!!
+  # NOTE y_true, y_pred need to have be label binarized, aka shape=(N_samples, N_classes)
+  y_true: true labels. shape: (N_samples, N_classes)
+  y_pred: 4 channel probability outputs from softmax. shape: (N_samples, N_classes)
+  FILE_MODEL: str, model filepath
+  FILE_FIG: str, dir to save plot in
+  chance_lvl: bool, whether to plot chance level
   '''
   FILE_HPTXT = FILE_MODEL + '_hps.txt'
   MODEL_NAME = FILE_MODEL.split('/')[-1]
-  # calc prec, recall, avg prec:
-  precision = {}; recall = {}; avg_prec = {}
-  for i in range(len(class_labels)):
-    precision[i], recall[i], _ = precision_recall_curve((y_true==i).flatten(), 
-                                                         (y_pred==i).flatten())
-    avg_prec[i] = average_precision_score((y_true==i).flatten(), (y_pred==i).flatten())
-  # plot PR curves:
-  plt.rcParams.update({'font.size': 16})
-  fig, ax = plt.subplots(1,1,figsize=(8,8))
+  N_classes = len(class_labels)
+  prec = dict(); recall = dict(); avg_prec = dict()
+  # create fig, ax
+  fig, ax = plt.subplots(1,1,figsize=(12,12))
   f_scores = np.linspace(0.3, 0.9, num=4)
   lines, labels = [], []
   for f_score in f_scores:
@@ -565,33 +609,68 @@ def PR_curves(y_true, y_pred, FILE_MODEL, FILE_FIG):
     (l,) = ax.plot(x[y >= 0], y[y >= 0], color='gray', alpha=0.2)
     ax.annotate("f1={0:0.1f}".format(f_score), xy=(0.9, y[45] + 0.02),
                 fontsize=10)
-  for i in range(len(class_labels)):
-    display = PrecisionRecallDisplay(precision=precision[i], recall=recall[i],
-                                     average_precision=avg_prec[i])
-    display.plot(ax=ax,name=class_labels[i]+' PR')
+  for i in range(N_classes):
+    prec[i], recall[i], _ = precision_recall_curve(y_true[:,i],y_pred[:,i])
+    avg_prec[i] = average_precision_score(y_true[:,i],y_pred[:,i])
+  prec['micro'], recall['micro'], _ = precision_recall_curve(y_true.ravel(),y_pred.ravel())
+  avg_prec['micro'] = average_precision_score(y_true,y_pred,average='micro')
+  # plot micro avg PR curve:
+  display = PrecisionRecallDisplay(
+    recall=recall["micro"],
+    precision=prec["micro"],
+    average_precision=avg_prec["micro"],
+    prevalence_pos_label=Counter(y_true.ravel())[1] / y_true.size,
+  )
+  display.plot(ax=ax,name='Micro-avg PR',plot_chance_level=chance_lvl)
+  # plot each class PR curve:
+  for i in range(N_classes):
+    display = PrecisionRecallDisplay(
+        recall=recall[i],
+        precision=prec[i],
+        average_precision=avg_prec[i],
+    )
+    display.plot(ax=ax,name=f'{class_labels[i]} PR')
+  ax.set_xlim([0.0,1.0]); ax.set_ylim([0.0,1.05])
   handles, labels = ax.get_legend_handles_labels()
   handles.extend([l])
   labels.extend(["iso-F1 curves"])
-  ax.set_xlim([0.0,1.0]); ax.set_ylim([0.0,1.05])
   ax.legend(handles=handles, labels=labels, loc='best',prop={'size': 10})
   ax.set_title('Multi-Label Precision-Recall Curves')
   plt.savefig(FILE_FIG+MODEL_NAME+'_PR.png',facecolor='white',bbox_inches='tight')
   print('Saved precision-recall curves for each class at: '+FILE_FIG+MODEL_NAME+'_PR.png')
+  with open(FILE_HPTXT, 'a') as f:
+    f.write(f'\nMicro-averaged average precision: {avg_prec["micro"]:.2f}\n')
+    for i in range(N_classes):
+      f.write('\n'+f'Class {class_labels[i]} average precision: {avg_prec[i]:.2f}\n')
+
 # 7/19/23: updated this to use helper functions instead.
-def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG, FILE_DEN):
+def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG):
   '''
   Save F1 scores, confusion matrix, population histograms, ROC curves,
   precision-recall curves. THIS FXN DOES NOT PREDICT!
   Inputs:
-  y_true: true labels (shape=[Nm,Nm,Nm])
-  y_pred: predicted class labels (shape=[Nm,Nm,Nm])
+  y_true: true labels 
+  (shape=[Nm,Nm,Nm], or [N_samples,SUBGRID,SUBGRID,SUBGRID,1])
+  y_pred: predicted class PROBABILITIES NOTE: used to be actual preds
+  (shape=[Nm,Nm,Nm,4], or [N_samples,SUBGRID,SUBGRID,SUBGRID,4])
   FILE_MODEL: str model filepath. should be the same as MODEL_OUT+MODEL_NAME
+  FILE_FIG: str filepath to save figures
   '''
+  if y_pred.shape[-1] != 4:
+    print('y_pred must be a 4 channel array of class probabilities. save_scores_from_fvol may not work as intended')
+  # get in shape for ROC, PR curves:
+  y_true_binarized = label_binarize(y_true.flatten(),classes=[0,1,2,3])
+  y_pred_reshaped = y_pred.reshape(-1,4)
+  ### REQUIRES DIRECT SOFTMAX OUTPUT PROBABILITIES ###
+  ROC_curves(y_true_binarized, y_pred_reshaped, FILE_MODEL, FILE_FIG)
+  PR_curves( y_true_binarized, y_pred_reshaped, FILE_MODEL, FILE_FIG)
+  # get in shape for F1s, Confusion matrix:
+  y_pred = np.argmax(y_pred, axis=-1); y_pred = np.expand_dims(y_pred, axis=-1)
+  # now y_true and y_pred both have shape [N_samples,SUBGRID,SUBGRID,SUBGRID,1]
+  ### REQUIRES ARG-MAXXED CLASS PREDICTIONS ###
   F1s(y_true, y_pred, FILE_MODEL)
   CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG)
   #population_hists(y_true, y_pred, FILE_MODEL, FILE_FIG, FILE_DEN) # broken rn w/ test data
-  ROC_curves(y_true, y_pred, FILE_MODEL, FILE_FIG)
-  PR_curves(y_true, y_pred, FILE_MODEL, FILE_FIG)
   print('Saved metrics.')
 #---------------------------------------------------------
 # Prediction functions:
@@ -613,14 +692,18 @@ def data_generator(data, batch_size):
     i += 1
     if i * batch_size >= num_samples:
       i = 0
-def run_predict_model(model, X_test, batch_size):
+def run_predict_model(model, X_test, batch_size, output_argmax=True):
   '''
   This function runs a prediction on a model that has already been loaded.
   It returns the predicted labels. Meant for multi-class models.
+  output_argmax: bool, if True returns the argmaxxed output. def True.
+  if output_argmax=False, Y_pred shape is [N_samples,SUBGRID,SUBGRID,SUBGRID,4],
+  since it's outputting the Softmax probs the model generates directly
   I: model (keras model), 
   X_test (np.array of shape [N_samples,SUBGRID,SUBGRID,SUBGRID,1]), 
   batch_size (int)
-  O: Y_pred (np.array of shape [N_samples,SUBGRID,SUBGRID,SUBGRID,1])
+  O: Y_pred (np.array of shape [N_samples,SUBGRID,SUBGRID,SUBGRID,1]) 
+  (if output_argmax is True)
   '''
   gen = data_generator(X_test, batch_size)
   N_steps = int(np.ceil(X_test.shape[0] / batch_size))
@@ -629,7 +712,9 @@ def run_predict_model(model, X_test, batch_size):
     X_batch = next(gen)
     Y_pred.append(model.predict(X_batch, verbose=0))
   Y_pred = np.concatenate(Y_pred, axis=0)
-  Y_pred = np.argmax(Y_pred, axis=-1); Y_pred = np.expand_dims(Y_pred, axis=-1)
+  if output_argmax:
+    # if we
+    Y_pred = np.argmax(Y_pred, axis=-1); Y_pred = np.expand_dims(Y_pred, axis=-1)
   return Y_pred
 def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, GRID=512, SUBGRID=128, OFF=64, BOXSIZE=205, BOLSHOI_FLAG=False, TRAIN_SCORE=False, COMPILE=False):
   '''
