@@ -587,6 +587,7 @@ def ROC_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, micro=True, macro=True):
     f.write(f'\nMacro-averaged ROC AUC: {roc_auc["macro"]:.2f}\n')
     for i in range(len(class_aucs)):
       f.write('\n'+f'Class {class_labels[i]} ROC AUC: {class_aucs[i]:.2f}\n')
+  print(f'Wrote ROC AUCs to '+FILE_HPTXT)
 
 def PR_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, chance_lvl=True):
   '''
@@ -620,13 +621,21 @@ def PR_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, chance_lvl=True):
   prec['micro'], recall['micro'], _ = precision_recall_curve(y_true.ravel(),y_pred.ravel())
   avg_prec['micro'] = average_precision_score(y_true,y_pred,average='micro')
   # plot micro avg PR curve:
-  display = PrecisionRecallDisplay(
-    recall=recall["micro"],
-    precision=prec["micro"],
-    average_precision=avg_prec["micro"],
-    prevalence_pos_label=Counter(y_true.ravel())[1] / y_true.size,
-    linestyle=':'
-  )
+  if chance_lvl:
+    display = PrecisionRecallDisplay(
+      recall=recall["micro"],
+      precision=prec["micro"],
+      average_precision=avg_prec["micro"],
+      prevalence_pos_label=Counter(y_true.ravel())[1] / y_true.size,
+      linestyle=':'
+    )
+  else:
+    display = PrecisionRecallDisplay(
+      recall=recall["micro"],
+      precision=prec["micro"],
+      average_precision=avg_prec["micro"],
+      linestyle=':'
+    )
   display.plot(ax=ax,name='Micro-avg PR',plot_chance_level=chance_lvl)
   # plot each class PR curve:
   for i in range(N_classes):
@@ -648,6 +657,7 @@ def PR_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, chance_lvl=True):
     f.write(f'\nMicro-averaged average precision: {avg_prec["micro"]:.2f}\n')
     for i in range(N_classes):
       f.write('\n'+f'Class {class_labels[i]} average precision: {avg_prec[i]:.2f}\n')
+  print(f'Wrote average precisions to '+FILE_HPTXT)
 
 # 7/19/23: updated this to use helper functions instead.
 def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG):
@@ -665,7 +675,7 @@ def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG):
   if y_pred.shape[-1] != 4:
     print('y_pred must be a 4 channel array of class probabilities. save_scores_from_fvol may not work as intended')
   # get in shape for ROC, PR curves:
-  y_true_binarized = label_binarize(y_true.reshape(-1),classes=[0,1,2,3])
+  y_true_binarized = to_categorical(y_true,num_classes=4,dtype='int8')
   y_pred_reshaped = y_pred.reshape(-1,4)
   ### REQUIRES DIRECT SOFTMAX OUTPUT PROBABILITIES ###
   ROC_curves(y_true_binarized, y_pred_reshaped, FILE_MODEL, FILE_FIG)
