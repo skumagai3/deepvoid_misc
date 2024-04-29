@@ -217,7 +217,7 @@ def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=
 #---------------------------------------------------------
 # For loading testing/validation data for prediction
 #---------------------------------------------------------
-def load_dataset(file_in, SUBGRID, OFF, preproc='mm',sigma=None):
+def load_dataset(file_in, SUBGRID, OFF, preproc='mm',sigma=None,return_int=False):
   #--- Read density field
   den = volumes.read_fvolume(file_in)
   if sigma is not None:
@@ -248,7 +248,10 @@ def load_dataset(file_in, SUBGRID, OFF, preproc='mm',sigma=None):
         X_all[cont,:,:,:,0] = sub_den
         cont = cont+1
       
-  X_all = X_all.astype('float16')
+  if return_int:
+    X_all = X_all.astype('int8')
+  else:
+    X_all = X_all.astype('float16')
   return X_all
 #---------------------------------------------------------
 # Focal loss function
