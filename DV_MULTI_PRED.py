@@ -52,12 +52,13 @@ else:
 LOSS = 'CCE' # default loss fxn
 if 'FOCAL' in MODEL_NAME:
     LOSS = 'FOCAL_CCE'
-L = float(MODEL_NAME.split('base_L')[1].split('_')[0])
+base_L = float(MODEL_NAME.split('base_L')[1].split('_')[0])
 print('#############################################')
 print('>>> Running DV_MULTI_PRED.py')
 print('>>> Root directory: ',ROOT_DIR)
 print('Simulation = ', SIM); 
-print('L = ',L); 
+print('Model trained on L = ',base_L); 
+print('Model predicting on :',FN_DEN)
 print('DEPTH = ',DEPTH); print('FILTERS = ',FILTERS)
 print('Eigenvalue threshold used in mask = ',th)
 print('UNIFORM_FLAG = ',UNIFORM_FLAG)
@@ -98,4 +99,6 @@ if SIM == 'BOL':
     FILE_DEN = path_to_BOL + FN_DEN
     FILE_MSK = path_to_BOL + FN_MSK
     FIG_OUT = FIG_DIR_PATH + 'Bolshoi/' + MODEL_NAME + '/'
-
+# we want the figures to be saved in ROOT_DIR/figs/SIM/MODEL_NAME/:
+if not os.path.exists(FIG_OUT):
+    os.makedirs(FIG_OUT)

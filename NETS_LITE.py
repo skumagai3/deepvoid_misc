@@ -620,6 +620,7 @@ def PR_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, chance_lvl=True):
     precision=prec["micro"],
     average_precision=avg_prec["micro"],
     prevalence_pos_label=Counter(y_true.ravel())[1] / y_true.size,
+    linestyle=':'
   )
   display.plot(ax=ax,name='Micro-avg PR',plot_chance_level=chance_lvl)
   # plot each class PR curve:
@@ -713,10 +714,10 @@ def run_predict_model(model, X_test, batch_size, output_argmax=True):
     Y_pred.append(model.predict(X_batch, verbose=0))
   Y_pred = np.concatenate(Y_pred, axis=0)
   if output_argmax:
-    # if we
+    # if we want the actual predictions [0,1,2,3]
     Y_pred = np.argmax(Y_pred, axis=-1); Y_pred = np.expand_dims(Y_pred, axis=-1)
   return Y_pred
-def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, GRID=512, SUBGRID=128, OFF=64, BOXSIZE=205, BOLSHOI_FLAG=False, TRAIN_SCORE=False, COMPILE=False):
+def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, GRID=512, SUBGRID=128, OFF=64, BOXSIZE=205, BOLSHOI_FLAG=False, TRAIN_SCORE=False, COMPILE=False, LATEX=False):
   '''
   Save image of density, mask, and predicted mask. Using save_scores_from_fvol,
   saves F1 scores, confusion matrix to MODEL_NAME_hps.txt and plots confusion matrix.
@@ -731,6 +732,8 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
   TRAIN_SCORE: bool whether you're scoring on training data or not. def false
   COMPILE: bool whether or not to compile the model. def False to get around
   custom objects error.
+  LATEX: bool whether or not to typeset plot labels/titles with LaTeX. added 
+  because some envs have thrown errors.
   '''
   MODEL_NAME = FILE_MODEL.split('/')[-1]
   DELTA_NAME = FILE_DEN.split('/')[-1]
@@ -766,18 +769,20 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
   den_cmap = 'gray' # default for full DM particle density
   d = volumes.read_fvolume(FILE_DEN); d = d/np.mean(d) # delta+1
   m = volumes.read_fvolume(FILE_MSK)
-  #plt.rcParams.update({'font.size': 20})
+  plt.rcParams.update({'font.size': 20})
   fig,ax = plt.subplots(1,3,figsize=(28,12),tight_layout=True)
   i = GRID//3
-  #ax[0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
-  ax[0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
+  if LATEX:
+    ax[0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
+  else:
+    ax[0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
   ax[1].set_title('Predicted Mask')
   ax[2].set_title('True Mask')
   plotter.plot_arr(d,i,ax=ax[0],cmap=den_cmap,logged=True)
   plotter.plot_arr(Y_pred,i,ax=ax[1],segmented_cb=True)
   plotter.plot_arr(m,i,ax=ax[2],segmented_cb=True)
   for axis in ax:
-    plotter.set_window(b=0,t=BOXSIZE,Nm=GRID,ax=axis,boxsize=BOXSIZE,Latex=False)
+    plotter.set_window(b=0,t=BOXSIZE,Nm=GRID,ax=axis,boxsize=BOXSIZE,Latex=LATEX)
   plt.savefig(FILE_FIG+MODEL_NAME+'-pred-comp.png',facecolor='white',bbox_inches='tight')
   print(f'Saved comparison plot to {FILE_FIG+MODEL_NAME}-pred-comp.png')
 
@@ -786,24 +791,27 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
   i = GRID//2
   step = 5
   # i - step slice:
-  #ax[0,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
-  ax[0,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
+  if LATEX:
+    ax[0,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
+    ax[1,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
+    ax[2,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
+  else:
+    ax[0,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
+    ax[1,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
+    ax[2,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
+
   ax[0,1].set_title(f'Predicted Mask\nSlice {i-step}')
   ax[0,2].set_title(f'True Mask\nSlice {i-step}')
   plotter.plot_arr(d,i-step,ax=ax[0,0],cmap=den_cmap,logged=True)
   plotter.plot_arr(Y_pred,i-step,ax=ax[0,1],segmented_cb=True)
   plotter.plot_arr(m,i-step,ax=ax[0,2],segmented_cb=True)
   # i slice:
-  #ax[1,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
-  ax[1,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
   ax[1,1].set_title(f'Predicted Mask\nSlice {i}')
   ax[1,2].set_title(f'True Mask\nSlice {i}')
   plotter.plot_arr(d,i,ax=ax[1,0],cmap=den_cmap,logged=True)
   plotter.plot_arr(Y_pred,i,ax=ax[1,1],segmented_cb=True)
   plotter.plot_arr(m,i,ax=ax[1,2],segmented_cb=True)
   # i + step slice:
-  #ax[2,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
-  ax[2,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
   ax[2,1].set_title(f'Predicted Mask\nSlice {i+step}')
   ax[2,2].set_title(f'True Mask\nSlice {i+step}')
   plotter.plot_arr(d,i+step,ax=ax[2,0],cmap=den_cmap,logged=True)
@@ -811,7 +819,7 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
   plotter.plot_arr(m,i+step,ax=ax[2,2],segmented_cb=True)
   # fix axis labels to be Mpc/h:
   for axis in ax.flatten():
-    plotter.set_window(b=0,t=BOXSIZE,Nm=GRID,ax=axis,boxsize=BOXSIZE,Latex=False)
+    plotter.set_window(b=0,t=BOXSIZE,Nm=GRID,ax=axis,boxsize=BOXSIZE,Latex=LATEX)
   plt.savefig(FILE_FIG+MODEL_NAME+'-pred-comp-3x3.png',facecolor='white',bbox_inches='tight')
   print(f'Saved 3x3 comparison plot to {FILE_FIG+MODEL_NAME}-pred-comp-3x3.png')
 
