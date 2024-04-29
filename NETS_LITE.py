@@ -390,7 +390,7 @@ class ComputeMetrics(Callback):
       _val_ROC_AUC = roc_auc_score(Y_test.reshape(-1,4),Y_pred.reshape(-1,4),average=self.avg,multi_class='ovr')
       Y_test = np.argmax(Y_test,axis=-1); Y_test = np.expand_dims(Y_test,axis=-1)
       Y_pred = np.argmax(Y_pred,axis=-1); Y_pred = np.expand_dims(Y_pred,axis=-1)
-      Y_test = Y_test.flatten(); Y_pred = Y_pred.flatten()
+      Y_test = Y_test.ravel(); Y_pred = Y_pred.ravel()
       _val_balanced_acc = balanced_accuracy_score(Y_test,Y_pred)
       _val_precision, _val_recall, _val_f1, _val_support = precision_recall_fscore_support(Y_test,Y_pred,beta=self.beta,average=self.avg,zero_division=0.0)
       _val_matt_corrcoef = matthews_corrcoef(Y_test,Y_pred)
@@ -436,7 +436,7 @@ def F1s(y_true, y_pred, FILE_MODEL):
   FILE_HPTXT = FILE_MODEL + '_hps.txt'
   MODEL_NAME = FILE_MODEL.split('/')[-1]
   # calculate F1 scores:
-  f1s = f1_score(y_true.flatten(), y_pred.flatten(), average=None)
+  f1s = f1_score(y_true.ravel(), y_pred.ravel(), average=None)
   with open(FILE_HPTXT, 'a') as f:
     for i in range(len(f1s)):
       f.write(f'Class {class_labels[i]} F1: {f1s[i]} \n')
@@ -451,9 +451,9 @@ def CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG):
   MODEL_NAME = FILE_MODEL.split('/')[-1]
   # compute confusion matrix:
   plt.rcParams.update({'font.size': 14})
-  cm = confusion_matrix(y_true.flatten(), y_pred.flatten(),
+  cm = confusion_matrix(y_true.ravel(), y_pred.ravel(),
                         labels=[0,1,2,3],normalize='true')
-  class_report = classification_report(y_true.flatten(), y_pred.flatten(),labels=[0,1,2,3],output_dict=True)
+  class_report = classification_report(y_true.ravel(), y_pred.ravel(),labels=[0,1,2,3],output_dict=True)
   # write confusion matrix to hyperparameters txt file:
   with open(FILE_HPTXT, 'a') as f:
     f.write('\nConfusion matrix: \n')
@@ -660,7 +660,7 @@ def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG):
   if y_pred.shape[-1] != 4:
     print('y_pred must be a 4 channel array of class probabilities. save_scores_from_fvol may not work as intended')
   # get in shape for ROC, PR curves:
-  y_true_binarized = label_binarize(y_true.flatten(),classes=[0,1,2,3])
+  y_true_binarized = label_binarize(y_true.reshape(-1),classes=[0,1,2,3])
   y_pred_reshaped = y_pred.reshape(-1,4)
   ### REQUIRES DIRECT SOFTMAX OUTPUT PROBABILITIES ###
   ROC_curves(y_true_binarized, y_pred_reshaped, FILE_MODEL, FILE_FIG)
