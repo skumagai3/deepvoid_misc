@@ -203,15 +203,21 @@ elif LOSS == 'FOCAL_CCE':
 DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 #===============================================================
 # Save training and test arrays for later preds:
+# what parameters are important for the validation 
+# data? SIM, L, GRID. 
+# filenames: TNG: TNG_L{L}_GRID{GRID}_X_test.npy
+# BOL: BOL_L{L}_GRID{GRID}_X_test.npy
 #===============================================================
+VAL_DATA_NAME = f'{SIM}_L{L}_Nm={GRID}'
 if SIM == 'TNG':
-  FILE_X_TEST = path_to_TNG + MODEL_NAME + '_X_test.npy'
-  FILE_Y_TEST = path_to_TNG + MODEL_NAME + '_Y_test.npy'
+  FILE_X_TEST = path_to_TNG + VAL_DATA_NAME + '_X_test.npy'
+  FILE_Y_TEST = path_to_TNG + VAL_DATA_NAME + '_Y_test.npy'
 if SIM == 'BOL':
-  FILE_X_TEST = path_to_BOL + MODEL_NAME + '_X_test.npy'
-  FILE_Y_TEST = path_to_BOL + MODEL_NAME + '_Y_test.npy'
-SAVE_VAL_DATA = False # should only need to do once. make sure seed is set!
-if SAVE_VAL_DATA:
+  FILE_X_TEST = path_to_BOL + VAL_DATA_NAME + '_X_test.npy'
+  FILE_Y_TEST = path_to_BOL + VAL_DATA_NAME + '_Y_test.npy'
+if os.path.exists(FILE_X_TEST) and os.path.exists(FILE_Y_TEST):
+  pass
+else:
   np.save(FILE_X_TEST,X_test,allow_pickle=True)
   np.save(FILE_Y_TEST,Y_test,allow_pickle=True)
   print(f'>>> Saved X_test to {FILE_X_TEST}')

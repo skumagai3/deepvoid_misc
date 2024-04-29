@@ -102,3 +102,5 @@ if SIM == 'BOL':
 # we want the figures to be saved in ROOT_DIR/figs/SIM/MODEL_NAME/:
 if not os.path.exists(FIG_OUT):
     os.makedirs(FIG_OUT)
+
+

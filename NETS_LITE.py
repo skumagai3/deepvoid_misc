@@ -547,6 +547,7 @@ def ROC_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, micro=True, macro=True):
       name=f'{class_labels[i]} ROC curve',
       ax=ax
     )
+    print(f'Calculated ROC curve for class {class_labels[i]}!')
   # add micro averaged ROC curve:
   if micro:
     _ = RocCurveDisplay.from_predictions(
@@ -615,6 +616,7 @@ def PR_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, chance_lvl=True):
   for i in range(N_classes):
     prec[i], recall[i], _ = precision_recall_curve(y_true[:,i],y_pred[:,i])
     avg_prec[i] = average_precision_score(y_true[:,i],y_pred[:,i])
+    print(f'Calculated PR curve for class {class_labels[i]}!')
   prec['micro'], recall['micro'], _ = precision_recall_curve(y_true.ravel(),y_pred.ravel())
   avg_prec['micro'] = average_precision_score(y_true,y_pred,average='micro')
   # plot micro avg PR curve:
