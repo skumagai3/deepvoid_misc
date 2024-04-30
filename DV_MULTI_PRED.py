@@ -127,6 +127,8 @@ if SIM == 'BOL':
         L = int(float(FN_DEN.split('L')[1].split('.fvol')[0]))
 X_VAL_DATA_NAME = f'{SIM}_L{L}_Nm={GRID}'
 Y_VAL_DATA_NAME = f'{SIM}_Nm={GRID}'
+if 'SCCE' in MODEL_NAME:
+    Y_VAL_DATA_NAME += '_int'
 if SIM == 'TNG':
     X_TEST_PATH = path_to_TNG + X_VAL_DATA_NAME + '_X_test.npy'
     Y_TEST_PATH = path_to_TNG + Y_VAL_DATA_NAME + '_Y_test.npy'

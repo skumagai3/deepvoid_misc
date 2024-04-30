@@ -24,7 +24,7 @@ from tensorflow.python.keras.utils import layer_utils
 from keras.utils import to_categorical
 from keras.layers import Input, Conv3D, MaxPooling3D, Conv3DTranspose, UpSampling3D, Concatenate, BatchNormalization, Activation, Dropout
 from keras import backend as K
-from keras.losses import CategoricalCrossentropy
+from keras.losses import CategoricalCrossentropy, SparseCategoricalCrossentropy
 from keras.callbacks import Callback, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, TensorBoard, CSVLogger
 
 from sklearn.preprocessing import label_binarize
@@ -379,27 +379,31 @@ class ComputeMetrics(Callback):
   It also computes the F1 score, recall, and precision for the void class.
   Usage: metrics = ComputeMetrics((X_test,Y_test),10,avg='macro')
   avg can be: 'micro', 'macro', 'weighted'.
-  N_epochs is how often you want to compute the metrics.
+  N_epochs is how often you want to compute the metrics. 
+  beta is for the Fscore (default=1, F1 score = Dice coef)
+  one_hot: bool, added so that SCCE models don't error out during training.
   '''
-  def __init__(self,val_data,N_epochs,avg='weighted',beta=1.0):
+  def __init__(self,val_data,N_epochs,avg='micro',beta=1.0,one_hot=True):
     super().__init__()
     self.validation_data = val_data
     self.N_epochs = N_epochs
     self.avg = avg
     self.beta = beta
+    self.one_hot = one_hot
   def on_epoch_end(self,epoch,logs={}):
     if epoch % self.N_epochs == 0:
       X_test = self.validation_data[0]; Y_test = self.validation_data[1]
       Y_pred = self.model.predict(X_test,verbose=0)
       #_val_loss, _val_acc = self.model.evaluate(X_test,Y_test,verbose=0)
       _val_ROC_AUC = roc_auc_score(Y_test.reshape(-1,4),Y_pred.reshape(-1,4),average=self.avg,multi_class='ovr')
-      Y_test = np.argmax(Y_test,axis=-1); Y_test = np.expand_dims(Y_test,axis=-1)
-      Y_pred = np.argmax(Y_pred,axis=-1); Y_pred = np.expand_dims(Y_pred,axis=-1)
+      if self.one_hot:
+        Y_test = np.argmax(Y_test,axis=-1); Y_test = np.expand_dims(Y_test,axis=-1)
+        Y_pred = np.argmax(Y_pred,axis=-1); Y_pred = np.expand_dims(Y_pred,axis=-1)
       Y_test = Y_test.ravel(); Y_pred = Y_pred.ravel()
       _val_balanced_acc = balanced_accuracy_score(Y_test,Y_pred)
-      _val_precision, _val_recall, _val_f1, _val_support = precision_recall_fscore_support(Y_test,Y_pred,beta=self.beta,average=self.avg,zero_division=0.0)
+      _val_precision, _val_recall, _val_f1, _ = precision_recall_fscore_support(Y_test,Y_pred,beta=self.beta,average=self.avg,zero_division=0.0)
       _val_matt_corrcoef = matthews_corrcoef(Y_test,Y_pred)
-      _val_void_precision, _val_void_recall, _val_void_f1, _val_void_support = precision_recall_fscore_support(Y_test,Y_pred,beta=self.beta,average=self.avg,zero_division=0.0)
+      _val_void_precision, _val_void_recall, _val_void_f1, _ = precision_recall_fscore_support(Y_test,Y_pred,beta=self.beta,labels=[0],zero_division=0.0)
 
       #logs['val_loss'] = _val_loss
       #logs['val_acc'] = _val_acc

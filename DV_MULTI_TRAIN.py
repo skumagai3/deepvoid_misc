@@ -38,7 +38,7 @@ if len(sys.argv) != 12:
         and UNIFORM_FLAG is 1 if you want to use identical masses for all subhaloes, 0 if not.
         BATCHNORM is 1 if you want to use batch normalization, 0 if not.
         DROPOUT is the dropout rate, and LOSS is the loss function to use.
-        LOSS is one of 'CCE', 'FOCAL_CCE', 'DICE_AVG', or 'DICE_VOID'.
+        LOSS is one of 'CCE', 'SCCE', 'FOCAL_CCE', 'DICE_AVG', or 'DICE_VOID'.
         MULTI_FLAG is 1 if you want to use multiprocessing, 0 if not.
         GRID is the size of the density and mask fields on a side. For TNG,
         GRID=512 (unless you want a lightweight model, then GRID=128), and for Bolshoi, GRID=640.''')
@@ -176,12 +176,13 @@ X_train, X_test, Y_train, Y_test = nets.train_test_split(features,labels,
 print(f'>>> Split into training ({(1-test_size)*100}%) and validation ({test_size*100}%) sets')
 print('X_train shape: ',X_train.shape); print('Y_train shape: ',Y_train.shape)
 print('X_test shape: ',X_test.shape); print('Y_test shape: ',Y_test.shape)
-print('>>> Converting to one-hot encoding')
-Y_train = nets.to_categorical(Y_train, num_classes=N_CLASSES)#,dtype='int8')
-Y_test  = nets.to_categorical(Y_test, num_classes=N_CLASSES)#,dtype='int8')
-print('>>> One-hot encoding complete')
-print('Y_train shape: ',Y_train.shape)
-print('Y_test shape: ',Y_test.shape)
+if LOSS != 'SCCE':
+  print('>>> Converting to one-hot encoding')
+  Y_train = nets.to_categorical(Y_train, num_classes=N_CLASSES)#,dtype='int8')
+  Y_test  = nets.to_categorical(Y_test, num_classes=N_CLASSES)#,dtype='int8')
+  print('>>> One-hot encoding complete')
+  print('Y_train shape: ',Y_train.shape)
+  print('Y_test shape: ',Y_test.shape)
 #===============================================================
 # Set model hyperparameters
 #===============================================================
@@ -201,6 +202,9 @@ if LOSS == 'CCE':
   pass
 elif LOSS == 'FOCAL_CCE':
   MODEL_NAME += '_FOCAL'
+elif LOSS == 'SCCE':
+  MODEL_NAME += '_SCCE'
+  print('Loss function SCCE requires integer labels, NOT one-hots')
 ### NOTE: add support for more loss functions here NOTE ###
 DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 #===============================================================
@@ -209,10 +213,14 @@ DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 # data? SIM, L, GRID. 
 # filenames: TNG: TNG_L{L}_GRID{GRID}_X_test.npy
 # BOL: BOL_L{L}_GRID{GRID}_X_test.npy
-# for Y_test though, the only thing that matters is SIM, GRID
+# for Y_test though, the only things that matter is SIM, GRID,
+# and if they're one-hot encoded or not. if LOSS = SCCE,
+# add a flag that indicates the labels are integers.
 #===============================================================
 X_VAL_DATA_NAME = f'{SIM}_L{L}_Nm={GRID}'
 Y_VAL_DATA_NAME = f'{SIM}_Nm={GRID}'
+if LOSS == 'SCCE':
+  Y_VAL_DATA_NAME += '_int'
 if SIM == 'TNG':
   FILE_X_TEST = path_to_TNG + X_VAL_DATA_NAME + '_X_test.npy'
   FILE_Y_TEST = path_to_TNG + Y_VAL_DATA_NAME + '_Y_test.npy'
@@ -221,7 +229,11 @@ if SIM == 'BOL':
   FILE_Y_TEST = path_to_BOL + Y_VAL_DATA_NAME + '_Y_test.npy'
 if os.path.exists(FILE_X_TEST) and os.path.exists(FILE_Y_TEST):
   pass
-else:
+elif os.path.exists(FILE_X_TEST) and not os.path.exists(FILE_Y_TEST):
+  np.save(FILE_Y_TEST,Y_test,allow_pickle=True)
+  print(f'File {FILE_X_TEST} already exists.')
+  print(f'>>> Saved Y_test to {FILE_Y_TEST}')
+elif not os.path.exists(FILE_X_TEST) and not os.path.exists(FILE_Y_TEST):
   np.save(FILE_X_TEST,X_test,allow_pickle=True)
   np.save(FILE_Y_TEST,Y_test,allow_pickle=True)
   print(f'>>> Saved X_test to {FILE_X_TEST}')
@@ -255,6 +267,8 @@ for key in hp_dict.keys():
 #===============================================================
 if LOSS == 'CCE':
   loss = nets.CategoricalCrossentropy()
+elif LOSS == 'SCCE':
+  loss = nets.SparseCategoricalCrossentropy()
 elif LOSS == 'FOCAL_CCE':
   loss = [nets.categorical_focal_loss(alpha=0.25,gamma=2.0)]
 elif LOSS == 'DICE_AVG':
@@ -307,7 +321,10 @@ N_epochs_metric = 10; print(f'classification metrics calculated every {N_epochs_
 #===============================================================
 print('>>> Training')
 # set up callbacks
-metrics = nets.ComputeMetrics((X_test,Y_test), N_epochs = N_epochs_metric, avg='macro')
+ONE_HOT_FLAG = True # for compute metrics callback
+if LOSS == 'SCCE':
+  ONE_HOT_FLAG = False
+metrics = nets.ComputeMetrics((X_test,Y_test), N_epochs = N_epochs_metric, avg='macro',one_hot=ONE_HOT_FLAG)
 model_chkpt = nets.ModelCheckpoint(FILE_OUT + MODEL_NAME, monitor='val_loss',
                                    save_best_only=True,verbose=2)
 #log_dir = "logs/fit/" + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") 
@@ -346,7 +363,10 @@ scores['VAL_FLAG'] = VAL_FLAG
 Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False)
 # since output argmax = False, Y_pred shape = [N_samples,SUBGRID,SUBGRID,SUBGRID,N_CLASSES]
 # adjust Y_test shape to be [N_samples,SUBGRID,SUBGRID,SUBGRID,1]:
-Y_test = np.argmax(Y_test,axis=-1); Y_test = np.expand_dims(Y_test,axis=-1)
+if LOSS != 'SCCE':
+  # undo one-hot encoding for input into save_scores_from_fvol
+  Y_test = np.argmax(Y_test,axis=-1)
+  Y_test = np.expand_dims(Y_test,axis=-1)
 nets.save_scores_from_fvol(Y_test,Y_pred,
                            FILE_OUT+MODEL_NAME,FIG_DIR,
                            scores,
