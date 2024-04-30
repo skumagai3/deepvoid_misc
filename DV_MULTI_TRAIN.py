@@ -180,6 +180,8 @@ print('>>> Converting to one-hot encoding')
 Y_train = nets.to_categorical(Y_train, num_classes=N_CLASSES)#,dtype='int8')
 Y_test  = nets.to_categorical(Y_test, num_classes=N_CLASSES)#,dtype='int8')
 print('>>> One-hot encoding complete')
+print('Y_train shape: ',Y_train.shape)
+print('Y_test shape: ',Y_test.shape)
 #===============================================================
 # Set model hyperparameters
 #===============================================================
@@ -207,14 +209,16 @@ DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 # data? SIM, L, GRID. 
 # filenames: TNG: TNG_L{L}_GRID{GRID}_X_test.npy
 # BOL: BOL_L{L}_GRID{GRID}_X_test.npy
+# for Y_test though, the only thing that matters is SIM, GRID
 #===============================================================
-VAL_DATA_NAME = f'{SIM}_L{L}_Nm={GRID}'
+X_VAL_DATA_NAME = f'{SIM}_L{L}_Nm={GRID}'
+Y_VAL_DATA_NAME = f'{SIM}_Nm={GRID}'
 if SIM == 'TNG':
-  FILE_X_TEST = path_to_TNG + VAL_DATA_NAME + '_X_test.npy'
-  FILE_Y_TEST = path_to_TNG + VAL_DATA_NAME + '_Y_test.npy'
+  FILE_X_TEST = path_to_TNG + X_VAL_DATA_NAME + '_X_test.npy'
+  FILE_Y_TEST = path_to_TNG + Y_VAL_DATA_NAME + '_Y_test.npy'
 if SIM == 'BOL':
-  FILE_X_TEST = path_to_BOL + VAL_DATA_NAME + '_X_test.npy'
-  FILE_Y_TEST = path_to_BOL + VAL_DATA_NAME + '_Y_test.npy'
+  FILE_X_TEST = path_to_BOL + X_VAL_DATA_NAME + '_X_test.npy'
+  FILE_Y_TEST = path_to_BOL + Y_VAL_DATA_NAME + '_Y_test.npy'
 if os.path.exists(FILE_X_TEST) and os.path.exists(FILE_Y_TEST):
   pass
 else:
@@ -326,6 +330,17 @@ if not os.path.exists(FIG_DIR):
 FILE_METRICS = FIG_DIR + MODEL_NAME + '_metrics.png'
 plotter.plot_training_metrics_all(history,FILE_METRICS,savefig=True)
 #===============================================================
+# set up score_dict. 
+#===============================================================
+VAL_FLAG = True
+scores = {}
+scores['SIM'] = SIM; scores['DEPTH'] = DEPTH; scores['FILTERS'] = FILTERS
+scores['L_TRAIN'] = L; scores['L_PRED'] = L
+scores['UNIFORM_FLAG'] = UNIFORM_FLAG; scores['BATCHNORM'] = BATCHNORM
+scores['DROPOUT'] = DROPOUT; scores['LOSS'] = LOSS
+scores['GRID'] = GRID; scores['DATE'] = DATE; scores['MODEL_NAME'] = MODEL_NAME
+scores['VAL_FLAG'] = VAL_FLAG
+#===============================================================
 # Predict, record metrics, and plot metrics on TEST DATA
 #===============================================================
 Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False)
@@ -333,7 +348,12 @@ Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False)
 # adjust Y_test shape to be [N_samples,SUBGRID,SUBGRID,SUBGRID,1]:
 Y_test = np.argmax(Y_test,axis=-1); Y_test = np.expand_dims(Y_test,axis=-1)
 nets.save_scores_from_fvol(Y_test,Y_pred,
-                           FILE_OUT+MODEL_NAME,FIG_DIR)
+                           FILE_OUT+MODEL_NAME,FIG_DIR,
+                           scores,
+                           VAL_FLAG=VAL_FLAG)
+# save score_dict by appending to the end of the csv.
+# csv will be at ROOT_DIR/model_scores.csv
+nets.save_scores_to_csv(scores,ROOT_DIR+'model_scores.csv')
 #========================================================================
 # Predict and plot and record metrics on TRAINING DATA
 # with TRAIN_SCORE = False, all this does is predict on the entire 

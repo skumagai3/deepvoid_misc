@@ -7,6 +7,7 @@ cubes.
 import os
 import sys
 import nets
+import numpy as np
 import volumes
 import plotter
 import NETS_LITE as nets
@@ -102,5 +103,80 @@ if SIM == 'BOL':
 # we want the figures to be saved in ROOT_DIR/figs/SIM/MODEL_NAME/:
 if not os.path.exists(FIG_OUT):
     os.makedirs(FIG_OUT)
-
-
+#===============================================================================
+# load model (set compile=False if necessary?)
+#===============================================================================
+model = nets.load_model(FILE_OUT+MODEL_NAME)
+model.summary()
+#===============================================================================
+# Check if validation set exists, if so, score on that
+# if not, warn that these scores are based off data it was trained on
+#===============================================================================
+# we want to extract L from FILE_DEN...not necessarily base_L
+if SIM == 'TNG':
+    if FN_DEN == 'DM_DEN_snap99_Nm=512.fvol':
+        L = 0.33
+    else:
+        # recall TNG files have names like subs1_mass_Nm512_L3_d_None_smooth.fvol
+        L = int(FN_DEN.split('L')[1].split('_')[0])
+if SIM == 'BOL':
+    if FN_DEN == 'Bolshoi_halo_CIC_640_L=0.122.fvol':
+        L = 0.122
+    else:
+        # recall BOL files have names like Bolshoi_halo_CIC_640_L=5.0.fvol
+        L = int(float(FN_DEN.split('L')[1].split('.fvol')[0]))
+X_VAL_DATA_NAME = f'{SIM}_L{L}_Nm={GRID}'
+Y_VAL_DATA_NAME = f'{SIM}_Nm={GRID}'
+if SIM == 'TNG':
+    X_TEST_PATH = path_to_TNG + X_VAL_DATA_NAME + '_X_test.npy'
+    Y_TEST_PATH = path_to_TNG + Y_VAL_DATA_NAME + '_Y_test.npy'
+if SIM == 'BOL':
+    X_TEST_PATH = path_to_BOL + X_VAL_DATA_NAME + '_X_test.npy'
+    Y_TEST_PATH = path_to_BOL + Y_VAL_DATA_NAME + '_Y_test.npy'
+if os.path.exists(X_TEST_PATH) and os.path.exists(Y_TEST_PATH):
+    VAL_FLAG = True
+    X_test = np.load(X_TEST_PATH,allow_pickle=True)
+    Y_test = np.load(Y_TEST_PATH,allow_pickle=True)
+    print(f'Loaded validation features from {X_TEST_PATH}')
+    print(f'Loaded validation labels from {Y_TEST_PATH}')
+    # undo one-hot on Y_test:
+    Y_test = np.argmax(Y_test,axis=-1); Y_test = np.expand_dims(Y_test,axis=-1)
+else:
+    VAL_FLAG = False
+    print('Model is being scored on training data. Scores may be better than they actually should be.')
+    X_test = nets.load_dataset(FILE_DEN, SUBGRID, OFF)
+    Y_test = nets.load_dataset(FILE_MSK, SUBGRID, OFF, preproc=None, return_int=True)
+#===============================================================================
+# predict
+# remember that Y_pred will have shape (N_samples, SUBGRID, SUBGRID, SUBGRID, 4)
+#===============================================================================
+batch_size = 8
+Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False)
+#===============================================================================
+# set up score_dict. 
+#===============================================================================
+scores = {}
+scores['SIM'] = SIM; scores['DEPTH'] = DEPTH; scores['FILTERS'] = FILTERS
+scores['L_TRAIN'] = base_L; scores['L_PRED'] = L
+scores['UNIFORM_FLAG'] = UNIFORM_FLAG; scores['BATCHNORM'] = BATCHNORM
+scores['DROPOUT'] = DROPOUT; scores['LOSS'] = LOSS
+scores['GRID'] = GRID; scores['DATE'] = DATE; scores['MODEL_NAME'] = MODEL_NAME
+scores['VAL_FLAG'] = VAL_FLAG
+#===============================================================================
+# score
+#===============================================================================
+nets.save_scores_from_fvol(Y_test,Y_pred,FILE_OUT+MODEL_NAME,
+                           FIG_OUT,
+                           scores,
+                           VAL_FLAG)
+#===============================================================================
+# plot slices
+#===============================================================================
+if SIM == 'TNG':
+  nets.save_scores_from_model(FILE_DEN, FILE_MSK, FILE_OUT+MODEL_NAME, FIG_OUT, FILE_PRED,
+                              GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,TRAIN_SCORE=False)
+elif SIM == 'BOL':
+  nets.save_scores_from_model(FILE_DEN, FILE_MSK, FILE_OUT+MODEL_NAME, FIG_OUT, FILE_PRED,
+                              GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,BOXSIZE=256,BOLSHOI_FLAG=True,
+                              TRAIN_SCORE=False)
+print('>>> Finished predicting on training data')

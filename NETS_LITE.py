@@ -430,21 +430,36 @@ class ComputeMetrics(Callback):
 #---------------------------------------------------------
 # Scoring functions for multi-class classification
 #---------------------------------------------------------
-
-def F1s(y_true, y_pred, FILE_MODEL):
+def F1s(y_true, y_pred, FILE_MODEL, score_dict):
   '''
   helper fxn for save_scores_from_fvol to calculate F1 scores
-  and write to hyperparameters txt file.
+  and write to score_dict dictionary.
   '''
-  FILE_HPTXT = FILE_MODEL + '_hps.txt'
+  #FILE_HPTXT = FILE_MODEL + '_hps.txt'
   MODEL_NAME = FILE_MODEL.split('/')[-1]
   # calculate F1 scores:
-  f1s = f1_score(y_true.ravel(), y_pred.ravel(), average=None)
-  with open(FILE_HPTXT, 'a') as f:
-    for i in range(len(f1s)):
-      f.write(f'Class {class_labels[i]} F1: {f1s[i]} \n')
-    f.write(f'\nAverage F1: {np.mean(f1s)} \n')
-
+  ps, rs, f1s, _ = precision_recall_fscore_support(y_true.ravel(), y_pred.ravel(), average=None)
+  micro_f1 = f1_score(y_true.ravel(), y_pred.ravel(), average='micro')
+  macro_f1 = f1_score(y_true.ravel(), y_pred.ravel(), average='macro')
+  weight_f1 = f1_score(y_true.ravel(), y_pred.ravel(), average='weighted')
+  # NOTE WRITING SCORES TO HYPERPARAMETER TXT FILES IS DEPRECATED!
+  #with open(FILE_HPTXT, 'a') as f:
+  #  for i in range(len(f1s)):
+  #    f.write(f'Class {class_labels[i]} F1: {f1s[i]} \n')
+  #  f.write(f'\nAverage F1: {np.mean(f1s)} \n')
+  # add to score_dict:
+  score_dict['micro_f1'] = micro_f1
+  score_dict['macro_f1'] = macro_f1
+  score_dict['weighted_f1'] = weight_f1
+  for i in range(len(f1s)):
+    score_dict[f'class_{class_labels[i]}_f1'] = f1s[i]
+    score_dict[f'class_{class_labels[i]}_precision'] = ps[i]
+    score_dict[f'class_{class_labels[i]}_recall'] = rs[i]
+  print(f'Micro F1: {micro_f1} \nMacro F1: {macro_f1} \nWeighted F1: {weight_f1}')
+  print(f'Class {class_labels[i]} F1: {f1s[i]}')
+  print(f'Class {class_labels[i]} precision: {ps[i]}')
+  print(f'Class {class_labels[i]} recall: {rs[i]}')
+  
 def CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG):
   '''
   helper fxn for save_scores_from_fvol to plot confusion matrix
@@ -518,7 +533,7 @@ def population_hists(y_true, y_pred, FILE_MODEL, FILE_FIG, FILE_DEN, n_bins=50):
   plt.savefig(FILE_FIG+MODEL_NAME+'_hists.png',facecolor='white',bbox_inches='tight')
   print(f'Saved population hists of mask and pred to '+FILE_FIG+MODEL_NAME+'_hists.png')
      
-def ROC_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, micro=True, macro=True):
+def ROC_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, micro=True, macro=True):
   '''
   Helper function for save_scores_from_fvol to plot ROC curves.
   # NOTE USE SOFTMAX PROBABILITY OUTPUTS FOR Y_PRED!!!!!
@@ -527,10 +542,11 @@ def ROC_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, micro=True, macro=True):
   y_pred: 4 channel probability outputs from softmax. shape: (N_samples, N_classes)
   FILE_MODEL: str, model filepath
   FILE_FIG: str, dir to save plot in
+  score_dict: dict to store scores in
   micro, macro: bools, whether to plot micro/macro avg ROC curve. AUC for micro
   and macro will be saved to hyperparameters text anyway
   '''
-  FILE_HPTXT = FILE_MODEL + '_hps.txt'
+  #FILE_HPTXT = FILE_MODEL + '_hps.txt'
   MODEL_NAME = FILE_MODEL.split('/')[-1]
   # plot ROC curves:
   plt.rcParams.update({'font.size': 16})
@@ -579,17 +595,22 @@ def ROC_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, micro=True, macro=True):
   )
   plt.savefig(FILE_FIG+MODEL_NAME+'_ROC_OvR.png',facecolor='white',bbox_inches='tight')
   print(f'Saved ROC OvR curves for each class to '+FILE_FIG+MODEL_NAME+'_ROC_OvR.png')
-  # write AUCs to hyperparameters txt file:
+  # write AUCs to score_dict:
   micro_auc = roc_auc_score(y_true.ravel(),y_pred.ravel(),average='micro')
   class_aucs = roc_auc_score(y_true,y_pred,average=None,multi_class='ovr')
-  with open(FILE_HPTXT, 'a') as f:
-    f.write(f'\nMicro-averaged ROC AUC: {micro_auc:.2f}\n')
-    f.write(f'\nMacro-averaged ROC AUC: {roc_auc["macro"]:.2f}\n')
-    for i in range(len(class_aucs)):
-      f.write('\n'+f'Class {class_labels[i]} ROC AUC: {class_aucs[i]:.2f}\n')
-  print(f'Wrote ROC AUCs to '+FILE_HPTXT)
+  score_dict['micro_ROC_AUC'] = micro_auc
+  score_dict['macro_ROC_AUC'] = roc_auc['macro']
+  for i in range(len(class_aucs)):
+    score_dict[f'class_{class_labels[i]}_ROC_AUC'] = class_aucs[i]
+  # NOTE WRITING SCORES TO HYPERPARAMETER TXT FILES IS DEPRECATED!
+  #with open(FILE_HPTXT, 'a') as f:
+  #  f.write(f'\nMicro-averaged ROC AUC: {micro_auc:.2f}\n')
+  #  f.write(f'\nMacro-averaged ROC AUC: {roc_auc["macro"]:.2f}\n')
+  #  for i in range(len(class_aucs)):
+  #    f.write('\n'+f'Class {class_labels[i]} ROC AUC: {class_aucs[i]:.2f}\n')
+  #print(f'Wrote ROC AUCs to '+FILE_HPTXT)
 
-def PR_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, chance_lvl=True):
+def PR_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, chance_lvl=True):
   '''
   function to plot Precision vs. Recall curves.
   # NOTE USE SOFTMAX PROBABILITY OUTPUTS FOR Y_PRED!!!!
@@ -598,9 +619,10 @@ def PR_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, chance_lvl=True):
   y_pred: 4 channel probability outputs from softmax. shape: (N_samples, N_classes)
   FILE_MODEL: str, model filepath
   FILE_FIG: str, dir to save plot in
+  score_dict: dictionary to save scores in
   chance_lvl: bool, whether to plot chance level
   '''
-  FILE_HPTXT = FILE_MODEL + '_hps.txt'
+  #FILE_HPTXT = FILE_MODEL + '_hps.txt'
   MODEL_NAME = FILE_MODEL.split('/')[-1]
   N_classes = len(class_labels)
   prec = dict(); recall = dict(); avg_prec = dict()
@@ -626,17 +648,16 @@ def PR_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, chance_lvl=True):
       recall=recall["micro"],
       precision=prec["micro"],
       average_precision=avg_prec["micro"],
-      prevalence_pos_label=Counter(y_true.ravel())[1] / y_true.size,
-      linestyle=':'
+      prevalence_pos_label=Counter(y_true.ravel())[1] / y_true.size
     )
+    display.plot(ax=ax,name='Micro-avg PR',plot_chance_level=chance_lvl,linestyle=':')
   else:
     display = PrecisionRecallDisplay(
       recall=recall["micro"],
       precision=prec["micro"],
-      average_precision=avg_prec["micro"],
-      linestyle=':'
+      average_precision=avg_prec["micro"]
     )
-  display.plot(ax=ax,name='Micro-avg PR',plot_chance_level=chance_lvl)
+    display.plot(ax=ax,name='Micro-avg PR',linestyle=':')
   # plot each class PR curve:
   for i in range(N_classes):
     display = PrecisionRecallDisplay(
@@ -653,14 +674,19 @@ def PR_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, chance_lvl=True):
   ax.set_title('Multi-Label Precision-Recall Curves')
   plt.savefig(FILE_FIG+MODEL_NAME+'_PR.png',facecolor='white',bbox_inches='tight')
   print('Saved precision-recall curves for each class at: '+FILE_FIG+MODEL_NAME+'_PR.png')
-  with open(FILE_HPTXT, 'a') as f:
-    f.write(f'\nMicro-averaged average precision: {avg_prec["micro"]:.2f}\n')
-    for i in range(N_classes):
-      f.write('\n'+f'Class {class_labels[i]} average precision: {avg_prec[i]:.2f}\n')
-  print(f'Wrote average precisions to '+FILE_HPTXT)
+  # write results to score_dict:
+  score_dict['micro_avg_AP'] = avg_prec['micro']
+  for i in range(N_classes):
+    score_dict[f'class_{class_labels[i]}_AP'] = avg_prec[i]
+  # NOTE WRITING SCORES TO HYPERPARAMETER TXT FILES IS DEPRECATED!
+  #with open(FILE_HPTXT, 'a') as f:
+  #  f.write(f'\nMicro-averaged average precision: {avg_prec["micro"]:.2f}\n')
+  #  for i in range(N_classes):
+  #    f.write('\n'+f'Class {class_labels[i]} average precision: {avg_prec[i]:.2f}\n')
+  #print(f'Wrote average precisions to '+FILE_HPTXT)
 
 # 7/19/23: updated this to use helper functions instead.
-def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG):
+def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, VAL_FLAG=True, downsample=10):
   '''
   Save F1 scores, confusion matrix, population histograms, ROC curves,
   precision-recall curves. THIS FXN DOES NOT PREDICT!
@@ -671,23 +697,69 @@ def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG):
   (shape=[Nm,Nm,Nm,4], or [N_samples,SUBGRID,SUBGRID,SUBGRID,4])
   FILE_MODEL: str model filepath. should be the same as MODEL_OUT+MODEL_NAME
   FILE_FIG: str filepath to save figures
+  score_dict: dict to save scores to
+  VAL_FLAG: bool, True if scores are based on val data, False if not. def True
+  downsample: int, skip parameter to downsample for ROC, PR curves. def 10.
+  e.g. if downsample = 100, every 100th voxel is considered
   '''
   if y_pred.shape[-1] != 4:
     print('y_pred must be a 4 channel array of class probabilities. save_scores_from_fvol may not work as intended')
   # get in shape for ROC, PR curves:
   y_true_binarized = to_categorical(y_true,num_classes=4,dtype='int8')
+  y_true_binarized = y_true_binarized.reshape(-1,4)
   y_pred_reshaped = y_pred.reshape(-1,4)
+  # downsample by some skip parameter, e.g. 10:
+  y_true_binarized = y_true_binarized[::downsample]
+  y_pred_reshaped =   y_pred_reshaped[::downsample]
   ### REQUIRES DIRECT SOFTMAX OUTPUT PROBABILITIES ###
-  ROC_curves(y_true_binarized, y_pred_reshaped, FILE_MODEL, FILE_FIG)
-  PR_curves( y_true_binarized, y_pred_reshaped, FILE_MODEL, FILE_FIG)
+  ROC_curves(y_true_binarized, y_pred_reshaped, FILE_MODEL, FILE_FIG, score_dict)
+  PR_curves( y_true_binarized, y_pred_reshaped, FILE_MODEL, FILE_FIG, score_dict)
   # get in shape for F1s, Confusion matrix:
   y_pred = np.argmax(y_pred, axis=-1); y_pred = np.expand_dims(y_pred, axis=-1)
   # now y_true and y_pred both have shape [N_samples,SUBGRID,SUBGRID,SUBGRID,1]
   ### REQUIRES ARG-MAXXED CLASS PREDICTIONS ###
-  F1s(y_true, y_pred, FILE_MODEL)
+  F1s(y_true, y_pred, FILE_MODEL, score_dict)
   CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG)
   #population_hists(y_true, y_pred, FILE_MODEL, FILE_FIG, FILE_DEN) # broken rn w/ test data
   print('Saved metrics.')
+'''
+4/29/24: I'm tired of looking through model's hyperparameter txt files.
+let's create a csv file that each training/prediction run will be appended to.
+scores that we want to include: 
+accuracy, loss, balanced acc, F1, precision, recall, ROC AUC, Matt Corr Coef, 
+void f1, precision, recall, micro avg ROC AUC, macro avg ROC AUC, micro avg PR,
+avg precisions for each class. 
+
+also add VAL_FLAG to differentiate scores based on training data
+from validation scores.
+
+also I want to have fields for:
+- SIMULATION trained on
+- Depth
+- Filters
+- BN
+- DROP
+- UNIFORM_FLAG
+- LOSS
+- L the model was trained on 
+- L the model was predicted on
+(for training runs these are the same value.)
+'''
+def save_scores_to_csv(score_dict, file_path):
+  '''
+  score_dict: dict of scores. 
+  filepath: str of where to save scores.csv
+
+  each dict of scores will be APPENDED to the csv, not overwriting. 
+  '''
+  file_exists = os.path.isfile(file_path)
+  with open(file_path, 'a', newline='') as f:
+    writer = csv.DictWriter(f, fieldnames=score_dict.keys())
+    if not file_exists:
+      writer.writeheader()
+    for score in score_dict:
+      writer.writerow(score)
+  print(f'>>> Appended scores to {file_path}')
 #---------------------------------------------------------
 # Prediction functions:
 #---------------------------------------------------------
@@ -840,4 +912,4 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
 
   # use save_scores_from_fvol to save scores if we want to run the model on its own training data:
   if TRAIN_SCORE == True:
-    save_scores_from_fvol(m,Y_pred,FILE_MODEL,FILE_FIG,FILE_DEN)
+    save_scores_from_fvol(m,Y_pred,FILE_MODEL,FILE_FIG,FILE_DEN,VAL_FLAG=False)
