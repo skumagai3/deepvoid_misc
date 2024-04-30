@@ -9,6 +9,7 @@ The old nets.py is fine for binary.
 import gc
 import os
 import sys
+import csv
 sys.path.append('/ifs/groups/vogeleyGrp/nets/')
 import volumes
 import plotter
@@ -393,12 +394,11 @@ class ComputeMetrics(Callback):
   def on_epoch_end(self,epoch,logs={}):
     if epoch % self.N_epochs == 0:
       X_test = self.validation_data[0]; Y_test = self.validation_data[1]
-      Y_pred = self.model.predict(X_test,verbose=0)
+      Y_pred = self.model.predict(X_test,verbose=0) # last axis has 4 channels
       #_val_loss, _val_acc = self.model.evaluate(X_test,Y_test,verbose=0)
       # ROC_AUC needs to be ran on one-hot encoded data
       if not self.one_hot:
         Y_test = to_categorical(Y_test,num_classes=4)
-        Y_pred = to_categorical(Y_pred,num_classes=4)
       _val_ROC_AUC = roc_auc_score(Y_test.reshape(-1,4),Y_pred.reshape(-1,4),average=self.avg,multi_class='ovr')
       Y_test = np.argmax(Y_test,axis=-1); Y_test = np.expand_dims(Y_test,axis=-1)
       Y_pred = np.argmax(Y_pred,axis=-1); Y_pred = np.expand_dims(Y_pred,axis=-1)
@@ -406,7 +406,7 @@ class ComputeMetrics(Callback):
       _val_balanced_acc = balanced_accuracy_score(Y_test,Y_pred)
       _val_precision, _val_recall, _val_f1, _ = precision_recall_fscore_support(Y_test,Y_pred,beta=self.beta,average=self.avg,zero_division=0.0)
       _val_matt_corrcoef = matthews_corrcoef(Y_test,Y_pred)
-      _val_void_precision, _val_void_recall, _val_void_f1, _ = precision_recall_fscore_support(Y_test,Y_pred,beta=self.beta,labels=[0],zero_division=0.0)
+      _val_void_precision, _val_void_recall, _val_void_f1, _ = precision_recall_fscore_support(Y_test,Y_pred,beta=self.beta,average=None,labels=[0],zero_division=0.0)
 
       #logs['val_loss'] = _val_loss
       #logs['val_acc'] = _val_acc
@@ -416,9 +416,9 @@ class ComputeMetrics(Callback):
       logs['val_precision'] = _val_precision
       logs['val_ROC_AUC'] = _val_ROC_AUC
       logs['val_matt_corrcoef'] = _val_matt_corrcoef
-      logs['val_void_f1'] = _val_void_f1
-      logs['val_void_recall'] = _val_void_recall
-      logs['val_void_precision'] = _val_void_precision
+      logs['val_void_f1'] = _val_void_f1[0]
+      logs['val_void_recall'] = _val_void_recall[0]
+      logs['val_void_precision'] = _val_void_precision[0]
       gc.collect()
 
       #print(f' - Balanced Acc: {_val_balanced_acc:.4f} - F1: {_val_f1:.4f} - Precision: {_val_precision:.4f} - Recall: {_val_recall:.4f} - ROC AUC: {_val_ROC_AUC:.4f} \nMatt Corr Coef: {_val_matt_corrcoef:.4f} - Void F1: {_val_void_f1:.4f} - Void Recall: {_val_void_recall:.4f} - Void Precision: {_val_void_precision:.4f}')
@@ -447,7 +447,7 @@ def F1s(y_true, y_pred, FILE_MODEL, score_dict):
   #FILE_HPTXT = FILE_MODEL + '_hps.txt'
   MODEL_NAME = FILE_MODEL.split('/')[-1]
   # calculate F1 scores:
-  ps, rs, f1s, _ = precision_recall_fscore_support(y_true.ravel(), y_pred.ravel(), average=None)
+  ps, rs, f1s, _ = precision_recall_fscore_support(y_true.ravel(), y_pred.ravel(), average=None,zero_division=0.0)
   micro_f1 = f1_score(y_true.ravel(), y_pred.ravel(), average='micro')
   macro_f1 = f1_score(y_true.ravel(), y_pred.ravel(), average='macro')
   weight_f1 = f1_score(y_true.ravel(), y_pred.ravel(), average='weighted')
@@ -464,10 +464,11 @@ def F1s(y_true, y_pred, FILE_MODEL, score_dict):
     score_dict[f'class_{class_labels[i]}_f1'] = f1s[i]
     score_dict[f'class_{class_labels[i]}_precision'] = ps[i]
     score_dict[f'class_{class_labels[i]}_recall'] = rs[i]
+    print(f'Class {class_labels[i]} F1: {f1s[i]}')
+    print(f'Class {class_labels[i]} precision: {ps[i]}')
+    print(f'Class {class_labels[i]} recall: {rs[i]}')
   print(f'Micro F1: {micro_f1} \nMacro F1: {macro_f1} \nWeighted F1: {weight_f1}')
-  print(f'Class {class_labels[i]} F1: {f1s[i]}')
-  print(f'Class {class_labels[i]} precision: {ps[i]}')
-  print(f'Class {class_labels[i]} recall: {rs[i]}')
+
   
 def CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG):
   '''
@@ -766,8 +767,7 @@ def save_scores_to_csv(score_dict, file_path):
     writer = csv.DictWriter(f, fieldnames=score_dict.keys())
     if not file_exists:
       writer.writeheader()
-    for score in score_dict:
-      writer.writerow(score)
+    writer.writerow(score_dict)
   print(f'>>> Appended scores to {file_path}')
 #---------------------------------------------------------
 # Prediction functions:
