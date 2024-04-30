@@ -616,7 +616,7 @@ def ROC_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, micro=True, mac
   #    f.write('\n'+f'Class {class_labels[i]} ROC AUC: {class_aucs[i]:.2f}\n')
   #print(f'Wrote ROC AUCs to '+FILE_HPTXT)
 
-def PR_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, chance_lvl=True):
+def PR_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, chance_lvl=False):
   '''
   function to plot Precision vs. Recall curves.
   # NOTE USE SOFTMAX PROBABILITY OUTPUTS FOR Y_PRED!!!!
