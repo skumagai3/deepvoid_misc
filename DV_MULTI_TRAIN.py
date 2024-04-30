@@ -299,11 +299,11 @@ nets.save_dict_to_text(hp_dict,FILE_HPS)
 # Train
 # python3 -m tensorboard.main --logdir=./logs
 # (^^^^ cmd for tensorboard, must be on sciserver conda env)
-epochs = 3; print('epochs: ',epochs)
+epochs = 10; print('epochs: ',epochs)
 patience = 50; print('patience: ',patience)
 lr_patience = 25; print('learning rate patience: ',lr_patience)
 batch_size = 8; print('batch_size: ',batch_size)
-N_epochs_metric = 10; print(f'class metrics calculated every {N_epochs_metric} epochs')
+N_epochs_metric = 10; print(f'classification metrics calculated every {N_epochs_metric} epochs')
 #===============================================================
 print('>>> Training')
 # set up callbacks

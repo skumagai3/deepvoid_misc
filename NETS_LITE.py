@@ -160,7 +160,7 @@ def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=
     #msk = minmax(msk) # 12/5 needed to disable this for sparse CCE losses
     print('Ran preprocessing to scale density to [0,1]!')
     print('\nNew summary statistics: ')
-    summary(den); summary(msk)
+    summary(den)
   if preproc == 'std':
     den = standardize(den)
     #msk = standardize(msk)
@@ -174,9 +174,9 @@ def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=
   cont = 0 
   X_all = np.zeros(shape=((n_bins**3)*4, SUBGRID,SUBGRID,SUBGRID,1))
   if classification == False:
-    Y_all = np.ndarray(((n_bins**3)*4, SUBGRID,SUBGRID,SUBGRID,1),dtype=np.float32)
+    Y_all = np.ndarray(((n_bins**3)*4, SUBGRID,SUBGRID,SUBGRID,1),dtype=np.float16)
   else:
-    Y_all = np.ndarray(((n_bins**3)*4, SUBGRID,SUBGRID,SUBGRID,1),dtype=np.int32)
+    Y_all = np.ndarray(((n_bins**3)*4, SUBGRID,SUBGRID,SUBGRID,1),dtype=np.int8)
 
   for i in range(n_bins):
     for j in range(n_bins):
@@ -213,6 +213,7 @@ def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=
     #print(i,j,k)
   X_all = X_all.astype('float16')
   Y_all = Y_all.astype('int8')
+  gc.collect()
   return X_all, Y_all
 #---------------------------------------------------------
 # For loading testing/validation data for prediction
@@ -252,6 +253,7 @@ def load_dataset(file_in, SUBGRID, OFF, preproc='mm',sigma=None,return_int=False
     X_all = X_all.astype('int8')
   else:
     X_all = X_all.astype('float16')
+  gc.collect()
   return X_all
 #---------------------------------------------------------
 # Focal loss function
