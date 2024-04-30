@@ -395,10 +395,13 @@ class ComputeMetrics(Callback):
       X_test = self.validation_data[0]; Y_test = self.validation_data[1]
       Y_pred = self.model.predict(X_test,verbose=0)
       #_val_loss, _val_acc = self.model.evaluate(X_test,Y_test,verbose=0)
+      # ROC_AUC needs to be ran on one-hot encoded data
+      if not self.one_hot:
+        Y_test = to_categorical(Y_test,num_classes=4)
+        Y_pred = to_categorical(Y_pred,num_classes=4)
       _val_ROC_AUC = roc_auc_score(Y_test.reshape(-1,4),Y_pred.reshape(-1,4),average=self.avg,multi_class='ovr')
-      if self.one_hot:
-        Y_test = np.argmax(Y_test,axis=-1); Y_test = np.expand_dims(Y_test,axis=-1)
-        Y_pred = np.argmax(Y_pred,axis=-1); Y_pred = np.expand_dims(Y_pred,axis=-1)
+      Y_test = np.argmax(Y_test,axis=-1); Y_test = np.expand_dims(Y_test,axis=-1)
+      Y_pred = np.argmax(Y_pred,axis=-1); Y_pred = np.expand_dims(Y_pred,axis=-1)
       Y_test = Y_test.ravel(); Y_pred = Y_pred.ravel()
       _val_balanced_acc = balanced_accuracy_score(Y_test,Y_pred)
       _val_precision, _val_recall, _val_f1, _ = precision_recall_fscore_support(Y_test,Y_pred,beta=self.beta,average=self.avg,zero_division=0.0)
