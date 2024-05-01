@@ -347,8 +347,12 @@ FILE_METRICS = FIG_DIR + MODEL_NAME + '_metrics.png'
 plotter.plot_training_metrics_all(history,FILE_METRICS,savefig=True)
 #===============================================================
 # set up score_dict. 
+# VAL_FLAG is True if scores are based on val set
+# ORTHO_FLAG is True if scores are based on orthogonal rotated delta/mask
+# for 45 deg rotated cubes, ORTHO_FLAG = False
 #===============================================================
-VAL_FLAG = True
+VAL_FLAG = True 
+ORTHO_FLAG = True 
 scores = {}
 scores['SIM'] = SIM; scores['DEPTH'] = DEPTH; scores['FILTERS'] = FILTERS
 scores['L_TRAIN'] = L; scores['L_PRED'] = L
@@ -356,6 +360,7 @@ scores['UNIFORM_FLAG'] = UNIFORM_FLAG; scores['BATCHNORM'] = BATCHNORM
 scores['DROPOUT'] = DROPOUT; scores['LOSS'] = LOSS
 scores['GRID'] = GRID; scores['DATE'] = DATE; scores['MODEL_NAME'] = MODEL_NAME
 scores['VAL_FLAG'] = VAL_FLAG
+scores['ORTHO_FLAG'] = ORTHO_FLAG
 epochs = len(history.epoch)
 scores['EPOCHS'] = epochs
 #===============================================================
@@ -379,6 +384,7 @@ nets.save_scores_to_csv(scores,ROOT_DIR+'model_scores.csv')
 # Predict and plot and record metrics on TRAINING DATA
 # with TRAIN_SCORE = False, all this does is predict on the entire 
 # data cube and save slices of the predicted mask 
+# for slice plotting:
 #========================================================================
 if SIM == 'TNG':
   nets.save_scores_from_model(FILE_DEN, FILE_MASK, FILE_OUT+MODEL_NAME, FIG_DIR, FILE_PRED,

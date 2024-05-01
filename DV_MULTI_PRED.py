@@ -9,9 +9,21 @@ import sys
 import nets
 import numpy as np
 import volumes
-import plotter
+#import plotter
+import absl.logging
+import tensorflow as tf
 import datetime
 import NETS_LITE as nets
+from scipy.ndimage import rotate
+absl.logging.set_verbosity(absl.logging.ERROR)
+print('TensorFlow version: ', tf.__version__)
+nets.K.set_image_data_format('channels_last')
+#===============================================================
+# Set random seed
+#===============================================================
+seed = 12
+np.random.seed(seed)
+tf.random.set_seed(seed)
 #===============================================================================
 # arg parsing
 #===============================================================================
@@ -94,14 +106,16 @@ if GRID == 512 or GRID == 640:
 if SIM == 'TNG':
     BoxSize = 205
     BOLSHOI_FLAG = False
-    FILE_DEN = path_to_TNG + FN_DEN
-    FILE_MSK = path_to_TNG + FN_MSK
+    DATA_PATH = path_to_TNG
+    FILE_DEN = DATA_PATH + FN_DEN
+    FILE_MSK = DATA_PATH + FN_MSK
     FIG_OUT = FIG_DIR_PATH + 'TNG/' + MODEL_NAME + '/'
 if SIM == 'BOL':
     BoxSize = 256
     BOLSHOI_FLAG = True
-    FILE_DEN = path_to_BOL + FN_DEN
-    FILE_MSK = path_to_BOL + FN_MSK
+    DATA_PATH = path_to_BOL
+    FILE_DEN = DATA_PATH + FN_DEN
+    FILE_MSK = DATA_PATH + FN_MSK
     FIG_OUT = FIG_DIR_PATH + 'Bolshoi/' + MODEL_NAME + '/'
 # we want the figures to be saved in ROOT_DIR/figs/SIM/MODEL_NAME/:
 if not os.path.exists(FIG_OUT):
@@ -132,12 +146,8 @@ X_VAL_DATA_NAME = f'{SIM}_L{L}_Nm={GRID}'
 Y_VAL_DATA_NAME = f'{SIM}_Nm={GRID}'
 if 'SCCE' in MODEL_NAME:
     Y_VAL_DATA_NAME += '_int'
-if SIM == 'TNG':
-    X_TEST_PATH = path_to_TNG + X_VAL_DATA_NAME + '_X_test.npy'
-    Y_TEST_PATH = path_to_TNG + Y_VAL_DATA_NAME + '_Y_test.npy'
-if SIM == 'BOL':
-    X_TEST_PATH = path_to_BOL + X_VAL_DATA_NAME + '_X_test.npy'
-    Y_TEST_PATH = path_to_BOL + Y_VAL_DATA_NAME + '_Y_test.npy'
+X_TEST_PATH = DATA_PATH + X_VAL_DATA_NAME + '_X_test.npy'
+Y_TEST_PATH = DATA_PATH + Y_VAL_DATA_NAME + '_Y_test.npy'
 if os.path.exists(X_TEST_PATH) and os.path.exists(Y_TEST_PATH):
     VAL_FLAG = True
     X_test = np.load(X_TEST_PATH,allow_pickle=True)
@@ -159,23 +169,62 @@ batch_size = 8
 Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False)
 #===============================================================================
 # set up score_dict. 
+# VAL_FLAG is True if scores are based on val set
+# ORTHO_FLAG is True if scores are based on orthogonal rotated delta/mask
+# for 45 deg rotated cubes, ORTHO_FLAG = False
 #===============================================================================
 scores = {}
+ORTHO_FLAG = True
 scores['SIM'] = SIM; scores['DEPTH'] = DEPTH; scores['FILTERS'] = FILTERS
 scores['L_TRAIN'] = base_L; scores['L_PRED'] = L
 scores['UNIFORM_FLAG'] = UNIFORM_FLAG; scores['BATCHNORM'] = BATCHNORM
 scores['DROPOUT'] = DROPOUT; scores['LOSS'] = LOSS
 scores['GRID'] = GRID; scores['DATE'] = DATE; scores['MODEL_NAME'] = MODEL_NAME
-scores['VAL_FLAG'] = VAL_FLAG
+scores['VAL_FLAG'] = VAL_FLAG; scores['ORTHO_FLAG'] = ORTHO_FLAG
 #===============================================================================
-# score
+# score and save results to a row in model_scores.csv
 #===============================================================================
 nets.save_scores_from_fvol(Y_test,Y_pred,FILE_OUT+MODEL_NAME,
                            FIG_OUT,
                            scores,
                            VAL_FLAG)
+nets.save_scores_to_csv(scores,ROOT_DIR+'model_scores.csv')
 #===============================================================================
-# plot slices
+# rotate training data (delta, mask) by 45 degrees and score again. 
+# ORTHO_FLAG = False.... VAL_FLAG = False
+# 45 rotated filepaths: path_to_TNG/ or path_to_BOL/ + '45deg/' + FN_DEN/FN_MSK
+#===============================================================================
+# check if rotated file exists
+if os.path.exists(DATA_PATH+'45deg/'+FN_DEN) and os.path.exists(DATA_PATH+'45deg/'+FN_MSK):
+    pass
+else:
+    # if not create it.
+    print('45degree rotated files do not exist. Creating them...')
+    d = volumes.read_fvolume(FILE_DEN); m = volumes.read_fvolume(FILE_MSK)
+    d = rotate(d,45,reshape=False,mode='grid-wrap')
+    m = rotate(m,45,reshape=False,mode='grid-wrap')
+    print(f'Rotated density and mask for {FN_DEN} and {FN_MSK} by 45 degrees.')
+    volumes.write_fvolume(d,DATA_PATH+'45deg/'+FN_DEN)
+    volumes.write_fvolume(m,DATA_PATH+'45deg/'+FN_MSK)
+# set up new score_dict with VAL_FLAG=False, ORTHO_FLAG=False
+scores_45 = {}
+ORTHO_FLAG = False; VAL_FLAG = False
+scores['SIM'] = SIM; scores['DEPTH'] = DEPTH; scores['FILTERS'] = FILTERS
+scores['L_TRAIN'] = base_L; scores['L_PRED'] = L
+scores['UNIFORM_FLAG'] = UNIFORM_FLAG; scores['BATCHNORM'] = BATCHNORM
+scores['DROPOUT'] = DROPOUT; scores['LOSS'] = LOSS
+scores['GRID'] = GRID; scores['DATE'] = DATE; scores['MODEL_NAME'] = MODEL_NAME
+scores['VAL_FLAG'] = VAL_FLAG; scores['ORTHO_FLAG'] = ORTHO_FLAG
+# score
+X_test = nets.load_dataset(DATA_PATH+'45deg/'+FN_DEN, SUBGRID, OFF)
+Y_test = nets.load_dataset(DATA_PATH+'45deg/'+FN_MSK, SUBGRID, OFF, preproc=None, return_int=True)
+Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False)
+nets.save_scores_from_fvol(Y_test,Y_pred,FILE_OUT+MODEL_NAME,scores_45,VAL_FLAG)
+# save to ROOT_DIR/model_scores.csv
+nets.save_scores_to_csv(scores_45,ROOT_DIR+'model_scores.csv')
+print('Saved 45 degree rotated scores!')
+#===============================================================================
+# plot slices from training data:
 #===============================================================================
 if SIM == 'TNG':
   nets.save_scores_from_model(FILE_DEN, FILE_MSK, FILE_OUT+MODEL_NAME, FIG_OUT, FILE_PRED,

@@ -792,6 +792,8 @@ def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, VAL_
   downsample: int, skip parameter to downsample for ROC, PR curves. def 10.
   e.g. if downsample = 100, every 100th voxel is considered
   '''
+  if not VAL_FLAG:
+    print('WARNING: Model is being scored on training data. Scores may not be accurate.')
   if y_pred.shape[-1] != 4:
     print('y_pred must be a 4 channel array of class probabilities. save_scores_from_fvol may not work as intended')
   # get in shape for ROC, PR curves:
