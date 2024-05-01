@@ -313,7 +313,7 @@ nets.save_dict_to_text(hp_dict,FILE_HPS)
 # Train
 # python3 -m tensorboard.main --logdir=./logs
 # (^^^^ cmd for tensorboard, must be on sciserver conda env)
-epochs = 10; print('epochs: ',epochs)
+epochs = 200; print('epochs: ',epochs)
 patience = 50; print('patience: ',patience)
 lr_patience = 25; print('learning rate patience: ',lr_patience)
 batch_size = 8; print('batch_size: ',batch_size)
@@ -324,7 +324,7 @@ print('>>> Training')
 ONE_HOT_FLAG = True # for compute metrics callback
 if LOSS == 'SCCE':
   ONE_HOT_FLAG = False
-metrics = nets.ComputeMetrics((X_test,Y_test), N_epochs = N_epochs_metric, avg='macro',one_hot=ONE_HOT_FLAG)
+metrics = nets.ComputeMetrics((X_test,Y_test), N_epochs = N_epochs_metric, avg='micro', one_hot=ONE_HOT_FLAG)
 model_chkpt = nets.ModelCheckpoint(FILE_OUT + MODEL_NAME, monitor='val_loss',
                                    save_best_only=True,verbose=2)
 #log_dir = "logs/fit/" + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") 
@@ -357,6 +357,8 @@ scores['UNIFORM_FLAG'] = UNIFORM_FLAG; scores['BATCHNORM'] = BATCHNORM
 scores['DROPOUT'] = DROPOUT; scores['LOSS'] = LOSS
 scores['GRID'] = GRID; scores['DATE'] = DATE; scores['MODEL_NAME'] = MODEL_NAME
 scores['VAL_FLAG'] = VAL_FLAG
+epochs = len(history.epoch)
+scores['EPOCHS'] = epochs
 #===============================================================
 # Predict, record metrics, and plot metrics on TEST DATA
 #===============================================================
@@ -397,4 +399,5 @@ print('Date created: ',DATE)
 print('Total trainable parameters: ',trainable_ps)
 print('Total nontrainable parameters: ',nontrainable_ps)
 print('Total parameters: ',trainable_ps+nontrainable_ps)
+print('>>> Finished training!!!')
 #===============================================================
