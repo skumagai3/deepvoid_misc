@@ -525,6 +525,8 @@ def F1s(y_true, y_pred, FILE_MODEL, score_dict):
   '''
   helper fxn for save_scores_from_fvol to calculate F1 scores
   and write to score_dict dictionary.
+  NOTE while this function is called F1s, it really calcs:
+  F1 score, recall, precision, and balanced accuracy.
   '''
   #FILE_HPTXT = FILE_MODEL + '_hps.txt'
   MODEL_NAME = FILE_MODEL.split('/')[-1]
@@ -533,6 +535,7 @@ def F1s(y_true, y_pred, FILE_MODEL, score_dict):
   micro_f1 = f1_score(y_true.ravel(), y_pred.ravel(), average='micro')
   macro_f1 = f1_score(y_true.ravel(), y_pred.ravel(), average='macro')
   weight_f1 = f1_score(y_true.ravel(), y_pred.ravel(), average='weighted')
+  bal_acc = balanced_accuracy_score(y_true.ravel(),y_pred.ravel())
   # NOTE WRITING SCORES TO HYPERPARAMETER TXT FILES IS DEPRECATED!
   #with open(FILE_HPTXT, 'a') as f:
   #  for i in range(len(f1s)):
@@ -542,6 +545,7 @@ def F1s(y_true, y_pred, FILE_MODEL, score_dict):
   score_dict['micro_f1'] = micro_f1
   score_dict['macro_f1'] = macro_f1
   score_dict['weighted_f1'] = weight_f1
+  score_dict['balanced_accuracy'] = bal_acc
   for i in range(len(f1s)):
     score_dict[f'class_{class_labels[i]}_f1'] = f1s[i]
     score_dict[f'class_{class_labels[i]}_precision'] = ps[i]
@@ -550,6 +554,7 @@ def F1s(y_true, y_pred, FILE_MODEL, score_dict):
     print(f'Class {class_labels[i]} precision: {ps[i]}')
     print(f'Class {class_labels[i]} recall: {rs[i]}')
   print(f'Micro F1: {micro_f1} \nMacro F1: {macro_f1} \nWeighted F1: {weight_f1}')
+  print(f'Balanced accuracy: {bal_acc}')
 
   
 def CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG):
@@ -941,9 +946,9 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
     MODEL_NAME = MODEL_NAME + '-bolshoi'
 
   # if model folder in figs doesnt exist, make it:
-  if not os.path.exists(FILE_FIG):
-    os.makedirs(FILE_FIG)
-    print(f'Created folder {FILE_FIG}')
+  if not os.path.exists(FILE_FIG+MODEL_NAME):
+    os.makedirs(FILE_FIG+MODEL_NAME)
+    print(f'Created folder {FILE_FIG+MODEL_NAME}')
 
   ### plot comparison plot of den, mask, pred mask to FILE_FIG:
   den_cmap = 'gray' # default for full DM particle density
@@ -1006,3 +1011,94 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
   # use save_scores_from_fvol to save scores if we want to run the model on its own training data:
   if TRAIN_SCORE == True:
     save_scores_from_fvol(m,Y_pred,FILE_MODEL,FILE_FIG,FILE_DEN,VAL_FLAG=False)
+
+'''
+5/1/24: create function to save slices from volumes.
+The plots will be identical to those created in save_scores_from_model,
+but will not run the prediction in the function
+'''
+def save_slices_from_fvol(X_test,Y_test,Y_pred,FILE_MODEL,FILE_FIG,GRID=512,SUBGRID=128,OFF=64,BOLSHOI_FLAG=False,LATEX=False):
+  '''
+  X_test: np.ndarray of shape (N_samples,SUBGRID,SUBGRID,SUBGRID,1). Should be in [0,1] range
+  Y_test: np.ndarray of shape (N_samples,SUBGRID,SUBGRID,SUBGRID,1). Should be int labels [0,1,2,3]
+  Y_pred: np.ndarray of shape (N_samples,SUBGRID,SUBGRID,SUBGRID,1). Should be int labels [0,1,2,3]
+  (this means that if you run nets.run_predict_model(output_argmax=False), you need to one-hot encode)
+  FILE_MODEL: str model filepath. should be the same as MODEL_OUT+MODEL_NAME
+  FILE_FIG: str where to save figures. figs will be saved to FILE_FIG + MODEL_NAME/
+  GRID: int, size of whole cube on a side. def 512
+  SUBGRID: int, size of subcubes on a side. def 128
+  OFF: int. size of overlap for each subcube. def 64.
+  if running test case of GRID=128, SUBGRID=32, OFF=16
+  BOLSHOI_FLAG: bool, whether volume is from Bolshoi or not. added to keep track of figure filenames
+  when running a model trained on TNG on Bolshoi data for validation.
+  LATEX: bool, whether or not to typeset axes labels and titles using LaTeX.
+
+  NOTE that this will not work for validation data since it has been shuffled and is not
+  in the right shape for assemble_cube2. This function is mostly meant for 45 deg rotated
+  plots for validation.
+  '''
+  MODEL_NAME = FILE_MODEL.split('/')[-1]
+  d = assemble_cube2(X_test,GRID,SUBGRID,OFF) # density field
+  m = assemble_cube2(Y_test,GRID,SUBGRID,OFF) # mask field
+  p = assemble_cube2(Y_pred,GRID,SUBGRID,OFF) # predicted mask field
+  # if BOLSHOI, change model name for figure filenames:
+  if BOLSHOI_FLAG == True:
+    MODEL_NAME = MODEL_NAME + '-bolshoi'
+  # if model folder in figs doesnt exist, make it:
+  if not os.path.exists(FILE_FIG+MODEL_NAME):
+    os.makedirs(FILE_FIG+MODEL_NAME)
+    print(f'Created folder {FILE_FIG+MODEL_NAME}')
+  # PLOTTING:
+  den_cmap = 'gray' # default for full DM particle density
+  plt.rcParams.update({'font.size': 20})
+  fig,ax = plt.subplots(1,3,figsize=(28,12),tight_layout=True)
+  i = GRID//3
+  if LATEX:
+    ax[0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
+  else:
+    ax[0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
+  ax[1].set_title('Predicted Mask')
+  ax[2].set_title('True Mask')
+  plotter.plot_arr(d,i,ax=ax[0],cmap=den_cmap,logged=True)
+  plotter.plot_arr(p,i,ax=ax[1],segmented_cb=True)
+  plotter.plot_arr(m,i,ax=ax[2],segmented_cb=True)
+  for axis in ax:
+    plotter.set_window(b=0,t=BOXSIZE,Nm=GRID,ax=axis,boxsize=BOXSIZE,Latex=LATEX)
+  plt.savefig(FILE_FIG+MODEL_NAME+'-pred-comp.png',facecolor='white',bbox_inches='tight')
+  print(f'Saved comparison plot to {FILE_FIG+MODEL_NAME}-pred-comp.png')
+
+  ### plot 3x3 plot of 3 adjacent slices of same comparison^^:
+  fig,ax = plt.subplots(3,3,figsize=(28,28),tight_layout=True)
+  i = GRID//2
+  step = 10
+  if LATEX:
+    ax[0,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
+    ax[1,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
+    ax[2,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
+  else:
+    ax[0,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
+    ax[1,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
+    ax[2,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
+  # i - step slice:
+  ax[0,1].set_title(f'Predicted Mask\nSlice {i-step}')
+  ax[0,2].set_title(f'True Mask\nSlice {i-step}')
+  plotter.plot_arr(d,i-step,ax=ax[0,0],cmap=den_cmap,logged=True)
+  plotter.plot_arr(p,i-step,ax=ax[0,1],segmented_cb=True)
+  plotter.plot_arr(m,i-step,ax=ax[0,2],segmented_cb=True)
+  # i slice:
+  ax[1,1].set_title(f'Predicted Mask\nSlice {i}')
+  ax[1,2].set_title(f'True Mask\nSlice {i}')
+  plotter.plot_arr(d,i,ax=ax[1,0],cmap=den_cmap,logged=True)
+  plotter.plot_arr(p,i,ax=ax[1,1],segmented_cb=True)
+  plotter.plot_arr(m,i,ax=ax[1,2],segmented_cb=True)
+  # i + step slice:
+  ax[2,1].set_title(f'Predicted Mask\nSlice {i+step}')
+  ax[2,2].set_title(f'True Mask\nSlice {i+step}')
+  plotter.plot_arr(d,i+step,ax=ax[2,0],cmap=den_cmap,logged=True)
+  plotter.plot_arr(p,i+step,ax=ax[2,1],segmented_cb=True)
+  plotter.plot_arr(m,i+step,ax=ax[2,2],segmented_cb=True)
+  # fix axis labels to be Mpc/h:
+  for axis in ax.flatten():
+    plotter.set_window(b=0,t=BOXSIZE,Nm=GRID,ax=axis,boxsize=BOXSIZE,Latex=LATEX)
+  plt.savefig(FILE_FIG+MODEL_NAME+'-pred-comp-3x3.png',facecolor='white',bbox_inches='tight')
+  print(f'Saved 3x3 comparison plot to {FILE_FIG+MODEL_NAME}-pred-comp-3x3.png')

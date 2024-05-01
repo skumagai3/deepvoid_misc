@@ -4,7 +4,7 @@
 I want to also make a lighter-weight version of the nets.py file,
 which currently imports all kinds of stuff that I don't need.
 '''
-print('Running DV_MULTI_TRAIN.py')
+print('>>> Running DV_MULTI_TRAIN.py')
 import os
 import sys
 import datetime
@@ -189,7 +189,7 @@ if LOSS != 'SCCE':
 # Set model hyperparameters
 #===============================================================
 KERNEL = (3,3,3)
-LR = 3e-4
+LR = 3e-3 # increased to 3e-3 since we have LRreduceonplateau anyway
 if SIM == 'TNG':
   MODEL_NAME = f'TNG_D{DEPTH}-F{FILTERS}-Nm{GRID}-th{th}-sig{sig}-base_L{L}'
 elif SIM == 'BOL':

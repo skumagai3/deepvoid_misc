@@ -4,9 +4,9 @@
 Script to evaluate models on validation data and plot slice plots from entire
 cubes.
 '''
+print('>>> Running DV_MULTI_PRED.py')
 import os
 import sys
-import nets
 import numpy as np
 import volumes
 #import plotter
@@ -68,6 +68,8 @@ else:
 LOSS = 'CCE' # default loss fxn
 if 'FOCAL' in MODEL_NAME:
     LOSS = 'FOCAL_CCE'
+if 'SCCE' in MODEL_NAME:
+    LOSS = 'SCCE'
 base_L = float(MODEL_NAME.split('base_L')[1].split('_')[0])
 print('#############################################')
 print('>>> Running DV_MULTI_PRED.py')
@@ -131,7 +133,7 @@ model.summary()
 #===============================================================================
 # we want to extract L from FILE_DEN...not necessarily base_L
 if SIM == 'TNG':
-    if FN_DEN == 'DM_DEN_snap99_Nm=512.fvol':
+    if FN_DEN == 'DM_DEN_snap99_Nm=512.fvol' or FN_DEN == 'DM_DEN_snap99_Nm=128.fvol':
         L = 0.33
     else:
         # recall TNG files have names like subs1_mass_Nm512_L3_d_None_smooth.fvol
@@ -144,7 +146,7 @@ if SIM == 'BOL':
         L = int(float(FN_DEN.split('L')[1].split('.fvol')[0]))
 X_VAL_DATA_NAME = f'{SIM}_L{L}_Nm={GRID}'
 Y_VAL_DATA_NAME = f'{SIM}_Nm={GRID}'
-if 'SCCE' in MODEL_NAME:
+if LOSS == 'SCCE':
     Y_VAL_DATA_NAME += '_int'
 X_TEST_PATH = DATA_PATH + X_VAL_DATA_NAME + '_X_test.npy'
 Y_TEST_PATH = DATA_PATH + Y_VAL_DATA_NAME + '_Y_test.npy'
@@ -154,8 +156,10 @@ if os.path.exists(X_TEST_PATH) and os.path.exists(Y_TEST_PATH):
     Y_test = np.load(Y_TEST_PATH,allow_pickle=True)
     print(f'Loaded validation features from {X_TEST_PATH}')
     print(f'Loaded validation labels from {Y_TEST_PATH}')
-    # undo one-hot on Y_test:
-    Y_test = np.argmax(Y_test,axis=-1); Y_test = np.expand_dims(Y_test,axis=-1)
+    # undo one-hot on Y_test if loss is not SCCE:
+    if LOSS != 'SCCE':
+        Y_test = np.argmax(Y_test,axis=-1)
+        Y_test = np.expand_dims(Y_test,axis=-1)
 else:
     VAL_FLAG = False
     print('Model is being scored on training data. Scores may be better than they actually should be.')
@@ -190,6 +194,16 @@ nets.save_scores_from_fvol(Y_test,Y_pred,FILE_OUT+MODEL_NAME,
                            VAL_FLAG)
 nets.save_scores_to_csv(scores,ROOT_DIR+'model_scores.csv')
 #===============================================================================
+# plot slices from training data:
+#===============================================================================
+if SIM == 'TNG':
+  nets.save_scores_from_model(FILE_DEN, FILE_MSK, FILE_OUT+MODEL_NAME, FIG_OUT, FILE_PRED,
+                              GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,TRAIN_SCORE=False)
+elif SIM == 'BOL':
+  nets.save_scores_from_model(FILE_DEN, FILE_MSK, FILE_OUT+MODEL_NAME, FIG_OUT, FILE_PRED,
+                              GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,BOXSIZE=256,BOLSHOI_FLAG=True,
+                              TRAIN_SCORE=False)
+#===============================================================================
 # rotate training data (delta, mask) by 45 degrees and score again. 
 # ORTHO_FLAG = False.... VAL_FLAG = False
 # 45 rotated filepaths: path_to_TNG/ or path_to_BOL/ + '45deg/' + FN_DEN/FN_MSK
@@ -198,7 +212,9 @@ nets.save_scores_to_csv(scores,ROOT_DIR+'model_scores.csv')
 if os.path.exists(DATA_PATH+'45deg/'+FN_DEN) and os.path.exists(DATA_PATH+'45deg/'+FN_MSK):
     pass
 else:
-    # if not create it.
+    # check if 45deg/ dir exists, if not create it.
+    if not os.path.exists(DATA_PATH+'45deg/'):
+        os.makedirs(DATA_PATH+'45deg/')
     print('45degree rotated files do not exist. Creating them...')
     d = volumes.read_fvolume(FILE_DEN); m = volumes.read_fvolume(FILE_MSK)
     d = rotate(d,45,reshape=False,mode='grid-wrap')
@@ -219,18 +235,16 @@ scores['VAL_FLAG'] = VAL_FLAG; scores['ORTHO_FLAG'] = ORTHO_FLAG
 X_test = nets.load_dataset(DATA_PATH+'45deg/'+FN_DEN, SUBGRID, OFF)
 Y_test = nets.load_dataset(DATA_PATH+'45deg/'+FN_MSK, SUBGRID, OFF, preproc=None, return_int=True)
 Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False)
-nets.save_scores_from_fvol(Y_test,Y_pred,FILE_OUT+MODEL_NAME,scores_45,VAL_FLAG)
+# create FIG_OUT/45deg/ if it doesn't exist already:
+if not os.path.exists(FIG_OUT+'45deg/'):
+    os.makedirs(FIG_OUT+'45deg/')
+nets.save_scores_from_fvol(Y_test,Y_pred,FILE_OUT+MODEL_NAME,
+                           FIG_OUT+'45deg/',scores_45,VAL_FLAG)
 # save to ROOT_DIR/model_scores.csv
 nets.save_scores_to_csv(scores_45,ROOT_DIR+'model_scores.csv')
 print('Saved 45 degree rotated scores!')
 #===============================================================================
-# plot slices from training data:
+# plot slices from 45 degree rotated delta/mask.
 #===============================================================================
-if SIM == 'TNG':
-  nets.save_scores_from_model(FILE_DEN, FILE_MSK, FILE_OUT+MODEL_NAME, FIG_OUT, FILE_PRED,
-                              GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,TRAIN_SCORE=False)
-elif SIM == 'BOL':
-  nets.save_scores_from_model(FILE_DEN, FILE_MSK, FILE_OUT+MODEL_NAME, FIG_OUT, FILE_PRED,
-                              GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,BOXSIZE=256,BOLSHOI_FLAG=True,
-                              TRAIN_SCORE=False)
+
 print('>>> Finished predicting on training data')
