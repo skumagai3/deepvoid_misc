@@ -241,8 +241,8 @@ def load_dataset_all_overlap(FILE_DEN, FILE_MSK, SUBGRID, OFF, preproc='mm', sig
   if sigma is not None:
     den = ndi.gaussian_filter(den,sigma,mode='wrap')
     print(f'Smoothed density with a Gaussian kernel of size {sigma}')
-  print(f'Reading mask: {FILE_MASK}...')
-  msk = volumes.read_fvolume(FILE_MASK)
+  print(f'Reading mask: {FILE_MSK}...')
+  msk = volumes.read_fvolume(FILE_MSK)
   # print mask populations:
   _, cnts = np.unique(msk,return_counts=True)
   for val in cnts:
