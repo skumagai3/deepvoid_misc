@@ -196,13 +196,10 @@ nets.save_scores_to_csv(scores,ROOT_DIR+'model_scores.csv')
 #===============================================================================
 # plot slices from training data:
 #===============================================================================
-if SIM == 'TNG':
-  nets.save_scores_from_model(FILE_DEN, FILE_MSK, FILE_OUT+MODEL_NAME, FIG_OUT, FILE_PRED,
-                              GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,TRAIN_SCORE=False)
-elif SIM == 'BOL':
-  nets.save_scores_from_model(FILE_DEN, FILE_MSK, FILE_OUT+MODEL_NAME, FIG_OUT, FILE_PRED,
-                              GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,BOXSIZE=256,BOLSHOI_FLAG=True,
-                              TRAIN_SCORE=False)
+nets.save_scores_from_model(FILE_DEN, FILE_MSK, FILE_OUT+MODEL_NAME, FIG_OUT,
+                            FILE_PRED, GRID=GRID, SUBGRID=SUBGRID, OFF=OFF,
+                            BOXSIZE=BoxSize, BOLSHOI_FLAG=BOLSHOI_FLAG, 
+                            TRAIN_SCORE=False)
 #===============================================================================
 # rotate training data (delta, mask) by 45 degrees and score again. 
 # ORTHO_FLAG = False.... VAL_FLAG = False
@@ -246,5 +243,6 @@ print('Saved 45 degree rotated scores!')
 #===============================================================================
 # plot slices from 45 degree rotated delta/mask.
 #===============================================================================
-
+nets.save_slices_from_fvol(X_test,Y_test,Y_pred,FILE_OUT+MODEL_NAME,
+                           FIG_OUT+'45deg/',GRID=GRID,SUBGRID=SUBGRID,OFF=OFF)
 print('>>> Finished predicting on training data')
