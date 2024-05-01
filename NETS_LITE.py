@@ -224,7 +224,7 @@ def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=
 # a total of N_subcubes = 4 * [(GRID/SUBGRID) + (GRID/SUBGRID - 1)]^3
 # NOTE THAT THIS IS FOR TRAINING ONLY!!!
 #---------------------------------------------------------
-def load_dataset_all_overlap(FILE_DEN, FILE_MSK, SUBGRID, OFF, preproc='mm', sigma=None):
+def load_dataset_all_overlap(FILE_DEN, FILE_MSK, SUBGRID, OFF, preproc='mm', sigma=None, dtype='float16'):
   '''
   Function that loads density and mask files, splits into overlapping subcubes.
   Subcubes overlap by OFF, and are of size SUBGRID.
@@ -294,7 +294,7 @@ def load_dataset_all_overlap(FILE_DEN, FILE_MSK, SUBGRID, OFF, preproc='mm', sig
         X_all_overlap[cont,:,:,:,0] = sub_den
         Y_all_overlap[cont,:,:,:,0] = sub_msk
         cont += 1
-  return X_all_overlap, Y_all_overlap
+  return X_all_overlap.astype(dtype), Y_all_overlap.astype(dtype)
 
 #---------------------------------------------------------
 # For loading testing/validation data for prediction
@@ -393,14 +393,14 @@ def categorical_focal_loss(alpha, gamma=2.):
 #---------------------------------------------------------
 # U-Net creator
 #---------------------------------------------------------
-def conv_block(input_tensor, filters, activation='relu', batch_normalization=True, dropout_rate=None):
-  x = Conv3D(filters, kernel_size=(3, 3, 3), padding='same')(input_tensor)
+def conv_block(input_tensor, filters, name, activation='relu', batch_normalization=True, dropout_rate=None):
+  x = Conv3D(filters, kernel_size=(3, 3, 3), padding='same', name=name)(input_tensor)
   if batch_normalization:
       x = BatchNormalization()(x)
   x = Activation(activation)(x)
   if dropout_rate:
       x = Dropout(dropout_rate)(x)
-  x = Conv3D(filters, kernel_size=(3, 3, 3), padding='same')(x)
+  x = Conv3D(filters, kernel_size=(3, 3, 3), padding='same', name=name+'_1')(x)
   if batch_normalization:
       x = BatchNormalization()(x)
   x = Activation(activation)(x)
@@ -414,22 +414,24 @@ def unet_3d(input_shape, num_classes, initial_filters=32, depth=4, activation='r
   x = inputs
   for d in range(depth):
     filters = initial_filters * (2 ** d)
-    x = conv_block(x, filters, activation, batch_normalization, dropout_rate)
+    block_name = f'encoder_block_D{d}'
+    x = conv_block(x, filters, block_name, activation, batch_normalization, dropout_rate)
     encoder_outputs.append(x)
-    x = MaxPooling3D(pool_size=(2, 2, 2))(x)
+    x = MaxPooling3D(pool_size=(2, 2, 2),name=block_name+'_maxpool')(x)
   
   # Bottom
-  x = conv_block(x, initial_filters * (2 ** depth), activation, batch_normalization, dropout_rate)
+  x = conv_block(x, initial_filters * (2 ** depth), 'bottleneck', activation, batch_normalization, dropout_rate)
   
   # Decoder path
   for d in reversed(range(depth)):
     filters = initial_filters * (2 ** d)
-    x = UpSampling3D(size=(2, 2, 2))(x)
-    x = Concatenate(axis=-1)([x, encoder_outputs[d]])
-    x = conv_block(x, filters, activation, batch_normalization, dropout_rate)
+    block_name = f'decoder_block_D{d}'
+    x = UpSampling3D(size=(2, 2, 2),name=block_name+'_upsample')(x)
+    x = Concatenate(axis=-1)([x, encoder_outputs[d]],name=block_name+'_concat')
+    x = conv_block(x, filters, block_name, activation, batch_normalization, dropout_rate)
   
   # Output
-  outputs = Conv3D(num_classes, kernel_size=(1, 1, 1))(x)
+  outputs = Conv3D(num_classes, kernel_size=(1, 1, 1), name='output_conv')(x)
   if last_activation is not None:
     outputs = Activation(last_activation)(outputs)
   

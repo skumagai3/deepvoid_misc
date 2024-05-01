@@ -169,9 +169,11 @@ print('Labels shape: ',labels.shape)
 # X_test is the density subcubes used to validate the model
 # Y_test is the corresponding mask subcubes
 test_size = 0.2
-X_train, X_test, Y_train, Y_test = nets.train_test_split(features,labels,
+X_index = np.arange(0, features.shape[0])
+X_train, X_test, Y_train, Y_test = nets.train_test_split(X_index,labels,
                                                          test_size=test_size,
                                                          random_state=seed)
+X_train = features[X_train]; X_test = features[X_test]
 print(f'>>> Split into training ({(1-test_size)*100}%) and validation ({test_size*100}%) sets')
 print('X_train shape: ',X_train.shape); print('Y_train shape: ',Y_train.shape)
 print('X_test shape: ',X_test.shape); print('Y_test shape: ',Y_test.shape)
