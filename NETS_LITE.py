@@ -167,7 +167,7 @@ def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=
     #msk = standardize(msk)
     print('Ran preprocessing by dividing density/mask by std dev and subtracting by the mean! ')
     print('\nNew summary statistics: ')
-    summary(den); summary(msk)
+    summary(den)
   # Make wall mask
   #msk = np.zeros(den_shp,dtype=np.uint8)
   n_bins = den_shp[0] // SUBGRID
@@ -216,6 +216,86 @@ def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=
   Y_all = Y_all.astype('int8')
   gc.collect()
   return X_all, Y_all
+#---------------------------------------------------------
+# 4/30/24: adding load_dataset_all_overlap function
+# this function will ACTUALLY do what we claim
+# load_dataset has done all along, which is taking overlapping
+# subcubes, rotating by 90 degrees 3 times, for 
+# a total of N_subcubes = 4 * [(GRID/SUBGRID) + (GRID/SUBGRID - 1)]^3
+# NOTE THAT THIS IS FOR TRAINING ONLY!!!
+#---------------------------------------------------------
+def load_dataset_all_overlap(FILE_DEN, FILE_MSK, SUBGRID, OFF, preproc='mm', sigma=None):
+  '''
+  Function that loads density and mask files, splits into overlapping subcubes.
+  Subcubes overlap by OFF, and are of size SUBGRID.
+  Each subcube is rotated by 90 deg three times.
+  FILE_DEN: str filepath to density field.
+  FILE_MSK: str filepath to mask field.
+  SUBGRID: int size of subcubes.
+  OFF: int overlap of subcubes.
+  preproc: str preprocessing method. 'mm' for minmax, 'std' for standardize.
+  sigma: float sigma for Gaussian smoothing. def None.
+  '''
+  print(f'Reading volume: {FILE_DEN}... ')
+  den = volumes.read_fvolume(FILE_DEN)
+  if sigma is not None:
+    den = ndi.gaussian_filter(den,sigma,mode='wrap')
+    print(f'Smoothed density with a Gaussian kernel of size {sigma}')
+  print(f'Reading mask: {FILE_MASK}...')
+  msk = volumes.read_fvolume(FILE_MASK)
+  # print mask populations:
+  _, cnts = np.unique(msk,return_counts=True)
+  for val in cnts:
+    print(f'% of population: {val/den.shape[0]**3 * 100}')
+  summary(den); summary(msk)
+  if preproc == 'mm':
+    den = minmax(den)
+    print('Ran preprocessing to scale density to [0,1]!')
+    print('\nNew summary statistics for density field: ')
+    summary(den)
+  if preproc == 'std':
+    den = standardize(den)
+    print('Ran preprocessing by dividing density/mask by std dev and subtracting by the mean! ')
+    print('\nNew summary statistics for density field: ')
+    summary(den)
+  nbins = den.shape[0]//SUBGRID + (den.shape[0]//SUBGRID - 1)
+  print(f'Number of overlapping subcubes: {4*nbins**3}')
+  X_all_overlap = np.ndarray(((nbins**3)*4, SUBGRID, SUBGRID, SUBGRID, 1))
+  Y_all_overlap = np.ndarray(((nbins**3)*4, SUBGRID, SUBGRID, SUBGRID, 1))
+  # loop over overlapping subcubes, rotate!
+  cont = 0
+  for i in range(nbins):
+    off_i = SUBGRID*i - OFF*i
+    for j in range(nbins):
+      off_j = SUBGRID*j - OFF*j
+      for k in range(nbins):
+        off_k = SUBGRID*k - OFF*k
+        # define subcube:
+        sub_den = den[off_i:off_i+SUBGRID,off_j:off_j+SUBGRID,off_k:off_k+SUBGRID]
+        sub_msk = msk[off_i:off_i+SUBGRID,off_j:off_j+SUBGRID,off_k:off_k+SUBGRID]
+        X_all_overlap[cont,:,:,:,0] = sub_den
+        Y_all_overlap[cont,:,:,:,0] = sub_msk
+        cont += 1
+        # rot 90:
+        sub_den = np.rot90(sub_den)
+        sub_msk = np.rot90(sub_msk)
+        X_all_overlap[cont,:,:,:,0] = sub_den
+        Y_all_overlap[cont,:,:,:,0] = sub_msk
+        cont += 1
+        # rot 180
+        sub_den = np.rot90(sub_den)
+        sub_msk = np.rot90(sub_msk)
+        X_all_overlap[cont,:,:,:,0] = sub_den
+        Y_all_overlap[cont,:,:,:,0] = sub_msk
+        cont += 1
+        # rot 270
+        sub_den = np.rot90(sub_den)
+        sub_msk = np.rot90(sub_msk)
+        X_all_overlap[cont,:,:,:,0] = sub_den
+        Y_all_overlap[cont,:,:,:,0] = sub_msk
+        cont += 1
+  return X_all_overlap, Y_all_overlap
+
 #---------------------------------------------------------
 # For loading testing/validation data for prediction
 #---------------------------------------------------------

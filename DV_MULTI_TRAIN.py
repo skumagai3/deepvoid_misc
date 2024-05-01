@@ -160,8 +160,7 @@ if L == 0.122 and SIM == 'TNG':
 print('>>> Loading data!')
 print('Density field: ',FILE_DEN)
 print('Mask field: ',FILE_MASK)
-features, labels = nets.load_dataset_all(FILE_DEN,FILE_MASK,SUBGRID,
-                                         preproc='mm',binary_mask=False)
+features, labels = nets.load_dataset_all_overlap(FILE_DEN,FILE_MASK,SUBGRID,OFF)
 print('>>> Data loaded!'); print('Features shape: ',features.shape)
 print('Labels shape: ',labels.shape)
 # split into training and validation sets:
