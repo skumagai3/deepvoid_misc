@@ -427,7 +427,7 @@ def unet_3d(input_shape, num_classes, initial_filters=32, depth=4, activation='r
     filters = initial_filters * (2 ** d)
     block_name = f'decoder_block_D{d}'
     x = UpSampling3D(size=(2, 2, 2),name=block_name+'_upsample')(x)
-    x = Concatenate(axis=-1)([x, encoder_outputs[d]],name=block_name+'_concat')
+    x = Concatenate(axis=-1,name=block_name+'_concat')([x, encoder_outputs[d]])
     x = conv_block(x, filters, block_name, activation, batch_normalization, dropout_rate)
   
   # Output
