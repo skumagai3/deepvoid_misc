@@ -65,4 +65,32 @@ N_CLASSES = 4
 #===============================================================
 '''
 What arguments will we need?
+ROOT_DIR
+MODEL_NAME (SIM, base_L will be pulled from that)
+FN_DEN
+TL_TYPE: (need to add more than just enc and LL)
+- ENC: freeze entire encoding side (and bottleneck)
+- LL: freeze entire model except last conv block and output
+
+- ENC_depth: freeze encoding side down to some depth?
+
+What about double transfer learning?
+What do i name those models?
+
 '''
+
+
+# steps:
+# load and clone model
+# freeze layers according to TL_TYPE
+# create hyperparams txt file with TL details
+# print out trainable/nontrainable params to ensure it's working
+# load data, split into training/test sets
+# perform transfer learning training
+# plot training metrics
+# score on test set
+# save results to model_scores.csv 
+# save slice plots of tran_L delta, pred, mask
+# score on 45 deg rotated tran_L delta
+# save scores with ortho_flag=False, val_flag=False
+print('>>> Finished transfer learning!')

@@ -75,7 +75,7 @@ print('#############################################')
 print('>>> Running DV_MULTI_PRED.py')
 print('>>> Root directory: ',ROOT_DIR)
 print('Simulation = ', SIM); 
-print('Model trained on L = ',base_L); 
+print('Model originally trained on L = ',base_L); 
 print('Model predicting on :',FN_DEN)
 print('DEPTH = ',DEPTH); print('FILTERS = ',FILTERS)
 print('Eigenvalue threshold used in mask = ',th)
@@ -223,7 +223,7 @@ else:
 scores_45 = {}
 ORTHO_FLAG = False; VAL_FLAG = False
 scores['SIM'] = SIM; scores['DEPTH'] = DEPTH; scores['FILTERS'] = FILTERS
-scores['L_TRAIN'] = base_L; scores['L_PRED'] = L
+scores['BASE_L'] = base_L; scores['PRED_L'] = L
 scores['UNIFORM_FLAG'] = UNIFORM_FLAG; scores['BATCHNORM'] = BATCHNORM
 scores['DROPOUT'] = DROPOUT; scores['LOSS'] = LOSS
 scores['GRID'] = GRID; scores['DATE'] = DATE; scores['MODEL_NAME'] = MODEL_NAME
@@ -244,5 +244,7 @@ print('Saved 45 degree rotated scores!')
 # plot slices from 45 degree rotated delta/mask.
 #===============================================================================
 nets.save_slices_from_fvol(X_test,Y_test,Y_pred,FILE_OUT+MODEL_NAME,
-                           FIG_OUT+'45deg/',GRID=GRID,SUBGRID=SUBGRID,OFF=OFF)
+                           FIG_OUT+'45deg/',L,BOXSIZE=BoxSize,
+                           GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,
+                           BOLSHOI_FLAG=BOLSHOI_FLAG)
 print('>>> Finished predicting on training data')

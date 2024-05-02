@@ -1017,7 +1017,7 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
 The plots will be identical to those created in save_scores_from_model,
 but will not run the prediction in the function
 '''
-def save_slices_from_fvol(X_test,Y_test,Y_pred,FILE_MODEL,FILE_FIG,GRID=512,SUBGRID=128,OFF=64,BOLSHOI_FLAG=False,LATEX=False):
+def save_slices_from_fvol(X_test,Y_test,Y_pred,FILE_MODEL,FILE_FIG,lamb,BOXSIZE=205,GRID=512,SUBGRID=128,OFF=64,BOLSHOI_FLAG=False,LATEX=False):
   '''
   X_test: np.ndarray of shape (N_samples,SUBGRID,SUBGRID,SUBGRID,1). Should be in [0,1] range
   Y_test: np.ndarray of shape (N_samples,SUBGRID,SUBGRID,SUBGRID,1). Should be int labels [0,1,2,3]
@@ -1054,9 +1054,9 @@ def save_slices_from_fvol(X_test,Y_test,Y_pred,FILE_MODEL,FILE_FIG,GRID=512,SUBG
   fig,ax = plt.subplots(1,3,figsize=(28,12),tight_layout=True)
   i = GRID//3
   if LATEX:
-    ax[0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
+    ax[0].set_title(r'$log(\delta+1)$'+'\n'+f'$\lambda={lamb}$')
   else:
-    ax[0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
+    ax[0].set_title('Mass Density'+'\n'+f'L={lamb}')
   ax[1].set_title('Predicted Mask')
   ax[2].set_title('True Mask')
   plotter.plot_arr(d,i,ax=ax[0],cmap=den_cmap,logged=True)
@@ -1072,13 +1072,13 @@ def save_slices_from_fvol(X_test,Y_test,Y_pred,FILE_MODEL,FILE_FIG,GRID=512,SUBG
   i = GRID//2
   step = 10
   if LATEX:
-    ax[0,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
-    ax[1,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
-    ax[2,0].set_title(r'$log(\delta+1)$'+'\n'+f'File: {DELTA_NAME}')
+    ax[0,0].set_title(r'$log(\delta+1)$'+'\n'+f'$\lambda={lamb}$')
+    ax[1,0].set_title(r'$log(\delta+1)$'+'\n'+f'$\lambda={lamb}$')
+    ax[2,0].set_title(r'$log(\delta+1)$'+'\n'+f'$\lambda={lamb}$')
   else:
-    ax[0,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
-    ax[1,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
-    ax[2,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
+    ax[0,0].set_title('Mass Density'+'\n'+f'L={lamb}')
+    ax[1,0].set_title('Mass Density'+'\n'+f'L={lamb}')
+    ax[2,0].set_title('Mass Density'+'\n'+f'L={lamb}')
   # i - step slice:
   ax[0,1].set_title(f'Predicted Mask\nSlice {i-step}')
   ax[0,2].set_title(f'True Mask\nSlice {i-step}')
