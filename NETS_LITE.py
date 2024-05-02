@@ -144,7 +144,7 @@ def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=
   print(f'Reading mask: {FILE_MASK}...')
   msk = volumes.read_fvolume(FILE_MASK)
   # print mask populations:
-  vals,cnts = np.unique(msk,return_counts=True)
+  _, cnts = np.unique(msk,return_counts=True)
   for val in cnts:
     print(f'% of population: {val/den.shape[0]**3 * 100}')
   den_shp = den.shape
@@ -213,7 +213,7 @@ def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=
         cont = cont+1
     #print(i,j,k)
   X_all = X_all.astype('float16')
-  Y_all = Y_all.astype('int8')
+  Y_all = Y_all.astype('uint8')
   gc.collect()
   return X_all, Y_all
 #---------------------------------------------------------
@@ -331,7 +331,7 @@ def load_dataset(file_in, SUBGRID, OFF, preproc='mm',sigma=None,return_int=False
         cont = cont+1
       
   if return_int:
-    X_all = X_all.astype('int8')
+    X_all = X_all.astype('uint8')
   else:
     X_all = X_all.astype('float16')
   gc.collect()
@@ -527,6 +527,7 @@ def F1s(y_true, y_pred, FILE_MODEL, score_dict):
   and write to score_dict dictionary.
   NOTE while this function is called F1s, it really calcs:
   F1 score, recall, precision, and balanced accuracy.
+  and matthew correlation coefficient!
   '''
   #FILE_HPTXT = FILE_MODEL + '_hps.txt'
   MODEL_NAME = FILE_MODEL.split('/')[-1]
@@ -536,6 +537,7 @@ def F1s(y_true, y_pred, FILE_MODEL, score_dict):
   macro_f1 = f1_score(y_true.ravel(), y_pred.ravel(), average='macro')
   weight_f1 = f1_score(y_true.ravel(), y_pred.ravel(), average='weighted')
   bal_acc = balanced_accuracy_score(y_true.ravel(),y_pred.ravel())
+  mcc = matthews_corrcoef(y_true.ravel(),y_pred.ravel())
   # NOTE WRITING SCORES TO HYPERPARAMETER TXT FILES IS DEPRECATED!
   #with open(FILE_HPTXT, 'a') as f:
   #  for i in range(len(f1s)):
@@ -546,6 +548,7 @@ def F1s(y_true, y_pred, FILE_MODEL, score_dict):
   score_dict['macro_f1'] = macro_f1
   score_dict['weighted_f1'] = weight_f1
   score_dict['balanced_accuracy'] = bal_acc
+  score_dict['matt_corrcoef'] = mcc
   for i in range(len(f1s)):
     score_dict[f'class_{class_labels[i]}_f1'] = f1s[i]
     score_dict[f'class_{class_labels[i]}_precision'] = ps[i]
@@ -555,6 +558,7 @@ def F1s(y_true, y_pred, FILE_MODEL, score_dict):
     print(f'Class {class_labels[i]} recall: {rs[i]}')
   print(f'Micro F1: {micro_f1} \nMacro F1: {macro_f1} \nWeighted F1: {weight_f1}')
   print(f'Balanced accuracy: {bal_acc}')
+  print(f'Matthews correlation coefficient: {mcc}')
 
   
 def CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG):
