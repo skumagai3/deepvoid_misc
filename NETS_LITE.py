@@ -950,9 +950,9 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
     MODEL_NAME = MODEL_NAME + '-bolshoi'
 
   # if model folder in figs doesnt exist, make it:
-  if not os.path.exists(FILE_FIG+MODEL_NAME):
-    os.makedirs(FILE_FIG+MODEL_NAME)
-    print(f'Created folder {FILE_FIG+MODEL_NAME}')
+  if not os.path.exists(FILE_FIG):
+    os.makedirs(FILE_FIG)
+    print(f'Created folder {FILE_FIG}')
 
   ### plot comparison plot of den, mask, pred mask to FILE_FIG:
   den_cmap = 'gray' # default for full DM particle density
@@ -1049,9 +1049,9 @@ def save_slices_from_fvol(X_test,Y_test,Y_pred,FILE_MODEL,FILE_FIG,lamb,BOXSIZE=
   if BOLSHOI_FLAG == True:
     MODEL_NAME = MODEL_NAME + '-bolshoi'
   # if model folder in figs doesnt exist, make it:
-  if not os.path.exists(FILE_FIG+MODEL_NAME):
-    os.makedirs(FILE_FIG+MODEL_NAME)
-    print(f'Created folder {FILE_FIG+MODEL_NAME}')
+  if not os.path.exists(FILE_FIG):
+    os.makedirs(FILE_FIG)
+    print(f'Created folder {FILE_FIG}')
   # PLOTTING:
   den_cmap = 'gray' # default for full DM particle density
   plt.rcParams.update({'font.size': 20})
