@@ -72,7 +72,7 @@ TL_TYPE: (need to add more than just enc and LL)
 - ENC: freeze entire encoding side (and bottleneck)
 - LL: freeze entire model except last conv block and output
 
-- ENC_depth: freeze encoding side down to some depth?
+- ENC_D{freeze_depth}: freeze encoding side down to some depth?
 
 What about double transfer learning?
 What do i name those models?

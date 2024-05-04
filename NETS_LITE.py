@@ -25,7 +25,7 @@ from tensorflow.python.keras.utils import layer_utils
 from keras.utils import to_categorical
 from keras.layers import Input, Conv3D, MaxPooling3D, Conv3DTranspose, UpSampling3D, Concatenate, BatchNormalization, Activation, Dropout
 from keras import backend as K
-from keras.losses import CategoricalCrossentropy, SparseCategoricalCrossentropy
+from keras.losses import CategoricalCrossentropy, SparseCategoricalCrossentropy, CategoricalFocalCrossentropy
 from keras.callbacks import Callback, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, TensorBoard, CSVLogger
 
 from sklearn.preprocessing import label_binarize

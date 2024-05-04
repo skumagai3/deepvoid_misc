@@ -204,6 +204,9 @@ if LOSS == 'CCE':
   pass
 elif LOSS == 'FOCAL_CCE':
   MODEL_NAME += '_FOCAL'
+  #alpha = 0.25 # NOTE set alpha here, def=0.25
+  alpha = [0.7, 0.9, 0.2, 0.1] # weighting void, wall more?
+  gamma = 2.0 # NOTE set gamma here, def=2.0
 elif LOSS == 'SCCE':
   MODEL_NAME += '_SCCE'
   print('Loss function SCCE requires integer labels, NOT one-hots')
@@ -257,6 +260,9 @@ hp_dict['KERNEL'] = KERNEL
 hp_dict['LR'] = LR
 hp_dict['DEPTH'] = DEPTH
 hp_dict['LOSS'] = LOSS
+if LOSS == 'FOCAL_CCE':
+  hp_dict['focal_alpha'] = alpha
+  hp_dict['focal_gamma'] = gamma
 hp_dict['BATCHNORM'] = str(BATCHNORM)
 hp_dict['DROPOUT'] = str(DROPOUT)
 hp_dict['DATE_CREATED'] = DATE
@@ -272,7 +278,8 @@ if LOSS == 'CCE':
 elif LOSS == 'SCCE':
   loss = nets.SparseCategoricalCrossentropy()
 elif LOSS == 'FOCAL_CCE':
-  loss = [nets.categorical_focal_loss(alpha=0.25,gamma=2.0)]
+  #loss = [nets.categorical_focal_loss(alpha=0.25,gamma=2.0)] 
+  loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma)
 elif LOSS == 'DICE_AVG':
   # implement dice loss averaged over all classes
   pass
