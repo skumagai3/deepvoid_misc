@@ -17,6 +17,20 @@ absl.logging.set_verbosity(absl.logging.ERROR)
 print('TensorFlow version: ', tf.__version__)
 nets.K.set_image_data_format('channels_last')
 #===============================================================
+# Set training parameters:
+#===============================================================
+# set to True if you want to use less memory, but no metrics and 
+# less subcubes loaded into memory at once.
+LOW_MEM_FLAG = True 
+epochs = 200; print('epochs: ',epochs)
+patience = 50; print('patience: ',patience)
+lr_patience = 25; print('learning rate patience: ',lr_patience)
+batch_size = 8; print('batch_size: ',batch_size)
+N_epochs_metric = 10
+print(f'classification metrics calculated every {N_epochs_metric} epochs')
+KERNEL = (3,3,3)
+LR = 3e-3 # increased to 3e-3 since we have LRreduceonplateau anyway
+#===============================================================
 # Set random seed
 #===============================================================
 seed = 12
@@ -160,7 +174,10 @@ if L == 0.122 and SIM == 'TNG':
 print('>>> Loading data!')
 print('Density field: ',FILE_DEN)
 print('Mask field: ',FILE_MASK)
-features, labels = nets.load_dataset_all_overlap(FILE_DEN,FILE_MASK,SUBGRID,OFF)
+if LOW_MEM_FLAG:
+  features, labels = nets.load_dataset_all(FILE_DEN,FILE_MASK,SUBGRID)
+else:
+  features, labels = nets.load_dataset_all_overlap(FILE_DEN,FILE_MASK,SUBGRID,OFF)
 print('>>> Data loaded!'); print('Features shape: ',features.shape)
 print('Labels shape: ',labels.shape)
 # split into training and validation sets:
@@ -180,16 +197,14 @@ print('X_train shape: ',X_train.shape); print('Y_train shape: ',Y_train.shape)
 print('X_test shape: ',X_test.shape); print('Y_test shape: ',Y_test.shape)
 if LOSS != 'SCCE':
   print('>>> Converting to one-hot encoding')
-  Y_train = nets.to_categorical(Y_train, num_classes=N_CLASSES)#,dtype='int8')
-  Y_test  = nets.to_categorical(Y_test, num_classes=N_CLASSES)#,dtype='int8')
+  Y_train = nets.to_categorical(Y_train, num_classes=N_CLASSES,dtype='uint8')
+  Y_test  = nets.to_categorical(Y_test, num_classes=N_CLASSES,dtype='uint8')
   print('>>> One-hot encoding complete')
   print('Y_train shape: ',Y_train.shape)
   print('Y_test shape: ',Y_test.shape)
 #===============================================================
 # Set model hyperparameters
 #===============================================================
-KERNEL = (3,3,3)
-LR = 3e-3 # increased to 3e-3 since we have LRreduceonplateau anyway
 if SIM == 'TNG':
   MODEL_NAME = f'TNG_D{DEPTH}-F{FILTERS}-Nm{GRID}-th{th}-sig{sig}-base_L{L}'
 elif SIM == 'BOL':
@@ -205,7 +220,7 @@ if LOSS == 'CCE':
 elif LOSS == 'FOCAL_CCE':
   MODEL_NAME += '_FOCAL'
   #alpha = 0.25 # NOTE set alpha here, def=0.25
-  alpha = [0.7, 0.9, 0.2, 0.1] # weighting void, wall more?
+  alpha = [0.85, 0.8, 0.35, 0.25] # weighting void, wall more?
   gamma = 2.0 # NOTE set gamma here, def=2.0
 elif LOSS == 'SCCE':
   MODEL_NAME += '_SCCE'
@@ -322,11 +337,6 @@ nets.save_dict_to_text(hp_dict,FILE_HPS)
 # Train
 # python3 -m tensorboard.main --logdir=./logs
 # (^^^^ cmd for tensorboard, must be on sciserver conda env)
-epochs = 200; print('epochs: ',epochs)
-patience = 50; print('patience: ',patience)
-lr_patience = 25; print('learning rate patience: ',lr_patience)
-batch_size = 8; print('batch_size: ',batch_size)
-N_epochs_metric = 10; print(f'classification metrics calculated every {N_epochs_metric} epochs')
 #===============================================================
 print('>>> Training')
 # set up callbacks
@@ -342,7 +352,11 @@ csv_logger = nets.CSVLogger(FILE_OUT+MODEL_NAME+'_' + datetime.datetime.now().st
 reduce_lr = nets.ReduceLROnPlateau(monitor='val_loss',factor=0.25,patience=lr_patience, 
                                    verbose=1,min_lr=1e-6)
 early_stop = nets.EarlyStopping(monitor='val_loss',patience=patience,restore_best_weights=True)
-callbacks = [metrics,model_chkpt,reduce_lr,early_stop,csv_logger]
+if LOW_MEM_FLAG:
+  # dont calc metrics, too memory intensive
+  callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger]
+else:
+  callbacks = [metrics,model_chkpt,reduce_lr,early_stop,csv_logger]
 history = model.fit(X_train, Y_train, batch_size = batch_size, epochs = epochs, 
                     validation_data=(X_test,Y_test), verbose = 2, shuffle = True,
                     callbacks=callbacks)
