@@ -224,7 +224,7 @@ def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=
 # a total of N_subcubes = 4 * [(GRID/SUBGRID) + (GRID/SUBGRID - 1)]^3
 # NOTE THAT THIS IS FOR TRAINING ONLY!!!
 #---------------------------------------------------------
-def load_dataset_all_overlap(FILE_DEN, FILE_MSK, SUBGRID, OFF, preproc='mm', sigma=None, dtype='float16'):
+def load_dataset_all_overlap(FILE_DEN, FILE_MSK, SUBGRID, OFF, preproc='mm', sigma=None):
   '''
   Function that loads density and mask files, splits into overlapping subcubes.
   Subcubes overlap by OFF, and are of size SUBGRID.
@@ -294,7 +294,7 @@ def load_dataset_all_overlap(FILE_DEN, FILE_MSK, SUBGRID, OFF, preproc='mm', sig
         X_all_overlap[cont,:,:,:,0] = sub_den
         Y_all_overlap[cont,:,:,:,0] = sub_msk
         cont += 1
-  return X_all_overlap.astype(dtype), Y_all_overlap.astype(dtype)
+  return X_all_overlap.astype('float16'), Y_all_overlap.astype('uint8')
 
 #---------------------------------------------------------
 # For loading testing/validation data for prediction
@@ -1058,7 +1058,7 @@ def save_slices_from_fvol(X_test,Y_test,Y_pred,FILE_MODEL,FILE_FIG,lamb,BOXSIZE=
   fig,ax = plt.subplots(1,3,figsize=(28,12),tight_layout=True)
   i = GRID//3
   if LATEX:
-    ax[0].set_title(r'$log(\delta+1)$'+'\n'+f'$\lambda={lamb}$')
+    ax[0].set_title(r'$log(\delta+1)$'+'\n'+fr'$\lambda={lamb}$')
   else:
     ax[0].set_title('Mass Density'+'\n'+f'L={lamb}')
   ax[1].set_title('Predicted Mask')
@@ -1076,9 +1076,9 @@ def save_slices_from_fvol(X_test,Y_test,Y_pred,FILE_MODEL,FILE_FIG,lamb,BOXSIZE=
   i = GRID//2
   step = 10
   if LATEX:
-    ax[0,0].set_title(r'$log(\delta+1)$'+'\n'+f'$\lambda={lamb}$')
-    ax[1,0].set_title(r'$log(\delta+1)$'+'\n'+f'$\lambda={lamb}$')
-    ax[2,0].set_title(r'$log(\delta+1)$'+'\n'+f'$\lambda={lamb}$')
+    ax[0,0].set_title(r'$log(\delta+1)$'+'\n'+fr'$\lambda={lamb}$')
+    ax[1,0].set_title(r'$log(\delta+1)$'+'\n'+fr'$\lambda={lamb}$')
+    ax[2,0].set_title(r'$log(\delta+1)$'+'\n'+fr'$\lambda={lamb}$')
   else:
     ax[0,0].set_title('Mass Density'+'\n'+f'L={lamb}')
     ax[1,0].set_title('Mass Density'+'\n'+f'L={lamb}')
