@@ -3,7 +3,7 @@ ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
 # full dm density: TNG: 0.33, BOL: 0.122
 # L = 3,5,7,10 for both
 base_L=0.33; echo "Lambda: $base_L"; 
-D=4; echo "Depth: $D";
+D=3; echo "Depth: $D";
 F=16;  echo "Filters: $F";
 LOSS="SCCE"; echo "Loss: $LOSS"; # make blank if CCE
 
@@ -16,8 +16,8 @@ SIM="TNG";
 echo "Simulation: $SIM"; 
 if [ $SIM = "TNG" ]
 then
-    SIGMA=2.4; # 512 grid
-    GRID=512; echo "GRID: $GRID"; # NOTE adjust grid here
+    GRID=256; echo "GRID: $GRID"; # NOTE adjust grid here
+    [ $GRID -eq 512 ] && SIGMA=2.4 || [ $GRID -eq 128 ] && SIGMA=0.6 || [ $GRID -eq 256 ] && SIGMA=1.2
     FN_DEN="subs1_mass_Nm${GRID}_L${tran_L}_d_None_smooth.fvol";
 elif [ $SIM = "Bolshoi" ]
 then
