@@ -102,7 +102,7 @@ ROOT_DIR = sys.argv[1]
 MODEL_NAME = sys.argv[2]
 FN_DEN = sys.argv[3]
 TL_TYPE = sys.argv[4]
-MULTI_FLAG = bool(sys.argv[5])
+MULTI_FLAG = bool(int(sys.argv[5]))
 # parse MODEL_NAME to get SIM, base_L, depth, filters, uniform_flag, BN, and drop
 # MODEL_NAME format: {SIM}_D{depth}-F{filters}-Nm{GRID}-th0.65-sig{sig}-base_L{base_L}_{LOSS}
 # e.g. TNG_D4-F16-Nm256-th0.65-sig1.2-base_L3_SCCE
