@@ -161,7 +161,7 @@ elif LOSS == 'FOCAL_CCE':
 # parse transfer L from FN_DEN
 if SIM == 'TNG':
     tran_L = int(FN_DEN.split('_L')[1].split('_')[0])
-    FILE_MASK = DATA_PATH + f'TNG300-3-Dark-mask-Nm={GRID}-th{LAMBDA_TH}-sig={SIGMA}.fvol'
+    FILE_MASK = DATA_PATH + f'TNG300-3-Dark-mask-Nm={GRID}-th={LAMBDA_TH}-sig={SIGMA}.fvol'
     FILE_FIG = FIG_DIR_PATH + 'TNG/'
 elif SIM == 'Bolshoi':
     tran_L = int(FN_DEN.split('L=')[1].split('.0')[0])
