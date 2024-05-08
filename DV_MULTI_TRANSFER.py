@@ -262,8 +262,8 @@ if LOSS == 'FOCAL_CCE':
     hp_dict_model['focal_gamma'] = gamma
 FILE_HPS_CLONE = FILE_MODEL+CLONE_NAME+'_hps.txt'
 # get # of trainable params to ensure it's working:
-trainable_ps = nets.count_params(clone.trainable_weights)
-nontrainable_ps = nets.count_params(clone.non_trainable_weights)
+trainable_ps = nets.layer_utils.count_params(clone.trainable_weights)
+nontrainable_ps = nets.layer_utils.count_params(clone.non_trainable_weights)
 hp_dict_model['trainable_params'] = trainable_ps
 hp_dict_model['nontrainable_params'] = nontrainable_ps
 hp_dict_model['total_params'] = trainable_ps + nontrainable_ps
