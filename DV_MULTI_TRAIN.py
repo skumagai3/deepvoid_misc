@@ -74,17 +74,17 @@ MULTI_FLAG = bool(int(sys.argv[10]))
 GRID = int(sys.argv[11])
 print('#############################################')
 print('>>> Running DV_MULTI_TRAIN.py')
-print('>>> Root directory: ',ROOT_DIR)
+print('>>> Root directory:',ROOT_DIR)
 print('>>> Parameters:')
-print('Simulation = ', SIM); 
-print('L = ',L); 
-print('DEPTH = ',DEPTH); print('FILTERS = ',FILTERS)
-print('UNIFORM_FLAG = ',UNIFORM_FLAG)
-print('BATCHNORM = ',BATCHNORM)
-print('DROPOUT = ',DROPOUT)
-print('LOSS = ',LOSS)
-print('MULTI_FLAG = ',MULTI_FLAG)
-print('GRID = ',GRID)
+print('Simulation =', SIM); 
+print('L =',L); 
+print('DEPTH =',DEPTH); print('FILTERS =',FILTERS)
+print('UNIFORM_FLAG =',UNIFORM_FLAG)
+print('BATCHNORM =',BATCHNORM)
+print('DROPOUT =',DROPOUT)
+print('LOSS =',LOSS)
+print('MULTI_FLAG =',MULTI_FLAG)
+print('GRID =',GRID)
 print('#############################################')
 #===============================================================
 # set paths
