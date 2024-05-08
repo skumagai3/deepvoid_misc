@@ -174,14 +174,14 @@ if L == 0.122 and SIM == 'TNG':
 # Load data, normalize
 #===============================================================
 print('>>> Loading data!')
-print('Density field: ',FILE_DEN)
-print('Mask field: ',FILE_MASK)
+print('Density field:',FILE_DEN)
+print('Mask field:',FILE_MASK)
 if LOW_MEM_FLAG:
   features, labels = nets.load_dataset_all(FILE_DEN,FILE_MASK,SUBGRID)
 else:
   features, labels = nets.load_dataset_all_overlap(FILE_DEN,FILE_MASK,SUBGRID,OFF)
-print('>>> Data loaded!'); print('Features shape: ',features.shape)
-print('Labels shape: ',labels.shape)
+print('>>> Data loaded!'); print('Features shape:',features.shape)
+print('Labels shape:',labels.shape)
 # split into training and validation sets:
 # X_train is the density subcubes used to train the model
 # Y_train is the corresponding mask subcubes
@@ -361,14 +361,14 @@ else:
   callbacks = [metrics,model_chkpt,reduce_lr,early_stop,csv_logger]
 history = model.fit(X_train, Y_train, batch_size = batch_size, epochs = epochs, 
                     validation_data=(X_test,Y_test), verbose = 2, shuffle = True,
-                    callbacks=callbacks)
+                    callbacks = callbacks)
 #===============================================================
 # Check if figs directory exists, if not, create it:
 #===============================================================
 FIG_DIR = FILE_FIG + MODEL_NAME + '/'
 if not os.path.exists(FIG_DIR):
   os.makedirs(FIG_DIR)
-  print('>>> Created directory for figures: ',FIG_DIR)
+  print('>>> Created directory for figures:',FIG_DIR)
 FILE_METRICS = FIG_DIR + MODEL_NAME + '_metrics.png'
 plotter.plot_training_metrics_all(history,FILE_METRICS,savefig=True)
 #===============================================================
@@ -422,13 +422,13 @@ elif SIM == 'BOL':
 print('>>> Finished predicting on training data')
 #===============================================================
 print('Finished training!')
-print('Model name: ',MODEL_NAME)
-print('Interparticle spacing model trained on: ',L)
+print('Model name:',MODEL_NAME)
+print('Interparticle spacing model trained on:',L)
 print(f'Model parameters: Depth={DEPTH}, Filters={FILTERS}, Uniform={UNIFORM_FLAG}, BatchNorm={BATCHNORM}, Dropout={DROPOUT}')
 print(f'Loss function: {LOSS}')
-print('Date created: ',DATE)
-print('Total trainable parameters: ',trainable_ps)
-print('Total nontrainable parameters: ',nontrainable_ps)
-print('Total parameters: ',trainable_ps+nontrainable_ps)
+print('Date created:',DATE)
+print('Total trainable parameters:',trainable_ps)
+print('Total nontrainable parameters:',nontrainable_ps)
+print('Total parameters:',trainable_ps+nontrainable_ps)
 print('>>> Finished training!!!')
 #===============================================================

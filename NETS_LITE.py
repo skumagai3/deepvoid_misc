@@ -10,7 +10,6 @@ import gc
 import os
 import sys
 import csv
-sys.path.append('/ifs/groups/vogeleyGrp/nets/')
 import volumes
 import plotter
 from collections import Counter
@@ -1106,3 +1105,79 @@ def save_slices_from_fvol(X_test,Y_test,Y_pred,FILE_MODEL,FILE_FIG,lamb,BOXSIZE=
     plotter.set_window(b=0,t=BOXSIZE,Nm=GRID,ax=axis,boxsize=BOXSIZE,Latex=LATEX)
   plt.savefig(FILE_FIG+MODEL_NAME+'-pred-comp-3x3.png',facecolor='white',bbox_inches='tight')
   print(f'Saved 3x3 comparison plot to {FILE_FIG+MODEL_NAME}-pred-comp-3x3.png')
+
+# adding function to spit out all possible parameters from a model name
+def parse_model_name(MODEL_NAME):
+  '''
+  Input: MODEL_NAME: str, name of model. can be base model or transfer
+  learned.
+  Output: dictionary of model parameters.
+  SIM: str, simulation model was trained on
+  DEPTH: int, depth of model
+  FILTERS: int, number of filters in first layer
+  GRID: int, size of full cube
+  Lambda_th: float, threshold value for eigenvalue definition
+  sig: float, sigma value for Gaussian smoothing
+  BN: bool, whether model uses batch normalization
+  DROP: float, dropout rate. 0.0 means no dropout.
+  UNIFORM_FLAG: bool, whether model uses uniform random sampling. def False
+  LOSS: str, loss function model was trained with
+  TL_TYPE: str, type of transfer learning model was trained with (if any)
+  base_L: int, interparticle spacing model was trained on originally
+  tran_L: int, interparticle spacing model was transfer learned to
+  example base MODEL_NAME:
+  TNG_D4-F16-Nm256-th0.65-sig1.2-base_L3_SCCE
+  example TLed MODEL_NAME:
+  TNG_D3-F32-Nm512-th0.65-sig2.4-base_L0.33-tran_L3_SCCE
+  '''
+  SIM = MODEL_NAME.split('_')[0]
+  DEPTH = int(MODEL_NAME.split('_')[1][1])
+  FILTERS = int(MODEL_NAME.split('-F')[1].split('-')[0])
+  GRID = int(MODEL_NAME.split('Nm')[1].split('-')[0])
+  LAMBDA_TH = float(MODEL_NAME.split('-th')[1].split('-')[0])
+  SIGMA = float(MODEL_NAME.split('-sig')[1].split('-')[0])
+  base_L = float(MODEL_NAME.split('base_L')[1][0])
+  BN_FLAG = 'BN' in MODEL_NAME
+  UNIFORM_FLAG = 'uniform' in MODEL_NAME
+  if 'DROP' in MODEL_NAME:
+    DROP = float(MODEL_NAME.split('DROP')[1].split('_')[0])
+  else:
+    DROP = 0.0
+  if 'TL' in MODEL_NAME:
+    TL_TYPE = MODEL_NAME.split('TL')[1].split('_')[0]
+    tran_L = MODEL_NAME.split('tran_L')[1]
+  else:
+    TL_TYPE = None
+    tran_L = None
+  if 'SCCE' in MODEL_NAME:
+    LOSS = 'SCCE'
+  elif 'FOCAL' in MODEL_NAME:
+    LOSS = 'FOCAL_CCE'
+  else:
+    LOSS = 'CCE'
+  # return dictionary of parameters:
+  return {
+    'SIM': SIM,
+    'DEPTH': DEPTH,
+    'FILTERS': FILTERS,
+    'GRID': GRID,
+    'Lambda_th': LAMBDA_TH,
+    'sig': SIGMA,
+    'BN': BN_FLAG,
+    'DROP': DROP,
+    'UNIFORM_FLAG': UNIFORM_FLAG,
+    'LOSS': LOSS,
+    'TL_TYPE': TL_TYPE,
+    'base_L': base_L,
+    'tran_L': tran_L
+  }
+# adding fxn that gets layer index from its name, for freezing purposes:
+def get_layer_index(model, layer_name):
+  '''
+  model: keras model
+  layer_name: str, name of layer to get index of
+  '''
+  for i, layer in enumerate(model.layers):
+    if layer.name == layer_name:
+      return i
+  return None
