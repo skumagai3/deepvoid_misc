@@ -110,7 +110,7 @@ hp_dict = nets.parse_model_name(MODEL_NAME)
 SIM = hp_dict['SIM'] # TNG or Bolshoi
 DEPTH = hp_dict['DEPTH']
 FILTERS = hp_dict['FILTERS']
-GRID = hp_dict['GRID']
+GRID = hp_dict['GRID']; SUBGRID = GRID//4; OFF = SUBGRID//2
 LAMBDA_TH = hp_dict['LAMBDA_TH']
 SIGMA = hp_dict['SIGMA']
 BATCHNORM = hp_dict['BN']
