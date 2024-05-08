@@ -955,7 +955,7 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
 
   ### plot comparison plot of den, mask, pred mask to FILE_FIG:
   den_cmap = 'gray' # default for full DM particle density
-  d = volumes.read_fvolume(FILE_DEN); d = d/np.mean(d) # delta+1
+  d = volumes.read_fvolume(FILE_DEN); d = d/np.mean(d) + 1e-7 # delta+1
   m = volumes.read_fvolume(FILE_MSK)
   plt.rcParams.update({'font.size': 20})
   fig,ax = plt.subplots(1,3,figsize=(28,12),tight_layout=True)
@@ -1042,6 +1042,7 @@ def save_slices_from_fvol(X_test,Y_test,Y_pred,FILE_MODEL,FILE_FIG,lamb,BOXSIZE=
   '''
   MODEL_NAME = FILE_MODEL.split('/')[-1]
   d = assemble_cube2(X_test,GRID,SUBGRID,OFF) # density field
+  d += 1e-7 # suppress div by zero warnings
   m = assemble_cube2(Y_test,GRID,SUBGRID,OFF) # mask field
   p = assemble_cube2(Y_pred,GRID,SUBGRID,OFF) # predicted mask field
   # if BOLSHOI, change model name for figure filenames:
