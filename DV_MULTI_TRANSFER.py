@@ -55,9 +55,9 @@ nets.K.set_image_data_format('channels_last')
 # set to True if you want to use less memory, but no metrics and 
 # less subcubes loaded into memory at once.
 LOW_MEM_FLAG = True 
-epochs = 200; print('epochs: ',epochs)
+epochs = 300; print('epochs: ',epochs)
 patience = 50; print('patience: ',patience)
-lr_patience = 25; print('learning rate patience: ',lr_patience)
+lr_patience = 20; print('learning rate patience: ',lr_patience)
 batch_size = 8; print('batch_size: ',batch_size)
 N_epochs_metric = 10
 print(f'classification metrics calculated every {N_epochs_metric} epochs')
