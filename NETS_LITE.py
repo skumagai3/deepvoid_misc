@@ -18,7 +18,7 @@ class_labels = ['Void','Wall','Filament','Halo']
 import numpy as np
 from scipy import ndimage as ndi
 from keras.models import Model, load_model, clone_model
-from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.optimizers import Adam # type: ignore
 #from tensorflow.keras.utils.layer_utils import count_params # doesnt work?
 from tensorflow.python.keras.utils import layer_utils
 from keras.utils import to_categorical

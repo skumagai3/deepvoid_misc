@@ -277,11 +277,11 @@ ONE_HOT_FLAG = True # for compute metrics callback
 if LOSS == 'SCCE':
   ONE_HOT_FLAG = False
 metrics = nets.ComputeMetrics((X_test,Y_test), N_epochs = N_epochs_metric, avg='micro', one_hot=ONE_HOT_FLAG)
-model_chkpt = nets.ModelCheckpoint(FILE_OUT + CLONE_NAME, monitor='val_loss',
+model_chkpt = nets.ModelCheckpoint(MODEL_PATH+CLONE_NAME,monitor='val_loss',
                                    save_best_only=True,verbose=2)
 #log_dir = "logs/fit/" + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") 
 #tb_call = nets.TensorBoard(log_dir=log_dir) # do we even need this if we CSV log?
-csv_logger = nets.CSVLogger(FILE_OUT+CLONE_NAME+'_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") + '_train_log.csv')
+csv_logger = nets.CSVLogger(MODEL_PATH+CLONE_NAME+'_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") + '_train_log.csv')
 reduce_lr = nets.ReduceLROnPlateau(monitor='val_loss',factor=0.25,patience=lr_patience, 
                                    verbose=1,min_lr=1e-6)
 early_stop = nets.EarlyStopping(monitor='val_loss',patience=patience,restore_best_weights=True)
@@ -312,7 +312,7 @@ VAL_FLAG = True
 ORTHO_FLAG = True 
 scores = {}
 scores['SIM'] = SIM; scores['DEPTH'] = DEPTH; scores['FILTERS'] = FILTERS
-scores['L_TRAIN'] = L; scores['L_PRED'] = L
+scores['L_TRAIN'] = base_L; scores['L_PRED'] = tran_L
 scores['UNIFORM_FLAG'] = UNIFORM_FLAG; scores['BATCHNORM'] = BATCHNORM
 scores['DROPOUT'] = DROP; scores['LOSS'] = LOSS
 scores['GRID'] = GRID; scores['DATE'] = DATE; scores['MODEL_NAME'] = MODEL_NAME
@@ -344,18 +344,18 @@ nets.save_scores_to_csv(scores,ROOT_DIR+'model_scores.csv')
 # for slice plotting:
 #========================================================================
 if SIM == 'TNG':
-  nets.save_scores_from_model(FILE_DEN, FILE_MASK, FILE_OUT+MODEL_NAME, FIG_DIR, FILE_PRED,
+  nets.save_scores_from_model(FILE_DEN, FILE_MASK, MODEL_PATH+MODEL_NAME, CLONE_FIG_DIR, PRED_PATH,
                               GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,TRAIN_SCORE=False)
 elif SIM == 'BOL':
-  nets.save_scores_from_model(FILE_DEN, FILE_MASK, FILE_OUT+MODEL_NAME, FIG_DIR, FILE_PRED,
+  nets.save_scores_from_model(FILE_DEN, FILE_MASK, MODEL_PATH+MODEL_NAME, CLONE_FIG_DIR, PRED_PATH,
                               GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,BOXSIZE=256,BOLSHOI_FLAG=True,
                               TRAIN_SCORE=False)
 print('>>> Finished predicting on training data')
 #===============================================================
 print('Finished training!')
 print('Model name:',CLONE_NAME)
-print('Interparticle spacing model trained on:',L)
-print(f'Model parameters: Depth={DEPTH}, Filters={FILTERS}, Uniform={UNIFORM_FLAG}, BatchNorm={BATCHNORM}, Dropout={DROPOUT}')
+print('Interparticle spacing model trained on:',tran_L)
+print(f'Model parameters: Depth={DEPTH}, Filters={FILTERS}, Uniform={UNIFORM_FLAG}, BatchNorm={BATCHNORM}, Dropout={DROP}')
 print(f'Loss function: {LOSS}')
 print('Date created:',DATE)
 print('Total trainable parameters:',trainable_ps)
