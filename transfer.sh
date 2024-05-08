@@ -24,6 +24,7 @@ then
     SIGMA=0.916; # 640 grid
     GRID=640; echo "GRID: $GRID";
     FN_DEN="Bolshoi_halo_CIC_${GRID}_L=${tran_L}.0.fvol";
+fi
 # other options (just type out model name manually):
 #UNIFORM_FLAG=0; echo "Uniform Flag: $UNIFORM_FLAG";
 #BN=0; echo "Batch Norm: $BN";
@@ -35,6 +36,7 @@ then
     MODEL_NAME="${SIM}_D${D}-F${F}-Nm${GRID}-th0.65-sig${SIGMA}-base_L${base_L}";
 else
     MODEL_NAME="${SIM}_D${D}-F${F}-Nm${GRID}-th0.65-sig${SIGMA}-base_L${base_L}_${LOSS}";
+fi
 MULTI_FLAG=0; echo "Multiprocessing: $MULTI_FLAG"; # 0 for no, 1 for multiple GPUs
 
 python3 ./deepvoid_misc/DV_MULTI_TRANSFER.py $ROOT_DIR $MODEL_NAME $FN_DEN $TL_TYPE $MULTI_FLAG;
