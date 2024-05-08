@@ -216,14 +216,15 @@ if MULTI_FLAG:
         del model
         N_layers = len(clone.layers); print(f'Model has {N_layers} layers')
         if TL_TYPE == 'ENC':
-            up_idx = nets.get_layer_index(clone,'up') # up to 1st upsample layer
+            first_up_name = f'decoder_block_D{DEPTH-1}_upsample'
+            up_idx = nets.get_layer_index(clone,first_up_name) # up to 1st upsample layer
             print('Freezing all layers up to', clone.layers[up_idx].name)
             for layer in clone.layers[:up_idx]:
                 layer.trainable = False
         elif TL_TYPE == 'LL':
             print('Freezing all layers up to last convolutional block')
             up_to_last_decode_idx = nets.get_layer_index(clone,'decoder_block_D0')
-            up_to_last_decode_idx -= 1 # dont want to freeze that block, rather the one before!
+            up_to_last_decode_idx -= 2 # dont want to freeze that block, rather the one before!
             for layer in clone.layers[:up_to_last_decode_idx]:
                 layer.trainable = False
         # compile model:
@@ -238,7 +239,7 @@ else:
     N_layers = len(clone.layers); print(f'Model has {N_layers} layers')
     if TL_TYPE == 'ENC':
         first_up_name = f'decoder_block_D{DEPTH-1}_upsample'
-        up_idx = nets.get_layer_index(clone,'up') # up to 1st upsample layer
+        up_idx = nets.get_layer_index(clone,first_up_name) # up to 1st upsample layer
         print('Freezing all layers up to', clone.layers[up_idx].name)
         for layer in clone.layers[:up_idx]:
             layer.trainable = False
