@@ -288,12 +288,15 @@ hp_dict['FILE_MASK'] = FILE_MASK
 for key in hp_dict.keys():
   print(key,hp_dict[str(key)])
 #===============================================================
-# Set loss function
+# Set loss function and metrics
 #===============================================================
+metrics = ['accuracy','categorical_accuracy']
 if LOSS == 'CCE':
   loss = nets.CategoricalCrossentropy()
 elif LOSS == 'SCCE':
   loss = nets.SparseCategoricalCrossentropy()
+  # replace 'categorical_accuracy' with 'sparse_categorical_accuracy'
+  metrics = ['accuracy','sparse_categorical_accuracy']
 elif LOSS == 'FOCAL_CCE':
   #loss = [nets.categorical_focal_loss(alpha=0.25,gamma=2.0)] 
   loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma)
@@ -303,6 +306,9 @@ elif LOSS == 'DICE_AVG':
 elif LOSS == 'DICE_VOID':
   # implement dice loss with void class
   pass
+# add more metrics here, may slow down training?
+if not LOW_MEM_FLAG:
+  metrics += ['f1_score','precision','recall']
 #===============================================================
 # Multiprocessing
 #===============================================================
@@ -310,21 +316,31 @@ if MULTI_FLAG:
   strategy = tf.distribute.MirroredStrategy()
   print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
   with strategy.scope():
-    model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
-                        batch_normalization=BATCHNORM,
-                        dropout_rate=DROPOUT,
-                        model_name=MODEL_NAME)
-    model.compile(optimizer=nets.Adam(learning_rate=LR),
-                                      loss=loss,
-                                      metrics=['accuracy'])
-else:
-  model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
-                        batch_normalization=BATCHNORM,
-                        dropout_rate=DROPOUT,
-                        model_name=MODEL_NAME)
-  model.compile(optimizer=nets.Adam(learning_rate=LR),
+    # if model_name exists in FILE_OUT, load it
+    # if not, create a new model
+    if os.path.exists(FILE_OUT+MODEL_NAME):
+      model = nets.load_model(FILE_OUT+MODEL_NAME)
+      model.set_weights(model.get_weights())
+    else:
+      model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
+                          batch_normalization=BATCHNORM,
+                          dropout_rate=DROPOUT,
+                          model_name=MODEL_NAME)
+      model.compile(optimizer=nets.Adam(learning_rate=LR),
                                         loss=loss,
-                                        metrics=['accuracy'])
+                                        metrics=metrics)
+else:
+  if os.path.exists(FILE_OUT+MODEL_NAME):
+    model = nets.load_model(FILE_OUT+MODEL_NAME)
+    model.set_weights(model.get_weights())
+  else:
+    model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
+                          batch_normalization=BATCHNORM,
+                          dropout_rate=DROPOUT,
+                          model_name=MODEL_NAME)
+    model.compile(optimizer=nets.Adam(learning_rate=LR),
+                                          loss=loss,
+                                          metrics=metrics)
 model.summary()
 # get trainable parameters:
 trainable_ps = nets.layer_utils.count_params(model.trainable_weights)

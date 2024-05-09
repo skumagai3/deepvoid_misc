@@ -136,7 +136,7 @@ PRED_PATH = ROOT_DIR + 'preds/'
 FILE_DEN = DATA_PATH + FN_DEN
 FILE_MODEL = MODEL_PATH + MODEL_NAME
 #================================================================
-# Parse hp_dict file for attributes
+# Parse hp_dict file for attributes, set metrics
 #================================================================
 hp_dict_model = {}
 with open(MODEL_PATH+MODEL_NAME+'_hps.txt','r') as f:
@@ -146,15 +146,19 @@ with open(MODEL_PATH+MODEL_NAME+'_hps.txt','r') as f:
             break
         else:
             hp_dict[line.split(':')[0]] = line.split(':')[1].strip()
+metrics = ['accuracy','categorical_accuracy']
 if LOSS == 'CCE':
     loss = nets.CategoricalCrossentropy()
 elif LOSS == 'SCCE':
     loss = nets.SparseCategoricalCrossentropy()
+    metrics = ['accuracy','sparse_categorical_accuracy']
 elif LOSS == 'FOCAL_CCE':
     alpha = hp_dict_model['focal_alpha']
     gamma = hp_dict_model['focal_gamma']
     #loss = [nets.categorical_focal_loss(alpha=0.25,gamma=2.0)] 
     loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma)
+if not LOW_MEM_FLAG:
+    metrics += ['f1_score','precision','recall']
 #===============================================================
 # Load data
 #===============================================================
@@ -229,7 +233,7 @@ if MULTI_FLAG:
                 layer.trainable = False
         # compile model:
         clone.compile(optimizer=nets.Adam(learning_rate=LR),loss=loss,
-                      metrics=['accuracy'])
+                      metrics=metrics)
 else:
     model = nets.load_model(FILE_MODEL)
     clone = nets.clone_model(model)
@@ -250,7 +254,7 @@ else:
         for layer in clone.layers[:up_to_last_decode_idx]:
             layer.trainable = False
     clone.compile(optimizer=nets.Adam(learning_rate=LR),loss=loss,
-                  metrics=['accuracy'])
+                  metrics=metrics)
 clone.summary()
 # save clone hps, WITH alpha and gamma if loss is focal:
 hp_dict_model['FILE_MASK'] = FILE_MASK
