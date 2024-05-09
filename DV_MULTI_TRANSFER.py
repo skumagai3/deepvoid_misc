@@ -41,6 +41,7 @@ print('>>> Running DV_MULTI_TRANSFER.py')
 import os
 import sys
 import datetime
+import argparse
 import numpy as np
 import tensorflow as tf
 import NETS_LITE as nets
@@ -52,9 +53,6 @@ nets.K.set_image_data_format('channels_last')
 #===============================================================
 # Set training parameters:
 #===============================================================
-# set to True if you want to use less memory, but no metrics and 
-# less subcubes loaded into memory at once.
-LOW_MEM_FLAG = True 
 epochs = 300; print('epochs: ',epochs)
 patience = 50; print('patience: ',patience)
 lr_patience = 20; print('learning rate patience: ',lr_patience)
@@ -78,31 +76,61 @@ N_CLASSES = 4
 # arg parsing:
 #===============================================================
 '''
-What arguments will we need?
-ROOT_DIR
+Usage: python3 DV_MULTI_TRANSFER.py <ROOT_DIR> <MODEL_NAME> <FN_DEN> <TL_TYPE> [--MULTI_FLAG] [--LOW_MEM_FLAG]
+
+Arguments:
+  ROOT_DIR: Root directory where data, models, figures, etc. are stored.
+  MODEL_NAME: Name of the model to be loaded.
+  FN_DEN: Filename of the density field to be loaded.
+  TL_TYPE: Type of transfer learning to be done. Possible values: 'ENC', 'LL'.
+
+Optional Flags:
+  --MULTI_FLAG: If set, use multiprocessing. Default is False.
+  --LOW_MEM_FLAG: If set, will load less training data and report fewer metrics. Default is True.
+
+Notes:
 MODEL_NAME (SIM, base_L will be pulled from that)
-FN_DEN
-TL_TYPE: (need to add more than just enc and LL)
+TL_TYPEs:
 - ENC: freeze entire encoding side (and bottleneck)
 - LL: freeze entire model except last conv block and output
-
+(not implemented):
 - ENC_D{freeze_depth}: freeze encoding side down to some depth?
 
-What about double transfer learning?
-What do i name those models?
+Double transfer learning:
+Transfer learning a model that has already been transfer learned
+will append _TL_TYPE_{TL_TYPE}_tran_L={tran_L} to the MODEL_NAME
 '''
-if len(sys.argv) != 6:
-    print('''Usage: python3 DV_MULTI_TRANSFER.py <ROOT_DIR> <MODEL_NAME> <FN_DEN> <TL_TYPE> <MULTI_FLAG>;
-          where ROOT_DIR is the root dir where data, models, preds, figs, etc. are stored,
-          MODEL_NAME is the name of the model to be loaded, FN_DEN is the filename of the
-          density field to be loaded, and TL_TYPE is the type of transfer learning to be
-          done (e.g. ENC, LL, ENC_D3) MULTI_FLAG is 0 for no multiprocessing, 1 for multi.
-          ''')
-ROOT_DIR = sys.argv[1]
-MODEL_NAME = sys.argv[2]
-FN_DEN = sys.argv[3]
-TL_TYPE = sys.argv[4]
-MULTI_FLAG = bool(int(sys.argv[5]))
+parser = argparse.ArgumentParser(
+    prog='DV_MULTI_TRANSFER.py',
+    description='Transfer learning DV models to higher interparticle separations')
+req_group = parser.add_argument_group('required arguments')
+req_group.add_argument('ROOT_DIR',type=str, help='Root directory where data, models, figs, etc. are stored')
+req_group.add_argument('MODEL_NAME',type=str, help='Name of the model to be loaded')
+req_group.add_argument('FN_DEN',type=str, help='Filename of the density field to be loaded')
+req_group.add_argument('TL_TYPE',type=str, help='Type of transfer learning to be done. Possible values: ENC, LL')
+opt_group = parser.add_argument_group('optional arguments')
+opt_group.add_argument('--MULTI_FLAG',action='store_true',help='If set, use multiprocessing.')
+opt_group.add_argument('--LOW_MEM_FLAG', action='store_false', help='If not set, will load less training data and report less metrics.')
+args = parser.parse_args()
+ROOT_DIR = args.ROOT_DIR
+MODEL_NAME = args.MODEL_NAME
+FN_DEN = args.FN_DEN
+TL_TYPE = args.TL_TYPE
+MULTI_FLAG = args.MULTI_FLAG
+LOW_MEM_FLAG = args.LOW_MEM_FLAG
+
+#if len(sys.argv) != 6:
+#    print('''Usage: python3 DV_MULTI_TRANSFER.py <ROOT_DIR> <MODEL_NAME> <FN_DEN> <TL_TYPE> <MULTI_FLAG>;
+#          where ROOT_DIR is the root dir where data, models, preds, figs, etc. are stored,
+#          MODEL_NAME is the name of the model to be loaded, FN_DEN is the filename of the
+#          density field to be loaded, and TL_TYPE is the type of transfer learning to be
+#          done (e.g. ENC, LL, ENC_D3) MULTI_FLAG is 0 for no multiprocessing, 1 for multi.
+#          ''')
+#ROOT_DIR = sys.argv[1]
+#MODEL_NAME = sys.argv[2]
+#FN_DEN = sys.argv[3]
+#TL_TYPE = sys.argv[4]
+#MULTI_FLAG = bool(int(sys.argv[5]))
 # parse MODEL_NAME to get SIM, base_L, depth, filters, uniform_flag, BN, and drop
 # MODEL_NAME format: {SIM}_D{depth}-F{filters}-Nm{GRID}-th0.65-sig{sig}-base_L{base_L}_{LOSS}
 # e.g. TNG_D4-F16-Nm256-th0.65-sig1.2-base_L3_SCCE

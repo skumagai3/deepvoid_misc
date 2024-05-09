@@ -7,6 +7,7 @@ which currently imports all kinds of stuff that I don't need.
 print('>>> Running DV_MULTI_TRAIN.py')
 import os
 import sys
+import argparse
 import datetime
 import numpy as np
 import tensorflow as tf
@@ -44,34 +45,87 @@ N_CLASSES = 4
 #===============================================================
 # arg parsing:
 #===============================================================
-if len(sys.argv) != 12:
-  print('''Usage: python3 DV_MULTI_TRAIN.py <ROOT_DIR> <SIM> <L> <DEPTH> <FILTERS> <UNIFORM_FLAG> <BATCHNORM> <DROPOUT> <LOSS> <MULTI_FLAG> <GRID>, 
-        where ROOT_DIR is your root directory where models, predictions, figures will be saved,
-        SIM is BOL or TNG, L is the interparticle separation in Mpc/h,
-        DEPTH is the depth of the U-Net, FILTERS is the number of filters in the first layer,
-        and UNIFORM_FLAG is 1 if you want to use identical masses for all subhaloes, 0 if not.
-        BATCHNORM is 1 if you want to use batch normalization, 0 if not.
-        DROPOUT is the dropout rate, and LOSS is the loss function to use.
-        LOSS is one of 'CCE', 'SCCE', 'FOCAL_CCE', 'DICE_AVG', or 'DICE_VOID'.
-        MULTI_FLAG is 1 if you want to use multiprocessing, 0 if not.
-        GRID is the size of the density and mask fields on a side. For TNG,
-        GRID=512 (unless you want a lightweight model, then GRID=128), and for Bolshoi, GRID=640.''')
-  sys.exit()
-ROOT_DIR = sys.argv[1]
-SIM = sys.argv[2]
-L = sys.argv[3]
-if L == '0.33' or L == '0.122':
-  L = float(L) # since it's a float in the FULL DENSITY filename
-else:
-  L = int(L) # since it's an int in the SUBHALOES filename
-DEPTH = int(sys.argv[4])
-FILTERS = int(sys.argv[5])
-UNIFORM_FLAG = bool(int(sys.argv[6]))
-BATCHNORM = bool(int(sys.argv[7]))
-DROPOUT = float(sys.argv[8])
-LOSS = str(sys.argv[9])
-MULTI_FLAG = bool(int(sys.argv[10]))
-GRID = int(sys.argv[11])
+'''
+Usage: python3 DV_MULTI_TRAIN.py <ROOT_DIR> <SIM> <L> <DEPTH> <FILTERS> <LOSS> <GRID> [--UNIFORM_FLAG] [--BATCHNORM] [--DROPOUT] [--MULTI_FLAG] [--LOW_MEM_FLAG]
+
+Arguments:
+  ROOT_DIR: Root directory where models, predictions, and figures will be saved.
+  SIM: Simulation type. Either 'TNG' or 'BOL'.
+  L: Interparticle separation in Mpc/h. For TNG full DM use '0.33', for BOL full DM use '0.122'. Other valid values are '3', '5', '7', '10'.
+  DEPTH: Depth of the U-Net. Default is 3.
+  FILTERS: Number of filters in the first layer. Default is 32.
+  LOSS: Loss function to use. Options are 'CCE', 'SCCE', 'FOCAL_CCE'. Default is 'CCE'.
+  GRID: Size of the density and mask fields on a side. For TNG, use 512, for Bolshoi, use 640.
+
+Optional Flags:
+  --UNIFORM_FLAG: If set, use identical masses for all subhaloes. Default is False.
+  --BATCHNORM: If set, use batch normalization. Default is False.
+  --DROPOUT: Dropout rate. Default is 0.0 (no dropout).
+  --MULTI_FLAG: If set, use multiprocessing. Default is False.
+  --LOW_MEM_FLAG: If set, will load less training data and do not report metrics. Default is True.
+'''
+parser = argparse.ArgumentParser(
+  prog='DV_MULTI_TRAIN.py',
+  description='Train a U-Net on a multiclass morphological mask')
+# required args: ROOT_DIR, SIM, L, DEPTH, FILTERS, LOSS, GRID
+req_group = parser.add_argument_group('required arguments')
+req_group.add_argument('ROOT_DIR', type=str, help='Root directory where models, predictions, and figures will be saved.')
+req_group.add_argument('SIM', type=str, help='Simulation: TNG or BOL.')
+req_group.add_argument('L', type=lambda x: float(x) if x in ['0.33', '0.122'] else int(x), 
+                       help='Interparticle separation in Mpc/h. TNG full DM 0.33, BOL full DM 0.122, 3,5,7,10.')
+req_group.add_argument('DEPTH', type=int, default=3, help='Depth of the U-Net.')
+req_group.add_argument('FILTERS', type=int, default=32, help='Number of filters in the first layer.')
+req_group.add_argument('LOSS', type=str, default='CCE', help='Loss function to use: CCE, SCCE, FOCAL_CCE.')
+req_group.add_argument('GRID', type=int, help='Size of the density and mask fields on a side. For TNG, GRID=512, for Bolshoi, GRID=640.')
+# optional args: UNIFORM_FLAG, BATCHNORM, DROPOUT, MULTI_FLAG, LOW_MEM_FLAG
+opt_group = parser.add_argument_group('optional arguments')
+opt_group.add_argument('--UNIFORM_FLAG', action='store_true', help='If set, use identical masses for all subhaloes.')
+opt_group.add_argument('--BATCHNORM', action='store_true', help='If set, use batch normalization')
+opt_group.add_argument('--DROPOUT', type=float, default=0.0, help='Dropout rate. 0.0 means no dropout.')
+opt_group.add_argument('--MULTI_FLAG', action='store_true', help='If set, use multiprocessing.')
+opt_group.add_argument('--LOW_MEM_FLAG', action='store_false', help='If not set, will load less training data and report less metrics.')
+args = parser.parse_args()
+ROOT_DIR = args.ROOT_DIR
+SIM = args.SIM
+L = args.L
+DEPTH = args.DEPTH
+FILTERS = args.FILTERS
+LOSS = args.LOSS
+GRID = args.GRID
+UNIFORM_FLAG = args.UNIFORM_FLAG
+BATCHNORM = args.BATCHNORM
+DROPOUT = args.DROPOUT
+MULTI_FLAG = args.MULTI_FLAG
+LOW_MEM_FLAG = args.LOW_MEM_FLAG
+
+#if len(sys.argv) != 12:
+#  print('''Usage: python3 DV_MULTI_TRAIN.py <ROOT_DIR> <SIM> <L> <DEPTH> <FILTERS> <UNIFORM_FLAG> <BATCHNORM> <DROPOUT> <LOSS> <MULTI_FLAG> <GRID>, 
+#        where ROOT_DIR is your root directory where models, predictions, figures will be saved,
+#        SIM is BOL or TNG, L is the interparticle separation in Mpc/h,
+#        DEPTH is the depth of the U-Net, FILTERS is the number of filters in the first layer,
+#        and UNIFORM_FLAG is 1 if you want to use identical masses for all subhaloes, 0 if not.
+#        BATCHNORM is 1 if you want to use batch normalization, 0 if not.
+#        DROPOUT is the dropout rate, and LOSS is the loss function to use.
+#        LOSS is one of 'CCE', 'SCCE', 'FOCAL_CCE', 'DICE_AVG', or 'DICE_VOID'.
+#        MULTI_FLAG is 1 if you want to use multiprocessing, 0 if not.
+#        GRID is the size of the density and mask fields on a side. For TNG,
+#        GRID=512 (unless you want a lightweight model, then GRID=128), and for Bolshoi, GRID=640.''')
+#  sys.exit()
+#ROOT_DIR = sys.argv[1]
+#SIM = sys.argv[2]
+#L = sys.argv[3]
+#if L == '0.33' or L == '0.122':
+#  L = float(L) # since it's a float in the FULL DENSITY filename
+#else:
+#  L = int(L) # since it's an int in the SUBHALOES filename
+#DEPTH = int(sys.argv[4])
+#FILTERS = int(sys.argv[5])
+#UNIFORM_FLAG = bool(int(sys.argv[6]))
+#BATCHNORM = bool(int(sys.argv[7]))
+#DROPOUT = float(sys.argv[8])
+#LOSS = str(sys.argv[9])
+#MULTI_FLAG = bool(int(sys.argv[10]))
+#GRID = int(sys.argv[11])
 print('#############################################')
 print('>>> Running DV_MULTI_TRAIN.py')
 print('>>> Root directory:',ROOT_DIR)
