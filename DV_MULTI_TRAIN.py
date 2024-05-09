@@ -148,7 +148,8 @@ if SIM == 'TNG':
   if not os.path.exists(FILE_FIG):
     os.makedirs(FILE_FIG)
 ### Bolshoi ###
-elif SIM == 'BOL':
+elif SIM == 'BOL' or SIM == 'Bolshoi':
+  SIM = 'BOL'
   #GRID = 640
   SUBGRID = 128
   OFF = 64
