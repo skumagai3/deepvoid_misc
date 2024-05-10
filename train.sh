@@ -1,5 +1,5 @@
 #!/bin/bash
-'''
+: <<'END_COMMENT'
 Usage: ./train.sh
 
 This script runs the DV_MULTI_TRAIN.py script.
@@ -20,7 +20,7 @@ Optional Flags:
   --DROPOUT: Dropout rate. Default is 0.0, aka no dropout.
   --MULTI_FLAG: If set to 1, use multiprocessing. Default is 0.
   --LOW_MEM_FLAG: If set to 1, will load less training data and report fewer metrics. Default is 1.
-'''
+END_COMMENT
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
 SIM="TNG"; echo "Simulation: $SIM"; # TNG/BOL
 L=0.33; echo "Lambda: $L";

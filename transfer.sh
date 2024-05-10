@@ -1,5 +1,5 @@
 #!/bin/bash
-'''
+: <<'END_COMMENT'
 Usage: ./transfer.sh
 
 This script runs the DV_MULTI_TRANSFER.py script.
@@ -22,7 +22,7 @@ Parameters:
 Optional Flags:
   --MULTI_FLAG: If set to 1, use multiprocessing. Default is 0.
   --LOW_MEM_FLAG: If set to 1, will load less training data and report fewer metrics. Default is 1.
-'''
+END_COMMENT
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
 #######################################################################
 # Choose model hyperparameters, choose base interparticle separation
