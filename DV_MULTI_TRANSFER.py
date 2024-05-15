@@ -118,22 +118,7 @@ FN_DEN = args.FN_DEN
 TL_TYPE = args.TL_TYPE
 MULTI_FLAG = args.MULTI_FLAG
 LOW_MEM_FLAG = args.LOW_MEM_FLAG
-
-#if len(sys.argv) != 6:
-#    print('''Usage: python3 DV_MULTI_TRANSFER.py <ROOT_DIR> <MODEL_NAME> <FN_DEN> <TL_TYPE> <MULTI_FLAG>;
-#          where ROOT_DIR is the root dir where data, models, preds, figs, etc. are stored,
-#          MODEL_NAME is the name of the model to be loaded, FN_DEN is the filename of the
-#          density field to be loaded, and TL_TYPE is the type of transfer learning to be
-#          done (e.g. ENC, LL, ENC_D3) MULTI_FLAG is 0 for no multiprocessing, 1 for multi.
-#          ''')
-#ROOT_DIR = sys.argv[1]
-#MODEL_NAME = sys.argv[2]
-#FN_DEN = sys.argv[3]
-#TL_TYPE = sys.argv[4]
-#MULTI_FLAG = bool(int(sys.argv[5]))
-# parse MODEL_NAME to get SIM, base_L, depth, filters, uniform_flag, BN, and drop
-# MODEL_NAME format: {SIM}_D{depth}-F{filters}-Nm{GRID}-th0.65-sig{sig}-base_L{base_L}_{LOSS}
-# e.g. TNG_D4-F16-Nm256-th0.65-sig1.2-base_L3_SCCE
+#===============================================================
 hp_dict = nets.parse_model_name(MODEL_NAME)
 SIM = hp_dict['SIM'] # TNG or Bolshoi
 DEPTH = hp_dict['DEPTH']

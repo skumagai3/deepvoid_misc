@@ -44,22 +44,6 @@ MODEL_NAME = args.MODEL_NAME
 FN_DEN = args.FN_DEN
 FN_MSK = args.FN_MSK
 GRID = args.GRID
-
-#if len(sys.argv) != 7:
-#    print('''Usage: python3 DV_MULTI_PRED.py <ROOT_DIR> <SIM> <MODEL_NAME>
-#          <FN_DEN> <FN_MSK> <GRID>; where ROOT_DIR is the root directory where data,
-#          models, preds, etc. are stored, SIM is either BOL or TNG, MODEL_NAME
-#          is the name of the network to load, and FN_DEN and FN_MSK are the 
-#          filepaths for the density and mask cubes respectively, GRID is the 
-#          desired cube size on a side in voxels.''')
-#    sys.exit()
-#ROOT_DIR = sys.argv[1]
-#SIM = sys.argv[2]
-#MODEL_NAME = sys.argv[3]
-## NOTE that FN_DEN is not necessarily from the same sim as SIM
-#FN_DEN = sys.argv[4]
-#FN_MSK = sys.argv[5]
-#GRID = int(sys.argv[6])
 DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 #===============================================================================
 # parse MODEL_NAME for model attributes
