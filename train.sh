@@ -43,11 +43,11 @@ MULTI_FLAG=0; echo "Multiprocessing: $MULTI_FLAG";
 LOW_MEM_FLAG=1; echo "Low memory: $LOW_MEM_FLAG";
 
 if [ "$LOSS" = "FOCAL_CCE" ]; then
-  ALPHA=(0.5 0.5 0.1 0.1); echo "Focal Alpha: $ALPHA";
+  ALPHA=(0.5 0.5 0.1 0.1); echo "Focal Alpha: ${ALPHA[@]}";
   GAMMA=2.0; echo "Focal Gamma: $GAMMA";
 fi
 
 #python3 ./deepvoid_misc/DV_MULTI_TRAIN.py $ROOT_DIR $SIM $L $D $F $UNIFORM_FLAG $BN $DROP $LOSS $MULTI_FLAG $GRID;
-#python3 $ROOT_DIR/deepvoid_misc/DV_MULTI_TRAIN.py $ROOT_DIR $SIM $L $D $F $LOSS $GRID --UNIFORM_FLAG $UNIFORM_FLAG --BATCHNORM $BN --DROPOUT $DROP --MULTI_FLAG $MULTI_FLAG --LOW_MEM_FLAG $LOW_MEM_FLAG;
+#python3 $ROOT_DIR/deepvoid_misc/DV_MULTI_TRAIN.py $ROOT_DIR $SIM $L $D $F $LOSS $GRID --UNIFORM_FLAG --BATCHNORM --DROPOUT $DROP --MULTI_FLAG --LOW_MEM_FLAG --FOCAL_ALPHA ${ALPHA[@]} --FOCAL_GAMMA $GAMMA;
 python3 $ROOT_DIR/deepvoid_misc/DV_MULTI_TRAIN.py $ROOT_DIR $SIM $L $D $F $LOSS $GRID;
 kill $NVIDIA_SMI_PID
