@@ -426,7 +426,7 @@ def conv_block(input_tensor, filters, name, activation='relu', batch_normalizati
     x = Dropout(dropout_rate/2.0)(x) # only half the dropout rate here????
   return x
 #---------------------------------------------------------
-def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation='relu', last_activation='softmax', batch_normalization=False, BN_scheme='none', dropout_rate=None, DROP_scheme='none', model_name='3D_U_Net', report_params=False):
+def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation='relu', last_activation='softmax', batch_normalization=False, BN_scheme='last', dropout_rate=None, DROP_scheme='last', model_name='3D_U_Net', report_params=False):
   '''
   Constructs a 3D U-Net model for semantic segmentation.
 
@@ -438,9 +438,9 @@ def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation=
   - activation (str): The activation function to use in the convolutional layers. Default is 'relu'.
   - last_activation (str): The activation function to use in the output layer. Default is 'softmax'.
   - batch_normalization (bool): Whether to use batch normalization after each convolutional layer. Default is False.
-  - BN_scheme (str): The batch normalization scheme to use. 'all' = after each conv layer, 'last' = after last conv layer, 'none' = no batch normalization. Default is 'none'.
+  - BN_scheme (str): The batch normalization scheme to use. 'all' = after each conv layer, 'last' = after last conv layer, 'none' = no batch normalization. Default is 'last'.
   - dropout_rate (float): The dropout rate to use after each convolutional layer. Default is None.
-  - DROP_scheme (str): The dropout scheme to use. 'all' = after each conv layer, 'last' = after last conv layer, 'none' = no dropout. Default is 'none'.
+  - DROP_scheme (str): The dropout scheme to use. 'all' = after each conv layer, 'last' = after last conv layer, 'none' = no dropout. Default is 'last'.
   - model_name (str): The name of the model. Default is '3D_U_Net'.
   - report_params (bool): Whether to return the number of trainable and non-trainable parameters. Default is False.
 
@@ -450,7 +450,7 @@ def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation=
   - nontrainable_ps (int): The number of non-trainable parameters in the model (if report_params=True).
   '''
   # check if dropout rate is 0.0
-  if dropout_rate == 0.0:
+  if dropout_rate == 0.0 or dropout_rate == None:
     DROP_scheme = 'none'
   # check if batch normalization is False
   if batch_normalization == False:
