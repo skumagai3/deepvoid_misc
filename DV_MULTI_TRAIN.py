@@ -23,7 +23,7 @@ nets.K.set_image_data_format('channels_last')
 # set to True if you want to use less memory, but no metrics and 
 # less subcubes loaded into memory at once.
 LOW_MEM_FLAG = True 
-epochs = 300; print('epochs: ',epochs)
+epochs = 500; print('epochs: ',epochs)
 patience = 50; print('patience: ',patience)
 lr_patience = 20; print('learning rate patience: ',lr_patience)
 batch_size = 8; print('batch_size: ',batch_size)
@@ -277,7 +277,7 @@ if LOSS == 'CCE':
 elif LOSS == 'FOCAL_CCE':
   MODEL_NAME += '_FOCAL'
   #alpha = 0.25 # NOTE set alpha here, def=0.25
-  alpha = [0.85, 0.8, 0.35, 0.25] # weighting void, wall more?
+  alpha = [0.35, 0.35, 0.15, 0.15] # weighting void, wall more?
   gamma = 2.0 # NOTE set gamma here, def=2.0
 elif LOSS == 'SCCE':
   MODEL_NAME += '_SCCE'
