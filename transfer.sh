@@ -25,7 +25,7 @@ Optional Flags:
 END_COMMENT
 current_time=$(date +"%Y%m%d-%H%M%S");
 mem_report_fn="transfer_gpu_mem_usage_${current_time}.txt";
-nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits > ${mem_report_fn} &
+nvidia-smi --query-gpu=timestamp,name,memory.used,memory.free,memory.total,temperature.gpu,pstate --format=csv -l 30 > ${mem_report_fn} &
 NVIDIA_SMI_PID=$!;
 #######################################################################
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
