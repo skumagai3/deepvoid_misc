@@ -12,6 +12,11 @@ Parameters:
   FN_MSK: Filepath for the mask cube.
   GRID: Desired cube size on a side in voxels.
 END_COMMENT
+current_time=$(date +"%Y%m%d-%H%M%S");
+mem_report_fn="pred_gpu_mem_usage_${current_time}.txt";
+nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits > ${mem_report_fn} &
+NVIDIA_SMI_PID=$!;
+
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
 SIM="TNG"; echo "Simulation: $SIM";
 MODEL_NAME="TNG_D2-F4-Nm128-th0.65-sig0.6-base_L0.33_FOCAL"; echo "Model Name: $MODEL_NAME";
@@ -20,3 +25,4 @@ FN_MSK="TNG300-3-Dark-mask-Nm=128-th=0.65-sig=0.6.fvol"; echo "Mask Field: $FN_M
 GRID=128; echo "GRID: $GRID";
 
 python3 $ROOT_DIR/deepvoid_misc/DV_MULTI_PRED.py $ROOT_DIR $SIM $MODEL_NAME $FN_DEN $FN_MSK $GRID;
+kill $NVIDIA_SMI_PID

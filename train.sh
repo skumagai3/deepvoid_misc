@@ -21,6 +21,11 @@ Optional Flags:
   --MULTI_FLAG: If set to 1, use multiprocessing. Default is 0.
   --LOW_MEM_FLAG: If set to 1, will load less training data and report fewer metrics. Default is 1.
 END_COMMENT
+current_time=$(date +"%Y%m%d-%H%M%S");
+mem_report_fn="train_gpu_mem_usage_${current_time}.txt";
+nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits > ${mem_report_fn} &
+NVIDIA_SMI_PID=$!;
+
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
 SIM="TNG"; echo "Simulation: $SIM"; # TNG/BOL
 L=0.33; echo "Lambda: $L";
@@ -36,4 +41,6 @@ MULTI_FLAG=0; echo "Multiprocessing: $MULTI_FLAG";
 LOW_MEM_FLAG=1; echo "Low memory: $LOW_MEM_FLAG";
 
 #python3 ./deepvoid_misc/DV_MULTI_TRAIN.py $ROOT_DIR $SIM $L $D $F $UNIFORM_FLAG $BN $DROP $LOSS $MULTI_FLAG $GRID;
-python3 $ROOT_DIR/deepvoid_misc/DV_MULTI_TRAIN.py $ROOT_DIR $SIM $L $D $F $LOSS $GRID --UNIFORM_FLAG $UNIFORM_FLAG --BATCHNORM $BN --DROPOUT $DROP --MULTI_FLAG $MULTI_FLAG --LOW_MEM_FLAG $LOW_MEM_FLAG;
+#python3 $ROOT_DIR/deepvoid_misc/DV_MULTI_TRAIN.py $ROOT_DIR $SIM $L $D $F $LOSS $GRID --UNIFORM_FLAG $UNIFORM_FLAG --BATCHNORM $BN --DROPOUT $DROP --MULTI_FLAG $MULTI_FLAG --LOW_MEM_FLAG $LOW_MEM_FLAG;
+python3 $ROOT_DIR/deepvoid_misc/DV_MULTI_TRAIN.py $ROOT_DIR $SIM $L $D $F $LOSS $GRID;
+kill $NVIDIA_SMI_PID

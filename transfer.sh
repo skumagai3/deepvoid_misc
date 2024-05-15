@@ -23,6 +23,11 @@ Optional Flags:
   --MULTI_FLAG: If set to 1, use multiprocessing. Default is 0.
   --LOW_MEM_FLAG: If set to 1, will load less training data and report fewer metrics. Default is 1.
 END_COMMENT
+current_time=$(date +"%Y%m%d-%H%M%S");
+mem_report_fn="transfer_gpu_mem_usage_${current_time}.txt";
+nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits > ${mem_report_fn} &
+NVIDIA_SMI_PID=$!;
+#######################################################################
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
 #######################################################################
 # Choose model hyperparameters, choose base interparticle separation
@@ -70,4 +75,5 @@ MULTI_FLAG=0; echo "Multiprocessing: $MULTI_FLAG"; # 0 for no, 1 for multiple GP
 LOW_MEM_FLAG=1; echo "Low memory flag: $LOW_MEM_FLAG"; # 0 for no, 1 for yes
 
 #python3 ./deepvoid_misc/DV_MULTI_TRANSFER.py $ROOT_DIR $MODEL_NAME $FN_DEN $TL_TYPE $MULTI_FLAG;
-python3 $ROOT_DIR/deepvoid_misc/DV_MULTI_TRANSFER.py $ROOT_DIR $MODEL_NAME $FN_DEN $TL_TYPE --MULTI_FLAG $MULTI_FLAG --LOW_MEM_FLAG $LOW_MEM_FLAG;
+python3 $ROOT_DIR/deepvoid_misc/DV_MULTI_TRANSFER.py $ROOT_DIR $MODEL_NAME $FN_DEN $TL_TYPE;
+kill $NVIDIA_SMI_PID
