@@ -63,6 +63,8 @@ Optional Flags:
   --DROPOUT: Dropout rate. Default is 0.0 (no dropout).
   --MULTI_FLAG: If set, use multiprocessing. Default is False.
   --LOW_MEM_FLAG: If set, will load less training data and do not report metrics. Default is True.
+  --FOCAL_ALPHA: Focal loss alpha parameter. Default is 0.25. can be a list of 4 values.
+  --FOCAL_GAMMA: Focal loss gamma parameter. Default is 2.0.
 '''
 parser = argparse.ArgumentParser(
   prog='DV_MULTI_TRAIN.py',
@@ -84,6 +86,8 @@ opt_group.add_argument('--BATCHNORM', action='store_true', help='If set, use bat
 opt_group.add_argument('--DROPOUT', type=float, default=0.0, help='Dropout rate. 0.0 means no dropout.')
 opt_group.add_argument('--MULTI_FLAG', action='store_true', help='If set, use multiprocessing.')
 opt_group.add_argument('--LOW_MEM_FLAG', action='store_false', help='If not set, will load less training data and report less metrics.')
+opt_group.add_argument('--FOCAL_ALPHA', type=float, nargs='+', default=[0.25,0.25,0.25,0.25], help='Focal loss alpha parameter. Default is 0.25.')
+opt_group.add_argument('--FOCAL_GAMMA', type=float, default=2.0, help='Focal loss gamma parameter. Default is 2.0.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 SIM = args.SIM
@@ -97,6 +101,8 @@ BATCHNORM = args.BATCHNORM
 DROPOUT = args.DROPOUT
 MULTI_FLAG = args.MULTI_FLAG
 LOW_MEM_FLAG = args.LOW_MEM_FLAG
+alpha = args.FOCAL_ALPHA
+gamma = args.FOCAL_GAMMA
 print('#############################################')
 print('>>> Running DV_MULTI_TRAIN.py')
 print('>>> Root directory:',ROOT_DIR)
@@ -108,6 +114,9 @@ print('UNIFORM_FLAG =',UNIFORM_FLAG)
 print('BATCHNORM =',BATCHNORM)
 print('DROPOUT =',DROPOUT)
 print('LOSS =',LOSS)
+if LOSS == 'FOCAL_CCE':
+  print('FOCAL_ALPHA =',alpha)
+  print('FOCAL_GAMMA =',gamma)
 print('MULTI_FLAG =',MULTI_FLAG)
 print('GRID =',GRID)
 print('#############################################')
@@ -247,9 +256,6 @@ if LOSS == 'CCE':
   pass
 elif LOSS == 'FOCAL_CCE':
   MODEL_NAME += '_FOCAL'
-  #alpha = 0.25 # NOTE set alpha here, def=0.25
-  alpha = [0.35, 0.35, 0.15, 0.15] # weighting void, wall more?
-  gamma = 2.0 # NOTE set gamma here, def=2.0
 elif LOSS == 'SCCE':
   MODEL_NAME += '_SCCE'
   print('Loss function SCCE requires integer labels, NOT one-hots')
@@ -442,6 +448,12 @@ scores['TRAIN_LOSS'] = history.history['loss'][-1]
 scores['VAL_LOSS'] = history.history['val_loss'][-1]
 scores['TRAIN_ACC'] = history.history['accuracy'][-1]
 scores['VAL_ACC'] = history.history['val_accuracy'][-1]
+if LOSS == 'SCCE':
+  scores['TRAIN_CAT_ACC'] = history.history['sparse_categorical_accuracy'][-1]
+  scores['VAL_CAT_ACC'] = history.history['val_sparse_categorical_accuracy'][-1]
+else:
+  scores['TRAIN_CAT_ACC'] = history.history['categorical_accuracy'][-1]
+  scores['VAL_CAT_ACC'] = history.history['val_categorical_accuracy'][-1]
 if LOSS == 'FOCAL_CCE':
   scores['FOCAL_ALPHA'] = alpha
   scores['FOCAL_GAMMA'] = gamma

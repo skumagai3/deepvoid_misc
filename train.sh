@@ -20,6 +20,8 @@ Optional Flags:
   --DROPOUT: Dropout rate. Default is 0.0, aka no dropout.
   --MULTI_FLAG: If set to 1, use multiprocessing. Default is 0.
   --LOW_MEM_FLAG: If set to 1, will load less training data and report fewer metrics. Default is 1.
+  --FOCAL_ALPHA: Alpha value for focal loss. Default is 0.25. can be a sequence of 4 values.
+  --FOCAL_GAMMA: Gamma value for focal loss. Default is 2.0.
 END_COMMENT
 current_time=$(date +"%Y%m%d-%H%M%S");
 mem_report_fn="train_gpu_mem_usage_${current_time}.txt";
@@ -39,6 +41,11 @@ BN=0; echo "Batch Norm: $BN";
 DROP=0.0; echo "Dropout: $DROP";
 MULTI_FLAG=0; echo "Multiprocessing: $MULTI_FLAG";
 LOW_MEM_FLAG=1; echo "Low memory: $LOW_MEM_FLAG";
+
+if [ "$LOSS" = "FOCAL_CCE" ]; then
+  ALPHA=(0.5 0.5 0.1 0.1); echo "Focal Alpha: $ALPHA";
+  GAMMA=2.0; echo "Focal Gamma: $GAMMA";
+fi
 
 #python3 ./deepvoid_misc/DV_MULTI_TRAIN.py $ROOT_DIR $SIM $L $D $F $UNIFORM_FLAG $BN $DROP $LOSS $MULTI_FLAG $GRID;
 #python3 $ROOT_DIR/deepvoid_misc/DV_MULTI_TRAIN.py $ROOT_DIR $SIM $L $D $F $LOSS $GRID --UNIFORM_FLAG $UNIFORM_FLAG --BATCHNORM $BN --DROPOUT $DROP --MULTI_FLAG $MULTI_FLAG --LOW_MEM_FLAG $LOW_MEM_FLAG;
