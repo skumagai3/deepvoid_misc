@@ -50,6 +50,8 @@ import plotter
 absl.logging.set_verbosity(absl.logging.ERROR)
 print('TensorFlow version: ', tf.__version__)
 nets.K.set_image_data_format('channels_last')
+from tensorflow.keras import mixed_precision
+mixed_precision.set_global_policy('mixed_float16')
 #===============================================================
 # Set training parameters:
 #===============================================================
@@ -294,7 +296,7 @@ ONE_HOT_FLAG = True # for compute metrics callback
 if LOSS == 'SCCE':
   ONE_HOT_FLAG = False
 metrics = nets.ComputeMetrics((X_test,Y_test), N_epochs = N_epochs_metric, avg='micro', one_hot=ONE_HOT_FLAG)
-model_chkpt = nets.ModelCheckpoint(MODEL_PATH+CLONE_NAME,monitor='val_loss',
+model_chkpt = nets.ModelCheckpoint(MODEL_PATH+CLONE_NAME+'.keras',monitor='val_loss',
                                    save_best_only=True,verbose=2)
 #log_dir = "logs/fit/" + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") 
 #tb_call = nets.TensorBoard(log_dir=log_dir) # do we even need this if we CSV log?

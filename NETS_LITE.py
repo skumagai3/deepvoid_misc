@@ -294,6 +294,7 @@ def load_dataset_all_overlap(FILE_DEN, FILE_MSK, SUBGRID, OFF, preproc='mm', sig
         X_all_overlap[cont,:,:,:,0] = sub_den
         Y_all_overlap[cont,:,:,:,0] = sub_msk
         cont += 1
+  gc.collect()
   return X_all_overlap.astype('float16'), Y_all_overlap.astype('uint8')
 
 #---------------------------------------------------------
