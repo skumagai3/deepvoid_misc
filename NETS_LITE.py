@@ -12,6 +12,7 @@ import sys
 import csv
 import volumes
 import plotter
+import pandas as pd
 from collections import Counter
 import matplotlib.pyplot as plt
 class_labels = ['Void','Wall','Filament','Halo']
@@ -902,14 +903,16 @@ def save_scores_to_csv(score_dict, file_path):
   score_dict: dict of scores. 
   filepath: str of where to save scores.csv
 
-  each dict of scores will be APPENDED to the csv, not overwriting. 
+  each dict of scores will be APPENDED to the csv, not overwritten.
+  new cols will be added if they don't exist. 
   '''
-  file_exists = os.path.isfile(file_path)
-  with open(file_path, 'a', newline='') as f:
-    writer = csv.DictWriter(f, fieldnames=score_dict.keys())
-    if not file_exists:
-      writer.writeheader()
-    writer.writerow(score_dict)
+  if os.path.isfile(file_path):
+    df = pd.read_csv(file_path)
+  else:
+    df = pd.DataFrame()
+  new_row = pd.DataFrame([score_dict])
+  updated_df = pd.concat([df,new_row],ignore_index=True, sort=False)
+  updated_df.to_csv(file_path, index=False)
   print(f'>>> Appended scores to {file_path}')
 #---------------------------------------------------------
 # Prediction functions:

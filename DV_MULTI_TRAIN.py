@@ -433,6 +433,18 @@ scores['VAL_FLAG'] = VAL_FLAG
 scores['ORTHO_FLAG'] = ORTHO_FLAG
 epochs = len(history.epoch)
 scores['EPOCHS'] = epochs
+scores['BATCHSIZE'] = batch_size
+scores['LR'] = LR
+scores['TRAINABLE_PARAMS'] = trainable_ps
+scores['NONTRAINABLE_PARAMS'] = nontrainable_ps
+scores['TOTAL_PARAMS'] = trainable_ps + nontrainable_ps
+scores['TRAIN_LOSS'] = history.history['loss'][-1]
+scores['VAL_LOSS'] = history.history['val_loss'][-1]
+scores['TRAIN_ACC'] = history.history['accuracy'][-1]
+scores['VAL_ACC'] = history.history['val_accuracy'][-1]
+if LOSS == 'FOCAL_CCE':
+  scores['FOCAL_ALPHA'] = alpha
+  scores['FOCAL_GAMMA'] = gamma
 #===============================================================
 # Predict, record metrics, and plot metrics on TEST DATA
 #===============================================================
