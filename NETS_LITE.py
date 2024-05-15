@@ -392,20 +392,70 @@ def categorical_focal_loss(alpha, gamma=2.):
 #---------------------------------------------------------
 # U-Net creator
 #---------------------------------------------------------
-def conv_block(input_tensor, filters, name, activation='relu', batch_normalization=True, dropout_rate=None):
+def conv_block(input_tensor, filters, name, activation='relu', batch_normalization=True, dropout_rate=None, BN_scheme='last', DROP_scheme='last'):
+  '''
+  Convolutional block for U-Net. 
+  input_tensor: input tensor
+  filters: int number of filters
+  name: str name of block
+  activation: str activation function
+  batch_normalization: bool whether or not to use batch normalization
+  dropout_rate: float dropout rate
+  BN_scheme: str batch normalization scheme. 'last' = last conv layer of block, 'all' = both layers, 'none' = no batch normalization.
+  DROP_scheme: str dropout scheme. 'last' = last conv layer of block, 'all' = both layers, 'none' = no dropout. needs to be none if dropout_rate is 0.0
+
+  here we assume that BN layers should come after the conv layers and before the activation layers.
+  we assume that drop layers should come after the activation layers.
+  '''
+  if dropout_rate == 0.0:
+    DROP_scheme = 'none'
+  if batch_normalization == False:
+    BN_scheme = 'none'
+  
   x = Conv3D(filters, kernel_size=(3, 3, 3), padding='same', name=name)(input_tensor)
-  if batch_normalization:
-      x = BatchNormalization()(x)
+  if BN_scheme == 'all':
+    x = BatchNormalization()(x)
   x = Activation(activation)(x)
-  if dropout_rate:
-      x = Dropout(dropout_rate)(x)
+  if DROP_scheme == 'all':
+    x = Dropout(dropout_rate)(x)
   x = Conv3D(filters, kernel_size=(3, 3, 3), padding='same', name=name+'_1')(x)
-  if batch_normalization:
-      x = BatchNormalization()(x)
+  if BN_scheme == 'all' or BN_scheme == 'last':
+    x = BatchNormalization()(x)
   x = Activation(activation)(x)
+  if DROP_scheme == 'all' or DROP_scheme == 'last':
+    x = Dropout(dropout_rate/2.0)(x) # only half the dropout rate here????
   return x
 #---------------------------------------------------------
-def unet_3d(input_shape, num_classes, initial_filters=32, depth=4, activation='relu', last_activation='softmax', batch_normalization=False, dropout_rate=None, model_name='3D_U_Net', report_params=False):
+def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation='relu', last_activation='softmax', batch_normalization=False, BN_scheme='none', dropout_rate=None, DROP_scheme='none', model_name='3D_U_Net', report_params=False):
+  '''
+  Constructs a 3D U-Net model for semantic segmentation.
+
+  Parameters:
+  - input_shape (tuple): The shape of the input tensor (excluding batch dimension). i.e. (None, None, None, 1)
+  - num_classes (int): The number of output classes. Default is 4 (void, wall, filament, halo).
+  - initial_filters (int): The number of filters in the first convolutional layer. Default is 16.
+  - depth (int): The depth of the U-Net architecture. Default is 4.
+  - activation (str): The activation function to use in the convolutional layers. Default is 'relu'.
+  - last_activation (str): The activation function to use in the output layer. Default is 'softmax'.
+  - batch_normalization (bool): Whether to use batch normalization after each convolutional layer. Default is False.
+  - BN_scheme (str): The batch normalization scheme to use. 'all' = after each conv layer, 'last' = after last conv layer, 'none' = no batch normalization. Default is 'none'.
+  - dropout_rate (float): The dropout rate to use after each convolutional layer. Default is None.
+  - DROP_scheme (str): The dropout scheme to use. 'all' = after each conv layer, 'last' = after last conv layer, 'none' = no dropout. Default is 'none'.
+  - model_name (str): The name of the model. Default is '3D_U_Net'.
+  - report_params (bool): Whether to return the number of trainable and non-trainable parameters. Default is False.
+
+  Returns:
+  - model (tf.keras.Model): The constructed 3D U-Net model.
+  - trainable_ps (int): The number of trainable parameters in the model (if report_params=True).
+  - nontrainable_ps (int): The number of non-trainable parameters in the model (if report_params=True).
+  '''
+  # check if dropout rate is 0.0
+  if dropout_rate == 0.0:
+    DROP_scheme = 'none'
+  # check if batch normalization is False
+  if batch_normalization == False:
+    BN_scheme = 'none'
+  # Input
   inputs = Input(input_shape)
   
   # Encoder path
@@ -414,12 +464,12 @@ def unet_3d(input_shape, num_classes, initial_filters=32, depth=4, activation='r
   for d in range(depth):
     filters = initial_filters * (2 ** d)
     block_name = f'encoder_block_D{d}'
-    x = conv_block(x, filters, block_name, activation, batch_normalization, dropout_rate)
+    x = conv_block(x, filters, block_name, activation, batch_normalization, dropout_rate, BN_scheme, DROP_scheme)
     encoder_outputs.append(x)
     x = MaxPooling3D(pool_size=(2, 2, 2),name=block_name+'_maxpool')(x)
   
   # Bottom
-  x = conv_block(x, initial_filters * (2 ** depth), 'bottleneck', activation, batch_normalization, dropout_rate)
+  x = conv_block(x, initial_filters * (2 ** depth), 'bottleneck', activation, batch_normalization, dropout_rate, BN_scheme, DROP_scheme)
   
   # Decoder path
   for d in reversed(range(depth)):
@@ -427,7 +477,7 @@ def unet_3d(input_shape, num_classes, initial_filters=32, depth=4, activation='r
     block_name = f'decoder_block_D{d}'
     x = UpSampling3D(size=(2, 2, 2),name=block_name+'_upsample')(x)
     x = Concatenate(axis=-1,name=block_name+'_concat')([x, encoder_outputs[d]])
-    x = conv_block(x, filters, block_name, activation, batch_normalization, dropout_rate)
+    x = conv_block(x, filters, block_name, activation, batch_normalization, dropout_rate, BN_scheme, DROP_scheme)
   
   # Output
   outputs = Conv3D(num_classes, kernel_size=(1, 1, 1), name='output_conv')(x)
