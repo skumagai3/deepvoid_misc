@@ -246,6 +246,17 @@ if LOSS != 'SCCE':
   print('Y_train shape: ',Y_train.shape)
   print('Y_test shape: ',Y_test.shape)
 #===============================================================
+# Make tf.data.Dataset
+#===============================================================
+train_dataset = tf.data.Dataset.from_tensor_slices((X_train,Y_train))
+test_dataset = tf.data.Dataset.from_tensor_slices((X_test,Y_test))
+# shuffle and batch the datasets
+train_dataset = train_dataset.shuffle(buffer_size=1024).batch(batch_size)
+test_dataset = test_dataset.batch(batch_size)
+# prefetch the datasets
+train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
+test_dataset = test_dataset.prefetch(tf.data.experimental.AUTOTUNE)
+#===============================================================
 # Set model hyperparameters
 #===============================================================
 if SIM == 'TNG':
@@ -416,9 +427,11 @@ if LOW_MEM_FLAG:
   callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger]
 else:
   callbacks = [metrics,model_chkpt,reduce_lr,early_stop,csv_logger]
-history = model.fit(X_train, Y_train, batch_size = batch_size, epochs = epochs, 
-                    validation_data=(X_test,Y_test), verbose = 2, shuffle = True,
-                    callbacks = callbacks)
+#history = model.fit(X_train, Y_train, batch_size = batch_size, epochs = epochs, 
+#                    validation_data=(X_test,Y_test), verbose = 2, shuffle = True,
+#                    callbacks = callbacks)
+history = model.fit(train_dataset, epochs=epochs, validation_data=test_dataset, verbose=2,
+                    callbacks=callbacks)
 #===============================================================
 # Check if figs directory exists, if not, create it:
 #===============================================================
