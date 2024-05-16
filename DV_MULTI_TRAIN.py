@@ -355,9 +355,9 @@ if MULTI_FLAG:
     # if model_name exists in FILE_OUT, load it
     # if not, create a new model
     if os.path.exists(FILE_OUT+MODEL_NAME):
+      print('>>> Loaded model:',FILE_OUT+MODEL_NAME)
       model = nets.load_model(FILE_OUT+MODEL_NAME)
       model.set_weights(model.get_weights())
-      print('>>> Loaded model:',FILE_OUT+MODEL_NAME)
     else:
       model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
                           batch_normalization=BATCHNORM,
@@ -368,9 +368,9 @@ if MULTI_FLAG:
                                         metrics=metrics)
 else:
   if os.path.exists(FILE_OUT+MODEL_NAME):
+    print('>>> Loaded model:',FILE_OUT+MODEL_NAME)
     model = nets.load_model(FILE_OUT+MODEL_NAME)
     model.set_weights(model.get_weights())
-    print('>>> Loaded model:',FILE_OUT+MODEL_NAME)
   else:
     model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
                           batch_normalization=BATCHNORM,
