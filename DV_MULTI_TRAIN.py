@@ -342,7 +342,8 @@ elif LOSS == 'DICE_VOID':
   pass
 # add more metrics here, may slow down training?
 if not LOW_MEM_FLAG:
-  metrics += ['f1_score','precision','recall']
+  #metrics += ['f1_score','precision','recall']
+  pass
 #===============================================================
 # Multiprocessing
 #===============================================================
