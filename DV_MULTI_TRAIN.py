@@ -17,8 +17,9 @@ import plotter
 absl.logging.set_verbosity(absl.logging.ERROR)
 print('TensorFlow version: ', tf.__version__)
 nets.K.set_image_data_format('channels_last')
-from tensorflow.keras import mixed_precision
-mixed_precision.set_global_policy('mixed_float16')
+# only use with Nvidia GPUs with compute capability >= 7.0!
+#from tensorflow.keras import mixed_precision 
+#mixed_precision.set_global_policy('mixed_float16')
 #===============================================================
 # Set training parameters:
 #===============================================================

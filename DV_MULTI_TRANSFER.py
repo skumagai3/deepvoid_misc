@@ -50,12 +50,13 @@ import plotter
 absl.logging.set_verbosity(absl.logging.ERROR)
 print('TensorFlow version: ', tf.__version__)
 nets.K.set_image_data_format('channels_last')
-from tensorflow.keras import mixed_precision
-mixed_precision.set_global_policy('mixed_float16')
+# only use with Nvidia GPUs with compute capability >= 7.0!
+#from tensorflow.keras import mixed_precision
+#mixed_precision.set_global_policy('mixed_float16')
 #===============================================================
 # Set training parameters:
 #===============================================================
-epochs = 300; print('epochs: ',epochs)
+epochs = 500; print('epochs: ',epochs)
 patience = 50; print('patience: ',patience)
 lr_patience = 20; print('learning rate patience: ',lr_patience)
 batch_size = 8; print('batch_size: ',batch_size)
