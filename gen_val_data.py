@@ -4,6 +4,8 @@
 otherwise, validation data is only generated during training.
 This script is meant to be run on CPU, not GPU.
 
+5/16/24: changing script to also save the training data.
+
 We can save validation data ONLY because we set the random seed. 
 As in every other script, we set seed = 12.
 '''
@@ -136,7 +138,7 @@ X_train, X_test, Y_train, Y_test = nets.train_test_split(X_index,labels,
                                                          test_size=test_size,
                                                          random_state=seed)
 X_train = features[X_train]; X_test = features[X_test]
-del features; del labels # memory purposes
+del features; del labels; del X_index # memory purposes
 print(f'>>> Split into training ({(1-test_size)*100}%) and validation ({test_size*100}%) sets')
 print('X_train shape: ',X_train.shape); print('Y_train shape: ',Y_train.shape)
 print('X_test shape: ',X_test.shape); print('Y_test shape: ',Y_test.shape)
@@ -147,6 +149,15 @@ if INT_FLAG == False:
   print('>>> One-hot encoding complete')
   print('Y_train shape: ',Y_train.shape)
   print('Y_test shape: ',Y_test.shape)
+# print shapes:
+print(X_train.shape); print(X_test.shape)
+print(Y_train.shape); print(Y_test.shape)
+# print dtypes:
+print(X_train.dtype); print(X_test.dtype)
+print(Y_train.dtype); print(Y_test.dtype)
+# print size in GB in memory:
+print(X_train.nbytes/1e9); print(X_test.nbytes/1e9)
+print(Y_train.nbytes/1e9); print(Y_test.nbytes/1e9)
 #===============================================================
 # Save training and test arrays for later preds:
 # what parameters are important for the validation 
@@ -157,10 +168,34 @@ if INT_FLAG == False:
 # and if they're one-hot encoded or not. if LOSS = SCCE,
 # add a flag that indicates the labels are integers.
 #===============================================================
+# save training set
+# save X_train and Y_train to file:
+X_TRAIN_DATA_NAME = f'{SIM}_L{L}_Nm={GRID}'
+Y_TRAIN_DATA_NAME = f'{SIM}_Nm={GRID}'
+if INT_FLAG == True:
+    Y_TRAIN_DATA_NAME += '_int'
+if SIM == 'TNG':
+    FILE_X_TRAIN = path_to_TNG + X_TRAIN_DATA_NAME + '_X_train.npy'
+    FILE_Y_TRAIN = path_to_TNG + Y_TRAIN_DATA_NAME + '_Y_train.npy'
+if SIM == 'BOL':
+    FILE_X_TRAIN = path_to_BOL + X_TRAIN_DATA_NAME + '_X_train.npy'
+    FILE_Y_TRAIN = path_to_BOL + Y_TRAIN_DATA_NAME + '_Y_train.npy'
+if os.path.exists(FILE_X_TRAIN) and os.path.exists(FILE_Y_TRAIN):
+    pass
+elif os.path.exists(FILE_X_TRAIN) and not os.path.exists(FILE_Y_TRAIN):
+    np.save(FILE_Y_TRAIN,Y_train,allow_pickle=True)
+    print(f'File {FILE_X_TRAIN} already exists.')
+    print(f'>>> Saved Y_train to {FILE_Y_TRAIN}')
+elif not os.path.exists(FILE_X_TRAIN) and not os.path.exists(FILE_Y_TRAIN):
+    np.save(FILE_X_TRAIN,X_train,allow_pickle=True)
+    np.save(FILE_Y_TRAIN,Y_train,allow_pickle=True)
+    print(f'>>> Saved X_train to {FILE_X_TRAIN}')
+    print(f'>>> Saved Y_train to {FILE_Y_TRAIN}')
+# save test set
 X_VAL_DATA_NAME = f'{SIM}_L{L}_Nm={GRID}'
 Y_VAL_DATA_NAME = f'{SIM}_Nm={GRID}'
 if INT_FLAG == True:
-    Y_VAL_DATA_NAME += '_int'
+  Y_VAL_DATA_NAME += '_int'
 if SIM == 'TNG':
   FILE_X_TEST = path_to_TNG + X_VAL_DATA_NAME + '_X_test.npy'
   FILE_Y_TEST = path_to_TNG + Y_VAL_DATA_NAME + '_Y_test.npy'

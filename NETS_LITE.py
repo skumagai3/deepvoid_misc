@@ -25,7 +25,8 @@ from tensorflow.python.keras.utils import layer_utils
 from keras.utils import to_categorical
 from keras.layers import Input, Conv3D, MaxPooling3D, Conv3DTranspose, UpSampling3D, Concatenate, BatchNormalization, Activation, Dropout
 from keras import backend as K
-from keras.losses import CategoricalCrossentropy, SparseCategoricalCrossentropy, CategoricalFocalCrossentropy
+from keras.losses import CategoricalCrossentropy, SparseCategoricalCrossentropy
+#from keras.losses import CategoricalFocalCrossentropy # not available in tf 2.10.0!!!
 from keras.callbacks import Callback, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, TensorBoard, CSVLogger
 
 from sklearn.preprocessing import label_binarize
@@ -212,8 +213,8 @@ def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=
         Y_all[cont,:,:,:,0] = sub_msk
         cont = cont+1
     #print(i,j,k)
-  X_all = X_all.astype('float16')
-  Y_all = Y_all.astype('uint8')
+  X_all = X_all.astype('float32')
+  Y_all = Y_all.astype('int8')
   gc.collect()
   return X_all, Y_all
 #---------------------------------------------------------
@@ -295,7 +296,7 @@ def load_dataset_all_overlap(FILE_DEN, FILE_MSK, SUBGRID, OFF, preproc='mm', sig
         Y_all_overlap[cont,:,:,:,0] = sub_msk
         cont += 1
   gc.collect()
-  return X_all_overlap.astype('float16'), Y_all_overlap.astype('uint8')
+  return X_all_overlap.astype('float32'), Y_all_overlap.astype('int8')
 
 #---------------------------------------------------------
 # For loading testing/validation data for prediction
