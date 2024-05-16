@@ -68,6 +68,7 @@ Optional Flags:
   --LOW_MEM_FLAG: If set, will load less training data and do not report metrics. Default is True.
   --FOCAL_ALPHA: Focal loss alpha parameter. Default is 0.25. can be a list of 4 values.
   --FOCAL_GAMMA: Focal loss gamma parameter. Default is 2.0.
+  --LOAD_MODEL_FLAG: If set, load model from FILE_OUT if it exists. Default is False.
 '''
 parser = argparse.ArgumentParser(
   prog='DV_MULTI_TRAIN.py',
@@ -91,6 +92,7 @@ opt_group.add_argument('--MULTI_FLAG', action='store_true', help='If set, use mu
 opt_group.add_argument('--LOW_MEM_FLAG', action='store_false', help='If not set, will load less training data and report less metrics.')
 opt_group.add_argument('--FOCAL_ALPHA', type=float, nargs='+', default=[0.25,0.25,0.25,0.25], help='Focal loss alpha parameter. Default is 0.25.')
 opt_group.add_argument('--FOCAL_GAMMA', type=float, default=2.0, help='Focal loss gamma parameter. Default is 2.0.')
+opt_group.add_argument('--LOAD_MODEL_FLAG', action='store_true', help='If set, load model from FILE_OUT if it exists.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 SIM = args.SIM
@@ -106,6 +108,7 @@ MULTI_FLAG = args.MULTI_FLAG
 LOW_MEM_FLAG = args.LOW_MEM_FLAG
 alpha = args.FOCAL_ALPHA
 gamma = args.FOCAL_GAMMA
+LOAD_MODEL_FLAG = args.LOAD_MODEL_FLAG
 print('#############################################')
 print('>>> Running DV_MULTI_TRAIN.py')
 print('>>> Root directory:',ROOT_DIR)
@@ -354,7 +357,7 @@ if MULTI_FLAG:
   with strategy.scope():
     # if model_name exists in FILE_OUT, load it
     # if not, create a new model
-    if os.path.exists(FILE_OUT+MODEL_NAME):
+    if os.path.exists(FILE_OUT+MODEL_NAME) and LOAD_MODEL_FLAG:
       print('>>> Loaded model:',FILE_OUT+MODEL_NAME)
       model = nets.load_model(FILE_OUT+MODEL_NAME)
       model.set_weights(model.get_weights())
@@ -367,7 +370,7 @@ if MULTI_FLAG:
                                         loss=loss,
                                         metrics=metrics)
 else:
-  if os.path.exists(FILE_OUT+MODEL_NAME):
+  if os.path.exists(FILE_OUT+MODEL_NAME) and LOAD_MODEL_FLAG:
     print('>>> Loaded model:',FILE_OUT+MODEL_NAME)
     model = nets.load_model(FILE_OUT+MODEL_NAME)
     model.set_weights(model.get_weights())
