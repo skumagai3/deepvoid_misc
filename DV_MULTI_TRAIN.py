@@ -349,8 +349,8 @@ elif LOSS == 'SCCE':
   # replace 'categorical_accuracy' with 'sparse_categorical_accuracy'
   metrics = ['accuracy','sparse_categorical_accuracy']
 elif LOSS == 'FOCAL_CCE':
-  #loss = [nets.categorical_focal_loss(alpha=0.25,gamma=2.0)] 
-  loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma)
+  loss = [nets.categorical_focal_loss(alpha=alpha,gamma=gamma)]
+  #loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma) # only works on 2.16.1
 elif LOSS == 'DICE_AVG':
   # implement dice loss averaged over all classes
   pass
@@ -359,7 +359,7 @@ elif LOSS == 'DICE_VOID':
   pass
 # add more metrics here, may slow down training?
 if not LOW_MEM_FLAG:
-  #metrics += ['f1_score','precision','recall']
+  #metrics += ['f1_score','precision','recall'] # not on tf 2.10.1
   pass
 #===============================================================
 # Multiprocessing

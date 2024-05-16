@@ -11,9 +11,9 @@ As in every other script, we set seed = 12.
 '''
 import os
 import sys
-import volumes
+#import volumes
 import numpy as np
-import NETS_LITE as nets
+from NETS_LITE import to_categorical, train_test_split, load_dataset_all_overlap, load_dataset_all
 N_CLASSES = 4
 #===============================================================
 # Set random seed
@@ -121,10 +121,8 @@ if L == 0.122 and SIM == 'TNG':
 print('>>> Loading data!')
 print('Density field: ',FILE_DEN)
 print('Mask field: ',FILE_MASK)
-features, labels = nets.load_dataset_all_overlap(FILE_DEN,FILE_MASK,SUBGRID,OFF)
-# if the overlapping subcubes are too much memory can always switch back...
-# need to change it in DV_MULTI_TRAIN.py too though...
-#features, labels = nets.load_dataset_all(FILE_DEN,FILE_MASK,SUBGRID,OFF)
+features, labels = load_dataset_all_overlap(FILE_DEN,FILE_MASK,SUBGRID,OFF)
+#features, labels = load_dataset_all(FILE_DEN,FILE_MASK,SUBGRID,OFF)
 print('>>> Data loaded!'); print('Features shape: ',features.shape)
 print('Labels shape: ',labels.shape)
 # split into training and validation sets:
@@ -134,7 +132,7 @@ print('Labels shape: ',labels.shape)
 # Y_test is the corresponding mask subcubes
 test_size = 0.2
 X_index = np.arange(0, features.shape[0])
-X_train, X_test, Y_train, Y_test = nets.train_test_split(X_index,labels,
+X_train, X_test, Y_train, Y_test = train_test_split(X_index,labels,
                                                          test_size=test_size,
                                                          random_state=seed)
 X_train = features[X_train]; X_test = features[X_test]
@@ -142,10 +140,13 @@ del features; del labels; del X_index # memory purposes
 print(f'>>> Split into training ({(1-test_size)*100}%) and validation ({test_size*100}%) sets')
 print('X_train shape: ',X_train.shape); print('Y_train shape: ',Y_train.shape)
 print('X_test shape: ',X_test.shape); print('Y_test shape: ',Y_test.shape)
+# print dtypes:
+print(X_train.dtype); print(X_test.dtype)
+print(Y_train.dtype); print(Y_test.dtype)
 if INT_FLAG == False:
   print('>>> Converting to one-hot encoding')
-  Y_train = nets.to_categorical(Y_train, num_classes=N_CLASSES)#,dtype='int8')
-  Y_test  = nets.to_categorical(Y_test, num_classes=N_CLASSES)#,dtype='int8')
+  Y_train = to_categorical(Y_train, num_classes=N_CLASSES)#,dtype='int8')
+  Y_test  = to_categorical(Y_test, num_classes=N_CLASSES)#,dtype='int8')
   print('>>> One-hot encoding complete')
   print('Y_train shape: ',Y_train.shape)
   print('Y_test shape: ',Y_test.shape)
@@ -181,11 +182,15 @@ if SIM == 'BOL':
     FILE_X_TRAIN = path_to_BOL + X_TRAIN_DATA_NAME + '_X_train.npy'
     FILE_Y_TRAIN = path_to_BOL + Y_TRAIN_DATA_NAME + '_Y_train.npy'
 if os.path.exists(FILE_X_TRAIN) and os.path.exists(FILE_Y_TRAIN):
-    pass
+    print('>>> Training data already saved!')
 elif os.path.exists(FILE_X_TRAIN) and not os.path.exists(FILE_Y_TRAIN):
     np.save(FILE_Y_TRAIN,Y_train,allow_pickle=True)
     print(f'File {FILE_X_TRAIN} already exists.')
     print(f'>>> Saved Y_train to {FILE_Y_TRAIN}')
+elif not os.path.exists(FILE_X_TRAIN) and os.path.exists(FILE_Y_TRAIN):
+    np.save(FILE_X_TRAIN,X_train,allow_pickle=True)
+    print(f'File {FILE_Y_TRAIN} already exists.')
+    print(f'>>> Saved X_train to {FILE_X_TRAIN}')
 elif not os.path.exists(FILE_X_TRAIN) and not os.path.exists(FILE_Y_TRAIN):
     np.save(FILE_X_TRAIN,X_train,allow_pickle=True)
     np.save(FILE_Y_TRAIN,Y_train,allow_pickle=True)
@@ -203,11 +208,15 @@ if SIM == 'BOL':
   FILE_X_TEST = path_to_BOL + X_VAL_DATA_NAME + '_X_test.npy'
   FILE_Y_TEST = path_to_BOL + Y_VAL_DATA_NAME + '_Y_test.npy'
 if os.path.exists(FILE_X_TEST) and os.path.exists(FILE_Y_TEST):
-  pass
+  print('>>> Validation data already saved!')
 elif os.path.exists(FILE_X_TEST) and not os.path.exists(FILE_Y_TEST):
   np.save(FILE_Y_TEST,Y_test,allow_pickle=True)
   print(f'File {FILE_X_TEST} already exists.')
   print(f'>>> Saved Y_test to {FILE_Y_TEST}')
+elif not os.path.exists(FILE_X_TEST) and os.path.exists(FILE_Y_TEST):
+  np.save(FILE_X_TEST,X_test,allow_pickle=True)
+  print(f'File {FILE_Y_TEST} already exists.')
+  print(f'>>> Saved X_test to {FILE_X_TEST}')
 elif not os.path.exists(FILE_X_TEST) and not os.path.exists(FILE_Y_TEST):
   np.save(FILE_X_TEST,X_test,allow_pickle=True)
   np.save(FILE_Y_TEST,Y_test,allow_pickle=True)
