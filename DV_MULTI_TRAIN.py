@@ -449,7 +449,7 @@ print('>>> Training')
 ONE_HOT_FLAG = True # for compute metrics callback
 if LOSS == 'SCCE':
   ONE_HOT_FLAG = False
-metrics = nets.ComputeMetrics((X_test,Y_test), N_epochs = N_epochs_metric, avg='micro', one_hot=ONE_HOT_FLAG)
+#metrics = nets.ComputeMetrics((X_test,Y_test), N_epochs = N_epochs_metric, avg='micro', one_hot=ONE_HOT_FLAG)
 model_chkpt = nets.ModelCheckpoint(FILE_OUT + MODEL_NAME + '.keras', monitor='val_loss',
                                    save_best_only=True,verbose=2)
 #log_dir = "logs/fit/" + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") 
