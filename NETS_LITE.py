@@ -1237,3 +1237,17 @@ def get_layer_index(model, layer_name):
     if layer.name == layer_name:
       return i
   return None
+
+# adding generator functions for tf.data.Dataset
+def data_gen_mmap(FILE_X,FILE_Y):
+  '''
+  Generator function to feed data in batches to the model.
+  Helps with OOM errors when training on a large volume.
+  Assumes that FILE_X_TRAIN and FILE_Y_TRAIN are .npy files.
+  FILE_X: str, filepath to X_(train/test) data
+  FILE_Y: str, filepath to Y_(train/test) data
+  '''
+  X = np.load(FILE_X,mmap_mode='r')
+  Y = np.load(FILE_Y,mmap_mode='r')
+  for features, labels in zip(X,Y):
+    yield (features, labels)

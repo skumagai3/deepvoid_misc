@@ -71,6 +71,9 @@ Optional Flags:
   --FOCAL_ALPHA: Focal loss alpha parameter. Default is 0.25. can be a list of 4 values.
   --FOCAL_GAMMA: Focal loss gamma parameter. Default is 2.0.
   --LOAD_MODEL_FLAG: If set, load model from FILE_OUT if it exists. Default is False.
+  --LOAD_INTO_MEM: If set, load training and test data into memory. 
+  If not set, load data from X_train, Y_train, X_test, Y_test .npy files into a tf.data.Dataset object 
+  that will load the data in batches instead of all at once. Default is False.
 '''
 parser = argparse.ArgumentParser(
   prog='DV_MULTI_TRAIN.py',
@@ -95,6 +98,7 @@ opt_group.add_argument('--LOW_MEM_FLAG', action='store_false', help='If not set,
 opt_group.add_argument('--FOCAL_ALPHA', type=float, nargs='+', default=[0.25,0.25,0.25,0.25], help='Focal loss alpha parameter. Default is 0.25.')
 opt_group.add_argument('--FOCAL_GAMMA', type=float, default=2.0, help='Focal loss gamma parameter. Default is 2.0.')
 opt_group.add_argument('--LOAD_MODEL_FLAG', action='store_true', help='If set, load model from FILE_OUT if it exists.')
+opt_group.add_argument('--LOAD_INTO_MEM', action='store_true', help='If set, load all training and test data into memory. Default is False, aka to load from train, test .npy files into a tf.data.Dataset object.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 SIM = args.SIM
@@ -111,6 +115,7 @@ LOW_MEM_FLAG = args.LOW_MEM_FLAG
 alpha = args.FOCAL_ALPHA
 gamma = args.FOCAL_GAMMA
 LOAD_MODEL_FLAG = args.LOAD_MODEL_FLAG
+LOAD_INTO_MEM = args.LOAD_INTO_MEM
 print('#############################################')
 print('>>> Running DV_MULTI_TRAIN.py')
 print('>>> Root directory:',ROOT_DIR)
@@ -160,8 +165,12 @@ if not os.path.exists(FILE_PRED):
 # Bolshoi Lambdas: 2, 3, 5, 7, 10, 15
 #===============================================================
 th = 0.65 # eigenvalue threshold NOTE SET THRESHOLD HERE
+# set up .npy filepaths for saving/loading data
+X_PREFIX = f'{SIM}_L{L}_Nm={GRID}'
+Y_PREFIX = f'{SIM}_Nm={GRID}'
 ### TNG ### 
 if SIM == 'TNG':
+  BoxSize = 205.0 # Mpc/h
   #GRID = 512 
   SUBGRID = 128
   OFF = 64
@@ -189,6 +198,11 @@ if SIM == 'TNG':
   FILE_FIG = FIG_DIR_PATH + 'TNG/'
   if not os.path.exists(FILE_FIG):
     os.makedirs(FILE_FIG)
+  # set .npy filepaths up for saving if LOAD_INTO_MEM = True, and loading if LOAD_INTO_MEM = False
+  FILE_X_TRAIN = path_to_TNG + X_PREFIX + '_X_train.npy'
+  FILE_Y_TRAIN = path_to_TNG + Y_PREFIX + '_Y_train.npy'
+  FILE_X_TEST  = path_to_TNG + X_PREFIX + '_X_test.npy'
+  FILE_Y_TEST  = path_to_TNG + Y_PREFIX + '_Y_test.npy'
 ### Bolshoi ###
 elif SIM == 'BOL' or SIM == 'Bolshoi':
   SIM = 'BOL'
@@ -206,6 +220,11 @@ elif SIM == 'BOL' or SIM == 'Bolshoi':
   FILE_FIG = FIG_DIR_PATH + 'Bolshoi/'
   if not os.path.exists(FILE_FIG):
     os.makedirs(FILE_FIG)
+  # set .npy filepaths up for saving if LOAD_INTO_MEM = True, and loading if LOAD_INTO_MEM = False
+  FILE_X_TRAIN = path_to_BOL + X_PREFIX + '_X_train.npy'
+  FILE_Y_TRAIN = path_to_BOL + Y_PREFIX + '_Y_train.npy'
+  FILE_X_TEST  = path_to_BOL + X_PREFIX + '_X_test.npy'
+  FILE_Y_TEST  = path_to_BOL + Y_PREFIX + '_Y_test.npy'
 # if L = 0.33 and SIM = TNG, error out, same for L = 0.122 and SIM = BOL:
 if L == 0.33 and SIM == 'BOL':
   print('ERROR: L = 0.33 and SIM = BOL. L for full DM Bolshoi is 0.122.')
@@ -219,39 +238,86 @@ if L == 0.122 and SIM == 'TNG':
 print('>>> Loading data!')
 print('Density field:',FILE_DEN)
 print('Mask field:',FILE_MASK)
-if LOW_MEM_FLAG:
-  features, labels = nets.load_dataset_all(FILE_DEN,FILE_MASK,SUBGRID)
+if LOAD_INTO_MEM:
+  print('>>> Loading full train, val data into memory')
+  if LOW_MEM_FLAG:
+    features, labels = nets.load_dataset_all(FILE_DEN,FILE_MASK,SUBGRID)
+  else:
+    features, labels = nets.load_dataset_all_overlap(FILE_DEN,FILE_MASK,SUBGRID,OFF)
+  print('>>> Data loaded!'); print('Features shape:',features.shape)
+  print('Labels shape:',labels.shape)
+  # split into training and validation sets:
+  # X_train is the density subcubes used to train the model
+  # Y_train is the corresponding mask subcubes
+  # X_test is the density subcubes used to validate the model
+  # Y_test is the corresponding mask subcubes
+  test_size = 0.2
+  X_index = np.arange(0, features.shape[0])
+  X_train, X_test, Y_train, Y_test = nets.train_test_split(X_index,labels,
+                                                          test_size=test_size,
+                                                          random_state=seed)
+  X_train = features[X_train]; X_test = features[X_test]
+  del features; del labels # memory purposes
+  print(f'>>> Split into training ({(1-test_size)*100}%) and validation ({test_size*100}%) sets')
+  print('X_train shape: ',X_train.shape); print('Y_train shape: ',Y_train.shape)
+  print('X_test shape: ',X_test.shape); print('Y_test shape: ',Y_test.shape)
+  if LOSS != 'SCCE':
+    print('>>> Converting to one-hot encoding')
+    Y_train = nets.to_categorical(Y_train, num_classes=N_CLASSES)
+    Y_test  = nets.to_categorical(Y_test,  num_classes=N_CLASSES)
+    print('>>> One-hot encoding complete')
+    print('Y_train shape: ',Y_train.shape)
+    print('Y_test shape: ',Y_test.shape)
+  #===============================================================
+  # Save training and test arrays for later preds:
+  # only need SIM, L, GRID to define filenames
+  # filenames: TNG: TNG_L{L}_GRID{GRID}_X_test.npy
+  # BOL: BOL_L{L}_GRID{GRID}_X_test.npy
+  # for Y_test though, the only things that matter is SIM, GRID,
+  # and if they're one-hot encoded or not. if LOSS = SCCE,
+  # add a flag that indicates the labels are integers.
+  #===============================================================
+  if os.path.exists(FILE_X_TEST) and os.path.exists(FILE_Y_TEST):
+    print(f'Files {FILE_X_TEST} and {FILE_Y_TEST} already exist.')
+  elif os.path.exists(FILE_X_TEST) and not os.path.exists(FILE_Y_TEST):
+    np.save(FILE_Y_TEST,Y_test,allow_pickle=True)
+    print(f'File {FILE_X_TEST} already exists.')
+    print(f'>>> Saved Y_test to {FILE_Y_TEST}')
+  elif not os.path.exists(FILE_X_TEST) and os.path.exists(FILE_Y_TEST):
+    np.save(FILE_X_TEST,X_test,allow_pickle=True)
+    print(f'File {FILE_Y_TEST} already exists.')
+    print(f'>>> Saved X_test to {FILE_X_TEST}')
+  elif not os.path.exists(FILE_X_TEST) and not os.path.exists(FILE_Y_TEST):
+    np.save(FILE_X_TEST,X_test,allow_pickle=True)
+    np.save(FILE_Y_TEST,Y_test,allow_pickle=True)
+    print(f'>>> Saved X_test to {FILE_X_TEST}')
+    print(f'>>> Saved Y_test to {FILE_Y_TEST}')
+  #===============================================================
+  # Make tf.data.Dataset
+  #===============================================================
+  train_dataset = tf.data.Dataset.from_tensor_slices((X_train,Y_train))
+  test_dataset = tf.data.Dataset.from_tensor_slices((X_test,Y_test))
 else:
-  features, labels = nets.load_dataset_all_overlap(FILE_DEN,FILE_MASK,SUBGRID,OFF)
-print('>>> Data loaded!'); print('Features shape:',features.shape)
-print('Labels shape:',labels.shape)
-# split into training and validation sets:
-# X_train is the density subcubes used to train the model
-# Y_train is the corresponding mask subcubes
-# X_test is the density subcubes used to validate the model
-# Y_test is the corresponding mask subcubes
-test_size = 0.2
-X_index = np.arange(0, features.shape[0])
-X_train, X_test, Y_train, Y_test = nets.train_test_split(X_index,labels,
-                                                         test_size=test_size,
-                                                         random_state=seed)
-X_train = features[X_train]; X_test = features[X_test]
-del features; del labels # memory purposes
-print(f'>>> Split into training ({(1-test_size)*100}%) and validation ({test_size*100}%) sets')
-print('X_train shape: ',X_train.shape); print('Y_train shape: ',Y_train.shape)
-print('X_test shape: ',X_test.shape); print('Y_test shape: ',Y_test.shape)
-if LOSS != 'SCCE':
-  print('>>> Converting to one-hot encoding')
-  Y_train = nets.to_categorical(Y_train, num_classes=N_CLASSES)
-  Y_test  = nets.to_categorical(Y_test,  num_classes=N_CLASSES)
-  print('>>> One-hot encoding complete')
-  print('Y_train shape: ',Y_train.shape)
-  print('Y_test shape: ',Y_test.shape)
-#===============================================================
-# Make tf.data.Dataset
-#===============================================================
-train_dataset = tf.data.Dataset.from_tensor_slices((X_train,Y_train))
-test_dataset = tf.data.Dataset.from_tensor_slices((X_test,Y_test))
+  print('>>> Loading train, val data into tf.data.Dataset from memmapped .npy files')
+  print('>>> Loading X_train, Y_train, X_test, Y_test from .npy files')
+  print('>>> NOTE: X_train, Y_train, X_test, Y_test will not be loaded into memory!')
+  print('>>> X_train:',FILE_X_TRAIN); print('>>> Y_train:',FILE_Y_TRAIN)
+  print('>>> X_test:',FILE_X_TEST); print('>>> Y_test:',FILE_Y_TEST)
+  last_dim = 1 if LOSS == 'SCCE' else N_CLASSES
+  train_dataset = tf.data.Dataset.from_generator(
+    lambda: nets.data_gen_mmap(FILE_X_TRAIN,FILE_Y_TRAIN),
+    output_signature=(
+      tf.TensorSpec(shape=(SUBGRID,SUBGRID,SUBGRID,1),dtype=tf.float32),
+      tf.TensorSpec(shape=(SUBGRID,SUBGRID,SUBGRID,last_dim),dtype=tf.float32)
+    )
+  )
+  test_dataset = tf.data.Dataset.from_generator(
+    lambda: nets.data_gen_mmap(FILE_X_TEST,FILE_Y_TEST),
+    output_signature=(
+      tf.TensorSpec(shape=(SUBGRID,SUBGRID,SUBGRID,1),dtype=tf.float32),
+      tf.TensorSpec(shape=(SUBGRID,SUBGRID,SUBGRID,last_dim),dtype=tf.float32)
+    )
+  )
 # shuffle and batch the datasets
 train_dataset = train_dataset.shuffle(buffer_size=1024).batch(batch_size)
 test_dataset = test_dataset.batch(batch_size)
@@ -281,42 +347,10 @@ elif LOSS == 'SCCE':
 ### NOTE: add support for more loss functions here NOTE ###
 DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 #===============================================================
-# Save training and test arrays for later preds:
-# what parameters are important for the validation 
-# data? SIM, L, GRID. 
-# filenames: TNG: TNG_L{L}_GRID{GRID}_X_test.npy
-# BOL: BOL_L{L}_GRID{GRID}_X_test.npy
-# for Y_test though, the only things that matter is SIM, GRID,
-# and if they're one-hot encoded or not. if LOSS = SCCE,
-# add a flag that indicates the labels are integers.
-#===============================================================
-X_VAL_DATA_NAME = f'{SIM}_L{L}_Nm={GRID}'
-Y_VAL_DATA_NAME = f'{SIM}_Nm={GRID}'
-if LOSS == 'SCCE':
-  Y_VAL_DATA_NAME += '_int'
-if SIM == 'TNG':
-  FILE_X_TEST = path_to_TNG + X_VAL_DATA_NAME + '_X_test.npy'
-  FILE_Y_TEST = path_to_TNG + Y_VAL_DATA_NAME + '_Y_test.npy'
-if SIM == 'BOL':
-  FILE_X_TEST = path_to_BOL + X_VAL_DATA_NAME + '_X_test.npy'
-  FILE_Y_TEST = path_to_BOL + Y_VAL_DATA_NAME + '_Y_test.npy'
-if os.path.exists(FILE_X_TEST) and os.path.exists(FILE_Y_TEST):
-  pass
-elif os.path.exists(FILE_X_TEST) and not os.path.exists(FILE_Y_TEST):
-  np.save(FILE_Y_TEST,Y_test,allow_pickle=True)
-  print(f'File {FILE_X_TEST} already exists.')
-  print(f'>>> Saved Y_test to {FILE_Y_TEST}')
-elif not os.path.exists(FILE_X_TEST) and not os.path.exists(FILE_Y_TEST):
-  np.save(FILE_X_TEST,X_test,allow_pickle=True)
-  np.save(FILE_Y_TEST,Y_test,allow_pickle=True)
-  print(f'>>> Saved X_test to {FILE_X_TEST}')
-  print(f'>>> Saved Y_test to {FILE_Y_TEST}')
-#===============================================================
 # Save hyperparameters to txt file
 #===============================================================
 hp_dict = {}
 hp_dict['notes'] = f'trained on multi-class mask, threshold={th}, sigma={sig}, L={L}, Nm={GRID}'
-
 if SIM == 'TNG':
   hp_dict['Simulation trained on:'] = 'TNG300-3-Dark'
 elif SIM == 'BOL':
@@ -482,8 +516,17 @@ if LOSS == 'FOCAL_CCE':
 #===============================================================
 # Predict, record metrics, and plot metrics on TEST DATA
 #===============================================================
-Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False)
-# since output argmax = False, Y_pred shape = [N_samples,SUBGRID,SUBGRID,SUBGRID,N_CLASSES]
+if LOAD_INTO_MEM:
+  Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False)
+  # since output argmax = False, Y_pred shape = [N_samples,SUBGRID,SUBGRID,SUBGRID,N_CLASSES]
+else:
+  Y_pred_list = []; Y_test_list = []
+  for X_batch, Y_batch in test_dataset:
+    Y_pred_batch = model.predict(X_batch)
+    Y_pred_list.append(Y_pred_batch)
+    Y_test_list.append(Y_batch.numpy()) # NOTE this may OOM???
+  Y_pred = np.concatenate(Y_pred_list,axis=0)
+  Y_test = np.concatenate(Y_test_list,axis=0)
 # adjust Y_test shape to be [N_samples,SUBGRID,SUBGRID,SUBGRID,1]:
 if LOSS != 'SCCE':
   # undo one-hot encoding for input into save_scores_from_fvol

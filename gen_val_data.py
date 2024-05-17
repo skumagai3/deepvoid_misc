@@ -13,7 +13,7 @@ import os
 import sys
 #import volumes
 import numpy as np
-from NETS_LITE import to_categorical, train_test_split, load_dataset_all_overlap, load_dataset_all
+from NETS_LITE import to_categorical, train_test_split, load_dataset_all_overlap#, load_dataset_all
 N_CLASSES = 4
 #===============================================================
 # Set random seed
