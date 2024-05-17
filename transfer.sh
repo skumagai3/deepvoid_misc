@@ -74,6 +74,12 @@ fi
 MULTI_FLAG=0; echo "Multiprocessing: $MULTI_FLAG"; # 0 for no, 1 for multiple GPUs
 LOW_MEM_FLAG=1; echo "Low memory flag: $LOW_MEM_FLAG"; # 0 for no, 1 for yes
 
-#python3 ./deepvoid_misc/DV_MULTI_TRANSFER.py $ROOT_DIR $MODEL_NAME $FN_DEN $TL_TYPE $MULTI_FLAG;
-python3 $ROOT_DIR/deepvoid_misc/DV_MULTI_TRANSFER.py $ROOT_DIR $MODEL_NAME $FN_DEN $TL_TYPE;
+# Constructing command line arguments dynamically
+CMD_ARGS="$ROOT_DIR $MODEL_NAME $FN_DEN $TL_TYPE"
+[ "$MULTI_FLAG" -eq 1 ] && CMD_ARGS+=" --MULTI_FLAG"
+[ "$LOW_MEM_FLAG" -eq 1 ] && CMD_ARGS+=" --LOW_MEM_FLAG"
+
+# Running the Python script with dynamically constructed arguments
+python3 $ROOT_DIR/deepvoid_misc/DV_MULTI_TRANSFER.py $CMD_ARGS
+
 kill $NVIDIA_SMI_PID

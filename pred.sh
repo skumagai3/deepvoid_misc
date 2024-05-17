@@ -24,5 +24,5 @@ FN_DEN="DM_DEN_snap99_Nm=128.fvol"; echo "Density Field: $FN_DEN";
 FN_MSK="TNG300-3-Dark-mask-Nm=128-th=0.65-sig=0.6.fvol"; echo "Mask Field: $FN_MSK";
 GRID=128; echo "GRID: $GRID";
 
-python3 $ROOT_DIR/deepvoid_misc/DV_MULTI_PRED.py $ROOT_DIR $SIM $MODEL_NAME $FN_DEN $FN_MSK $GRID;
+python3 ./deepvoid_misc/DV_MULTI_PRED.py $ROOT_DIR $SIM $MODEL_NAME $FN_DEN $FN_MSK $GRID;
 kill $NVIDIA_SMI_PID

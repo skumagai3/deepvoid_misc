@@ -22,6 +22,8 @@ Optional Flags:
   --LOW_MEM_FLAG: If set to 1, will load less training data and report fewer metrics. Default is 1.
   --FOCAL_ALPHA: Alpha value for focal loss. Default is 0.25. can be a sequence of 4 values.
   --FOCAL_GAMMA: Gamma value for focal loss. Default is 2.0.
+  --LOAD_MODEL: If set to 1, load a previously trained model. Default is 0.
+  --LOAD_INTO_MEM: If set to 1, load the entire dataset into memory. Default is 0.
 END_COMMENT
 current_time=$(date +"%Y%m%d-%H%M%S");
 mem_report_fn="train_gpu_mem_usage_${current_time}.txt";
@@ -34,20 +36,36 @@ L=0.33; echo "Lambda: $L";
 D=3; echo "Depth: $D";
 F=32;  echo "Filters: $F";
 LOSS="SCCE"; echo "Loss: $LOSS";
-GRID=256; echo "GRID: $GRID";
-# optional
-UNIFORM_FLAG=0; echo "Uniform Flag: $UNIFORM_FLAG";
-BN=0; echo "Batch Norm: $BN";
-DROP=0.0; echo "Dropout: $DROP";
-MULTI_FLAG=0; echo "Multiprocessing: $MULTI_FLAG";
-LOW_MEM_FLAG=1; echo "Low memory: $LOW_MEM_FLAG";
-
-if [ "$LOSS" = "FOCAL_CCE" ]; then
-  ALPHA=(0.5 0.5 0.1 0.1); echo "Focal Alpha: ${ALPHA[@]}";
-  GAMMA=2.0; echo "Focal Gamma: $GAMMA";
+if [ "$SIM" = "TNG" ]; then
+  GRID=512
+elif [ "$SIM" = "BOL" ]; then
+  GRID=640
 fi
+#GRID=256; echo "GRID: $GRID";
 
-#python3 ./deepvoid_misc/DV_MULTI_TRAIN.py $ROOT_DIR $SIM $L $D $F $UNIFORM_FLAG $BN $DROP $LOSS $MULTI_FLAG $GRID;
-#python3 $ROOT_DIR/deepvoid_misc/DV_MULTI_TRAIN.py $ROOT_DIR $SIM $L $D $F $LOSS $GRID --UNIFORM_FLAG --BATCHNORM --DROPOUT $DROP --MULTI_FLAG --LOW_MEM_FLAG --FOCAL_ALPHA ${ALPHA[@]} --FOCAL_GAMMA $GAMMA;
-python3 $ROOT_DIR/deepvoid_misc/DV_MULTI_TRAIN.py $ROOT_DIR $SIM $L $D $F $LOSS $GRID;
+# optional flags initialization
+BATCHNORM_ENABLED=0; echo "Batch Norm: $BATCHNORM_ENABLED";
+DROPOUT_RATE=0.0; echo "Dropout: $DROPOUT_RATE";
+MULTIPROCESSING_ENABLED=1; echo "Multiprocessing: $MULTIPROCESSING_ENABLED";
+HIGH_MEM_ENABLED=0; echo "High memory usage: $HIGH_MEM_ENABLED";
+FOCAL_ALPHA=(0.5 0.5 0.2 0.2); echo "Focal Alpha: ${FOCAL_ALPHA[@]}";
+FOCAL_GAMMA=2.0; echo "Focal Gamma: $FOCAL_GAMMA";
+UNIFORM_FLAG=0; echo "Uniform Flag: $UNIFORM_FLAG";
+LOAD_MODEL=0; echo "Load Model: $LOAD_MODEL";
+LOAD_INTO_MEM=0; echo "Load into memory: $LOAD_INTO_MEM";
+
+# Constructing command line arguments dynamically
+CMD_ARGS="$ROOT_DIR $SIM $L $D $F $LOSS $GRID"
+[ "$UNIFORM_FLAG" -eq 1 ] && CMD_ARGS+=" --UNIFORM_FLAG"
+[ "$BATCHNORM_ENABLED" -eq 1 ] && CMD_ARGS+=" --BATCHNORM"
+[ "$DROPOUT_RATE" != "0.0" ] && CMD_ARGS+=" --DROPOUT $DROPOUT_RATE"
+[ "$MULTIPROCESSING_ENABLED" -eq 1 ] && CMD_ARGS+=" --MULTI_FLAG"
+[ "$HIGH_MEM_ENABLED" -eq 1 ] && CMD_ARGS+=" --LOW_MEM_FLAG"
+[ "$LOSS" = "FOCAL_CCE" ] && CMD_ARGS+=" --FOCAL_ALPHA ${FOCAL_ALPHA[@]} --FOCAL_GAMMA $FOCAL_GAMMA"
+[ "$LOAD_MODEL" -eq 1 ] && CMD_ARGS+=" --LOAD_MODEL"
+[ "$LOAD_INTO_MEM" -eq 1 ] && CMD_ARGS+=" --LOAD_INTO_MEM"
+echo "Command line arguments: $CMD_ARGS";
+
+# Running the Python script with dynamically constructed arguments
+python3 ./deepvoid_misc/DV_MULTI_TRAIN.py $CMD_ARGS;
 kill $NVIDIA_SMI_PID
