@@ -168,6 +168,8 @@ th = 0.65 # eigenvalue threshold NOTE SET THRESHOLD HERE
 # set up .npy filepaths for saving/loading data
 X_PREFIX = f'{SIM}_L{L}_Nm={GRID}'
 Y_PREFIX = f'{SIM}_Nm={GRID}'
+if LOSS == 'SCCE':
+  Y_PREFIX += '_int'
 ### TNG ### 
 if SIM == 'TNG':
   BoxSize = 205.0 # Mpc/h
