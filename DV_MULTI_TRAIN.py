@@ -16,7 +16,7 @@ import absl.logging
 import plotter
 absl.logging.set_verbosity(absl.logging.ERROR)
 print('TensorFlow version: ', tf.__version__)
-print('Keras version: ', tf.keras.__version__)
+#print('Keras version: ', tf.keras.__version__)
 print('CUDA?: ',tf.test.is_built_with_cuda())
 nets.K.set_image_data_format('channels_last')
 # only use with Nvidia GPUs with compute capability >= 7.0!
