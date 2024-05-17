@@ -24,6 +24,7 @@ Optional Flags:
   --FOCAL_GAMMA: Gamma value for focal loss. Default is 2.0.
   --LOAD_MODEL: If set to 1, load a previously trained model. Default is 0.
   --LOAD_INTO_MEM: If set to 1, load the entire dataset into memory. Default is 0.
+  --BATCH_SIZE: Batch size for training. Default is 4.
 END_COMMENT
 current_time=$(date +"%Y%m%d-%H%M%S");
 mem_report_fn="train_gpu_mem_usage_${current_time}.txt";
@@ -58,6 +59,7 @@ FOCAL_GAMMA=2.0; echo "Focal Gamma: $FOCAL_GAMMA";
 UNIFORM_FLAG=0; echo "Uniform Flag: $UNIFORM_FLAG";
 LOAD_MODEL=0; echo "Load Model: $LOAD_MODEL";
 LOAD_INTO_MEM=0; echo "Load into memory: $LOAD_INTO_MEM";
+BATCH_SIZE=4; echo "Batch Size: $BATCH_SIZE";
 
 # Constructing command line arguments dynamically
 CMD_ARGS="$ROOT_DIR $SIM $L $D $F $LOSS $GRID"
@@ -69,6 +71,7 @@ CMD_ARGS="$ROOT_DIR $SIM $L $D $F $LOSS $GRID"
 [ "$LOSS" = "FOCAL_CCE" ] && CMD_ARGS+=" --FOCAL_ALPHA ${FOCAL_ALPHA[@]} --FOCAL_GAMMA $FOCAL_GAMMA"
 [ "$LOAD_MODEL" -eq 1 ] && CMD_ARGS+=" --LOAD_MODEL"
 [ "$LOAD_INTO_MEM" -eq 1 ] && CMD_ARGS+=" --LOAD_INTO_MEM"
+CMD_ARGS+=" --BATCH_SIZE $BATCH_SIZE"
 echo "Command line arguments: $CMD_ARGS";
 
 # Running the Python script with dynamically constructed arguments

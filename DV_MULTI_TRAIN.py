@@ -31,7 +31,7 @@ LOW_MEM_FLAG = True
 epochs = 500; print('epochs: ',epochs)
 patience = 50; print('patience: ',patience)
 lr_patience = 20; print('learning rate patience: ',lr_patience)
-batch_size = 8; print('batch_size: ',batch_size)
+# batch_size = 8; print('batch_size: ',batch_size) # set in arg parsing
 N_epochs_metric = 10
 print(f'classification metrics calculated every {N_epochs_metric} epochs')
 KERNEL = (3,3,3)
@@ -74,6 +74,7 @@ Optional Flags:
   --LOAD_INTO_MEM: If set, load training and test data into memory. 
   If not set, load data from X_train, Y_train, X_test, Y_test .npy files into a tf.data.Dataset object 
   that will load the data in batches instead of all at once. Default is False.
+  --BATCH_SIZE: Batch size. Default is 4.
 '''
 parser = argparse.ArgumentParser(
   prog='DV_MULTI_TRAIN.py',
@@ -99,6 +100,7 @@ opt_group.add_argument('--FOCAL_ALPHA', type=float, nargs='+', default=[0.25,0.2
 opt_group.add_argument('--FOCAL_GAMMA', type=float, default=2.0, help='Focal loss gamma parameter. Default is 2.0.')
 opt_group.add_argument('--LOAD_MODEL_FLAG', action='store_true', help='If set, load model from FILE_OUT if it exists.')
 opt_group.add_argument('--LOAD_INTO_MEM', action='store_true', help='If set, load all training and test data into memory. Default is False, aka to load from train, test .npy files into a tf.data.Dataset object.')
+opt_group.add_argument('--BATCH_SIZE', type=int, default=8, help='Batch size. Default is 4.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 SIM = args.SIM
@@ -116,6 +118,7 @@ alpha = args.FOCAL_ALPHA
 gamma = args.FOCAL_GAMMA
 LOAD_MODEL_FLAG = args.LOAD_MODEL_FLAG
 LOAD_INTO_MEM = args.LOAD_INTO_MEM
+batch_size = args.BATCH_SIZE
 print('#############################################')
 print('>>> Running DV_MULTI_TRAIN.py')
 print('>>> Root directory:',ROOT_DIR)
@@ -132,6 +135,7 @@ if LOSS == 'FOCAL_CCE':
   print('FOCAL_GAMMA =',gamma)
 print('MULTI_FLAG =',MULTI_FLAG)
 print('GRID =',GRID)
+print('BATCH_SIZE =',batch_size)
 print('#############################################')
 #===============================================================
 # set paths
