@@ -25,6 +25,11 @@ Optional Flags:
 END_COMMENT
 current_time=$(date +"%Y%m%d-%H%M%S");
 mem_report_fn="transfer_gpu_mem_usage_${current_time}.txt";
+output_fn="transfer_output_${current_time}.txt";
+error_fn="transfer_error_${current_time}.txt";
+echo "Memory report file: $mem_report_fn";
+echo "Output file: $output_fn";
+echo "Error file: $error_fn";
 nvidia-smi --query-gpu=timestamp,name,memory.used,memory.free,memory.total,temperature.gpu,pstate --format=csv -l 30 > ${mem_report_fn} &
 NVIDIA_SMI_PID=$!;
 #######################################################################
@@ -78,8 +83,9 @@ LOW_MEM_FLAG=1; echo "Low memory flag: $LOW_MEM_FLAG"; # 0 for no, 1 for yes
 CMD_ARGS="$ROOT_DIR $MODEL_NAME $FN_DEN $TL_TYPE"
 [ "$MULTI_FLAG" -eq 1 ] && CMD_ARGS+=" --MULTI_FLAG"
 [ "$LOW_MEM_FLAG" -eq 1 ] && CMD_ARGS+=" --LOW_MEM_FLAG"
+echo "Command line arguments: $CMD_ARGS";
 
 # Running the Python script with dynamically constructed arguments
-python3 $ROOT_DIR/deepvoid_misc/DV_MULTI_TRANSFER.py $CMD_ARGS
+python3 $ROOT_DIR/deepvoid_misc/DV_MULTI_TRANSFER.py $CMD_ARGS > ${ROOT_DIR}${output_fn} 2> ${ROOT_DIR}${error_fn};
 
 kill $NVIDIA_SMI_PID

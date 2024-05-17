@@ -14,6 +14,11 @@ Parameters:
 END_COMMENT
 current_time=$(date +"%Y%m%d-%H%M%S");
 mem_report_fn="pred_gpu_mem_usage_${current_time}.txt";
+output_fn="pred_output_${current_time}.txt";
+error_fn="pred_error_${current_time}.txt";
+echo "Memory report file: $mem_report_fn";
+echo "Output file: $output_fn";
+echo "Error file: $error_fn";
 nvidia-smi --query-gpu=timestamp,name,memory.used,memory.free,memory.total,temperature.gpu,pstate --format=csv -l 30 > ${mem_report_fn} &
 NVIDIA_SMI_PID=$!;
 
@@ -24,5 +29,5 @@ FN_DEN="DM_DEN_snap99_Nm=128.fvol"; echo "Density Field: $FN_DEN";
 FN_MSK="TNG300-3-Dark-mask-Nm=128-th=0.65-sig=0.6.fvol"; echo "Mask Field: $FN_MSK";
 GRID=128; echo "GRID: $GRID";
 
-python3 ./deepvoid_misc/DV_MULTI_PRED.py $ROOT_DIR $SIM $MODEL_NAME $FN_DEN $FN_MSK $GRID;
+python3 ./deepvoid_misc/DV_MULTI_PRED.py $ROOT_DIR $SIM $MODEL_NAME $FN_DEN $FN_MSK $GRID > ${ROOT_DIR}${output_fn} 2> ${ROOT_DIR}${error_fn};
 kill $NVIDIA_SMI_PID

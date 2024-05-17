@@ -27,6 +27,11 @@ Optional Flags:
 END_COMMENT
 current_time=$(date +"%Y%m%d-%H%M%S");
 mem_report_fn="train_gpu_mem_usage_${current_time}.txt";
+output_fn="train_output_${current_time}.txt";
+error_fn="train_error_${current_time}.txt";
+echo "Memory report file: $mem_report_fn";
+echo "Output file: $output_fn";
+echo "Error file: $error_fn";
 nvidia-smi --query-gpu=timestamp,name,memory.used,memory.free,memory.total,temperature.gpu,pstate --format=csv -l 30 > ${mem_report_fn} &
 NVIDIA_SMI_PID=$!;
 
@@ -67,5 +72,5 @@ CMD_ARGS="$ROOT_DIR $SIM $L $D $F $LOSS $GRID"
 echo "Command line arguments: $CMD_ARGS";
 
 # Running the Python script with dynamically constructed arguments
-python3 ./deepvoid_misc/DV_MULTI_TRAIN.py $CMD_ARGS;
+python3 ./deepvoid_misc/DV_MULTI_TRAIN.py $CMD_ARGS > ${ROOT_DIR}${output_fn} 2> ${ROOT_DIR}${error_fn};
 kill $NVIDIA_SMI_PID
