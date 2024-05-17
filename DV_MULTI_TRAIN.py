@@ -462,7 +462,8 @@ if LOW_MEM_FLAG:
   # dont calc metrics, too memory intensive
   callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger]
 else:
-  callbacks = [metrics,model_chkpt,reduce_lr,early_stop,csv_logger]
+  #callbacks = [metrics,model_chkpt,reduce_lr,early_stop,csv_logger]
+  callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger]
 #history = model.fit(X_train, Y_train, batch_size = batch_size, epochs = epochs, 
 #                    validation_data=(X_test,Y_test), verbose = 2, shuffle = True,
 #                    callbacks = callbacks)
