@@ -200,6 +200,7 @@ if SIM == 'TNG':
     SUBGRID = 32; OFF = 16
   if GRID == 256:
     sig = 1.2
+    SUBGRID = 64; OFF = 32
   FILE_MASK = path_to_TNG + f'TNG300-3-Dark-mask-Nm={GRID}-th={th}-sig={sig}.fvol'
   FILE_FIG = FIG_DIR_PATH + 'TNG/'
   if not os.path.exists(FILE_FIG):
