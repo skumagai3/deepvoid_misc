@@ -23,17 +23,21 @@ Optional Flags:
   --MULTI_FLAG: If set to 1, use multiprocessing. Default is 0.
   --LOW_MEM_FLAG: If set to 1, will load less training data and report fewer metrics. Default is 1.
 END_COMMENT
-current_time=$(date +"%Y%m%d-%H%M");
-mem_report_fn="logs/GPU_usage/transfer_gpu_mem_usage_${current_time}.txt";
-output_fn="logs/stdout/transfer_output_${current_time}.txt";
-error_fn="logs/stderr/transfer_error_${current_time}.txt";
+#######################################################################
+ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
+current_time=$(date +"%Y%m%d-%H%M"); echo "Current time: $current_time";
+mem_report="logs/GPU_usage/transfer_gpu_mem_usage_${current_time}.txt";
+output="logs/stdout/transfer_output_${current_time}.txt";
+error="logs/stderr/transfer_error_${current_time}.txt";
+mem_report_fn="${ROOT_DIR}${mem_report}";
+output_fn="${ROOT_DIR}${output}";
+error_fn="${ROOT_DIR}${error}";
 echo "Memory report file: $mem_report_fn";
 echo "Output file: $output_fn";
 echo "Error file: $error_fn";
 nvidia-smi --query-gpu=timestamp,name,memory.used,memory.free,memory.total,temperature.gpu,pstate --format=csv -l 30 > ${mem_report_fn} &
 NVIDIA_SMI_PID=$!;
-#######################################################################
-ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
+
 #######################################################################
 # Choose model hyperparameters, choose base interparticle separation
 # full dm density: TNG: 0.33, BOL: 0.122

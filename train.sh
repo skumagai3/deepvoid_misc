@@ -26,17 +26,20 @@ Optional Flags:
   --LOAD_INTO_MEM: If set to 1, load the entire dataset into memory. Default is 0.
   --BATCH_SIZE: Batch size for training. Default is 4.
 END_COMMENT
-current_time=$(date +"%Y%m%d-%H%M");
-mem_report_fn="logs/GPU_usage/train_gpu_mem_usage_${current_time}.txt";
-output_fn="logs/stdout/train_output_${current_time}.txt";
-error_fn="logs/stderr/train_error_${current_time}.txt";
+ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
+current_time=$(date +"%Y%m%d-%H%M"); echo "Current time: $current_time";
+mem_report="logs/GPU_usage/train_gpu_mem_usage_${current_time}.txt";
+output="logs/stdout/train_output_${current_time}.txt";
+error="logs/stderr/train_error_${current_time}.txt";
+mem_report_fn="${ROOT_DIR}${mem_report}";
+output_fn="${ROOT_DIR}${output}";
+error_fn="${ROOT_DIR}${error}";
 echo "Memory report file: $mem_report_fn";
 echo "Output file: $output_fn";
 echo "Error file: $error_fn";
 nvidia-smi --query-gpu=timestamp,name,memory.used,memory.free,memory.total,temperature.gpu,pstate --format=csv -l 30 > ${mem_report_fn} &
 NVIDIA_SMI_PID=$!;
 
-ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
 SIM="TNG"; echo "Simulation: $SIM"; # TNG/BOL
 L=0.33; echo "Lambda: $L";
 D=3; echo "Depth: $D";
