@@ -20,8 +20,8 @@ print('TensorFlow version: ', tf.__version__)
 print('CUDA?: ',tf.test.is_built_with_cuda())
 nets.K.set_image_data_format('channels_last')
 # only use with Nvidia GPUs with compute capability >= 7.0!
-from tensorflow.keras import mixed_precision 
-mixed_precision.set_global_policy('mixed_float16')
+#from tensorflow.keras import mixed_precision  # type: ignore
+#mixed_precision.set_global_policy('mixed_float16')
 #===============================================================
 # Set training parameters:
 #===============================================================
