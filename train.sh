@@ -78,5 +78,5 @@ CMD_ARGS+=" --BATCH_SIZE $BATCH_SIZE"
 echo "Command line arguments: $CMD_ARGS";
 
 # Running the Python script with dynamically constructed arguments
-python3 ./deepvoid_misc/DV_MULTI_TRAIN.py $CMD_ARGS > ${ROOT_DIR}${output_fn} 2> ${ROOT_DIR}${error_fn};
+python3 ./deepvoid_misc/DV_MULTI_TRAIN.py $CMD_ARGS > ${output_fn} 2> ${error_fn};
 kill $NVIDIA_SMI_PID
