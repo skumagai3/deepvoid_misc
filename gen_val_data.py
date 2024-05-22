@@ -95,6 +95,9 @@ if SIM == 'TNG':
   if GRID == 128:
     sig = 0.6
     SUBGRID = 32; OFF = 16
+  if GRID == 256:
+    sig = 1.2
+    SUBGRID = 64; OFF = 32
   FILE_MASK = path_to_TNG + f'TNG300-3-Dark-mask-Nm={GRID}-th={th}-sig={sig}.fvol'
 ### Bolshoi ###
 elif SIM == 'BOL':
