@@ -23,10 +23,10 @@ Optional Flags:
   --MULTI_FLAG: If set to 1, use multiprocessing. Default is 0.
   --LOW_MEM_FLAG: If set to 1, will load less training data and report fewer metrics. Default is 1.
 END_COMMENT
-current_time=$(date +"%Y%m%d-%H%M%S");
-mem_report_fn="transfer_gpu_mem_usage_${current_time}.txt";
-output_fn="transfer_output_${current_time}.txt";
-error_fn="transfer_error_${current_time}.txt";
+current_time=$(date +"%Y%m%d-%H%M");
+mem_report_fn="logs/GPU_usage/transfer_gpu_mem_usage_${current_time}.txt";
+output_fn="logs/stdout/transfer_output_${current_time}.txt";
+error_fn="logs/stderr/transfer_error_${current_time}.txt";
 echo "Memory report file: $mem_report_fn";
 echo "Output file: $output_fn";
 echo "Error file: $error_fn";

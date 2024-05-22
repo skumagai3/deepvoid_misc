@@ -12,10 +12,10 @@ Parameters:
   FN_MSK: Filepath for the mask cube.
   GRID: Desired cube size on a side in voxels.
 END_COMMENT
-current_time=$(date +"%Y%m%d-%H%M%S");
-mem_report_fn="pred_gpu_mem_usage_${current_time}.txt";
-output_fn="pred_output_${current_time}.txt";
-error_fn="pred_error_${current_time}.txt";
+current_time=$(date +"%Y%m%d-%H%M");
+mem_report_fn="logs/GPU_usage/pred_gpu_mem_usage_${current_time}.txt";
+output_fn="logs/stdout/pred_output_${current_time}.txt";
+error_fn="logs/stderr/pred_error_${current_time}.txt";
 echo "Memory report file: $mem_report_fn";
 echo "Output file: $output_fn";
 echo "Error file: $error_fn";

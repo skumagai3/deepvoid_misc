@@ -381,13 +381,13 @@ for key in hp_dict.keys():
 #===============================================================
 # Set loss function and metrics
 #===============================================================
-metrics = ['accuracy','categorical_accuracy']
+metrics = ['accuracy']
 if LOSS == 'CCE':
   loss = nets.CategoricalCrossentropy()
 elif LOSS == 'SCCE':
   loss = nets.SparseCategoricalCrossentropy()
   # replace 'categorical_accuracy' with 'sparse_categorical_accuracy'
-  metrics = ['accuracy','sparse_categorical_accuracy']
+  metrics = ['accuracy']
 elif LOSS == 'FOCAL_CCE':
   loss = [nets.categorical_focal_loss(alpha=alpha,gamma=gamma)]
   #loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma) # only works on 2.16.1

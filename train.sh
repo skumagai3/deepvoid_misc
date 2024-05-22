@@ -27,9 +27,9 @@ Optional Flags:
   --BATCH_SIZE: Batch size for training. Default is 4.
 END_COMMENT
 current_time=$(date +"%Y%m%d-%H%M");
-mem_report_fn="train_gpu_mem_usage_${current_time}.txt";
-output_fn="train_output_${current_time}.txt";
-error_fn="train_error_${current_time}.txt";
+mem_report_fn="logs/GPU_usage/train_gpu_mem_usage_${current_time}.txt";
+output_fn="logs/stdout/train_output_${current_time}.txt";
+error_fn="logs/stderr/train_error_${current_time}.txt";
 echo "Memory report file: $mem_report_fn";
 echo "Output file: $output_fn";
 echo "Error file: $error_fn";
