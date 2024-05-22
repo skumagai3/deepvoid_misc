@@ -26,7 +26,7 @@ Optional Flags:
   --LOAD_INTO_MEM: If set to 1, load the entire dataset into memory. Default is 0.
   --BATCH_SIZE: Batch size for training. Default is 4.
 END_COMMENT
-current_time=$(date +"%Y%m%d-%H%M%S");
+current_time=$(date +"%Y%m%d-%H%M");
 mem_report_fn="train_gpu_mem_usage_${current_time}.txt";
 output_fn="train_output_${current_time}.txt";
 error_fn="train_error_${current_time}.txt";
