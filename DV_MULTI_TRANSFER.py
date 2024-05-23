@@ -145,7 +145,7 @@ path_to_TNG = ROOT_DIR + 'data/TNG/'
 path_to_BOL = ROOT_DIR + 'data/Bolshoi/'
 if SIM == 'TNG':
     DATA_PATH = path_to_TNG
-elif SIM == 'Bolshoi':
+elif SIM == 'Bolshoi' or SIM == 'BOL':
     DATA_PATH = path_to_BOL
 FIG_DIR_PATH = ROOT_DIR + 'figs/'
 MODEL_PATH = ROOT_DIR + 'models/'
