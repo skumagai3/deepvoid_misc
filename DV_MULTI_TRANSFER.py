@@ -235,6 +235,7 @@ if MULTI_FLAG:
         del model
         N_layers = len(clone.layers); print(f'Model has {N_layers} layers')
         if TL_TYPE == 'ENC':
+          print('Freezing all layers up to bottleneck')
           first_up_name = f'decoder_block_D{DEPTH-1}_upsample'
           up_idx = nets.get_layer_index(clone,first_up_name) # up to 1st upsample layer
           print('Freezing all layers up to', clone.layers[up_idx].name)
@@ -270,17 +271,31 @@ else:
     del model
     N_layers = len(clone.layers); print(f'Model has {N_layers} layers')
     if TL_TYPE == 'ENC':
-        first_up_name = f'decoder_block_D{DEPTH-1}_upsample'
-        up_idx = nets.get_layer_index(clone,first_up_name) # up to 1st upsample layer
-        print('Freezing all layers up to', clone.layers[up_idx].name)
-        for layer in clone.layers[:up_idx]:
-            layer.trainable = False
+      print('Freezing all layers up to bottleneck')
+      first_up_name = f'decoder_block_D{DEPTH-1}_upsample'
+      up_idx = nets.get_layer_index(clone,first_up_name) # up to 1st upsample layer
+      print('Freezing all layers up to', clone.layers[up_idx].name)
+      for layer in clone.layers[:up_idx]:
+        layer.trainable = False
     elif TL_TYPE == 'LL':
-        print('Freezing all layers up to last convolutional block')
-        up_to_last_decode_idx = nets.get_layer_index(clone,'decoder_block_D0')
-        up_to_last_decode_idx -= 2 # dont want to freeze that block, rather the one before!
-        for layer in clone.layers[:up_to_last_decode_idx]:
-            layer.trainable = False
+      print('Freezing all layers up to last convolutional block')
+      up_to_last_decode_idx = nets.get_layer_index(clone,'decoder_block_D0')
+      up_to_last_decode_idx -= 2 # dont want to freeze that block, rather the one before!
+      for layer in clone.layers[:up_to_last_decode_idx]:
+        layer.trainable = False
+    elif TL_TYPE == 'ENC_EO':
+      # freeze every other block on the encoding side
+      # blocks are named: enocder_block_D{i}
+      # and encoder_block_D{i}_1, so we freeze the latter
+      print('Freezing every other encoding block')
+      for i in range(0,DEPTH):
+        block_name = f'encoder_block_D{i}_1'
+        block_idx = nets.get_layer_index(clone,block_name)
+        freeze_blocks = []
+        freeze_blocks.append(block_idx)
+        print('Freezing',block_name)
+        for layer in clone.layers[freeze_blocks]:
+          layer.trainable = False
     clone.compile(optimizer=nets.Adam(learning_rate=LR),loss=loss,
                   metrics=metrics)
 clone.summary()
