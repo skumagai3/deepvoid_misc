@@ -258,8 +258,9 @@ if MULTI_FLAG:
             freeze_blocks = []
             freeze_blocks.append(block_idx)
             print('Freezing',block_name)
-            for layer in clone.layers[freeze_blocks]:
-              layer.trainable = False
+          for i in range(len(freeze_blocks)):
+            layer = clone.layers[freeze_blocks[i]]
+            layer.trainable = False
         # compile model:
         clone.compile(optimizer=nets.Adam(learning_rate=LR),loss=loss,
                       metrics=metrics)
@@ -294,8 +295,9 @@ else:
         freeze_blocks = []
         freeze_blocks.append(block_idx)
         print('Freezing',block_name)
-        for layer in clone.layers[freeze_blocks]:
-          layer.trainable = False
+      for i in range(len(freeze_blocks)):
+        layer = clone.layers[freeze_blocks[i]]
+        layer.trainable = False
     clone.compile(optimizer=nets.Adam(learning_rate=LR),loss=loss,
                   metrics=metrics)
 clone.summary()
