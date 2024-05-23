@@ -1261,8 +1261,7 @@ def load_dict_from_text(file_path,string_break='total_params'):
         break
       else:
         dict_out[line.split(':')[0]] = line.split(':')[1].strip()
-        
-
+  return dict_out
 
 # adding generator functions for tf.data.Dataset
 def data_gen_mmap(FILE_X,FILE_Y):
