@@ -78,10 +78,10 @@ then
 else
     if [ $SIM = "TNG" ]
     then
-        MODEL_NAME="${SIM}_D${D}-F${F}-Nm${GRID}-th0.65-sig${SIGMA}-base_L${base_L}_FOCAL";
+        MODEL_NAME="${SIM}_D${D}-F${F}-Nm${GRID}-th0.65-sig${SIGMA}-base_L${base_L}_${LOSS}";
     elif [ $SIM = "BOL" ]
     then
-        MODEL_NAME="Bolshoi_D${D}-F${F}-Nm${GRID}-th0.65-sig${SIGMA}-base_L${base_L}_FOCAL";
+        MODEL_NAME="Bolshoi_D${D}-F${F}-Nm${GRID}-th0.65-sig${SIGMA}-base_L${base_L}_${LOSS}";
     fi
 fi
 #######################################################################
