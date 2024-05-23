@@ -22,6 +22,10 @@ Parameters:
 Optional Flags:
   --MULTI_FLAG: If set to 1, use multiprocessing. Default is 0.
   --LOW_MEM_FLAG: If set to 1, will load less training data and report fewer metrics. Default is 1.
+  --LOAD_INTO_MEM: If set to 1, load the entire dataset into memory. Default is 0.
+  --TENSORBOARD_FLAG: If set to 1, use TensorBoard. Default is 0.
+  --EPOCHS: Number of epochs to train. Default is 500.
+  --BATCH_SIZE: Batch size for training. Default is 8.
 END_COMMENT
 #######################################################################
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
@@ -88,11 +92,19 @@ fi
 # optional flags:
 MULTI_FLAG=0; echo "Multiprocessing: $MULTI_FLAG"; # 0 for no, 1 for multiple GPUs
 LOW_MEM_FLAG=0; echo "Low memory flag: $LOW_MEM_FLAG"; # 0 for no, 1 for yes
+LOAD_INTO_MEM=0; echo "Load into memory: $LOAD_INTO_MEM"; # 0 for no, 1 for yes
+TENSORBOARD_FLAG=0; echo "TensorBoard: $TENSORBOARD_FLAG"; # 0 for no, 1 for yes
+EPOCHS=500; echo "Epochs: $EPOCHS";
+BATCH_SIZE=8; echo "Batch Size: $BATCH_SIZE";
 
 # Constructing command line arguments dynamically
 CMD_ARGS="$ROOT_DIR $MODEL_NAME $FN_DEN $TL_TYPE"
 [ "$MULTI_FLAG" -eq 1 ] && CMD_ARGS+=" --MULTI_FLAG"
 [ "$LOW_MEM_FLAG" -eq 1 ] && CMD_ARGS+=" --LOW_MEM_FLAG"
+[ "$LOAD_INTO_MEM" -eq 1 ] && CMD_ARGS+=" --LOAD_INTO_MEM"
+[ "$TENSORBOARD_FLAG" -eq 1 ] && CMD_ARGS+=" --TENSORBOARD_FLAG"
+CMD_ARGS+=" --EPOCHS $EPOCHS"
+CMD_ARGS+=" --BATCH_SIZE $BATCH_SIZE"
 echo "Command line arguments: $CMD_ARGS";
 
 # Running the Python script with dynamically constructed arguments

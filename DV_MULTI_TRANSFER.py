@@ -2,40 +2,6 @@
 '''
 5/1/24: Making an updated version of dv-transfer-nonbinary.
 NOTE that this is with the updated layer names.
-Models' layers are named as such:
-e.g. for a model with depth = 4:
-input: InputLayer
-depth=0 encoding block: encoder_block_D0
-depth=0 maxpool layer: encoder_block_D0_maxpool
-
-depth=1 encoding block: encoder_block_D1
-depth=1 maxpool layer: encoder_block_D1_maxpool
-
-depth=2 encoding block: encoder_block_D2
-depth=2 maxpool layer: encoder_block_D2_maxpool
-
-depth=3 encoding block: encoder_block_D3
-depth=3 maxpool layer: encoder_block_D3_maxpool
-
-depth=4 bottleneck: bottleneck
-
-depth=3 upsampling layer: decoder_block_D3_upsample
-depth=3 concatenation layer: decoder_block_D3_concat
-depth=3 decoding block: decoder_block_D3
-
-depth=2 upsampling layer: decoder_block_D2_upsample
-depth=2 concatenation layer: decoder_block_D2_concat
-depth=2 decoding block: decoder_block_D2
-
-depth=1 upsampling layer: decoder_block_D1_upsample
-depth=1 concatenation layer: decoder_block_D1_concat
-depth=1 decoding block: decoder_block_D1
-
-depth=0 upsampling layer: decoder_block_D0_upsample
-depth=0 concatenation layer: decoder_block_D0_concat
-depth=0 decoding block: decoder_block_D0
-
-output: output_conv
 '''
 print('>>> Running DV_MULTI_TRANSFER.py')
 import os
@@ -56,10 +22,8 @@ nets.K.set_image_data_format('channels_last')
 #===============================================================
 # Set training parameters:
 #===============================================================
-epochs = 500; print('epochs: ',epochs)
 patience = 50; print('patience: ',patience)
 lr_patience = 20; print('learning rate patience: ',lr_patience)
-batch_size = 8; print('batch_size: ',batch_size)
 N_epochs_metric = 10
 print(f'classification metrics calculated every {N_epochs_metric} epochs')
 KERNEL = (3,3,3)
@@ -90,6 +54,10 @@ Arguments:
 Optional Flags:
   --MULTI_FLAG: If set, use multiprocessing. Default is False.
   --LOW_MEM_FLAG: If set, will load less training data and report fewer metrics. Default is True.
+  --LOAD_INTO_MEM: If set, will load entire dataset into memory. Default is False.
+  --TENSORBOARD_FLAG: If set, will use TensorBoard. Default is False.
+  --EPOCHS: Number of epochs for training. Default is 500.
+  --BATCH_SIZE: Batch size for training. Default is 8.
 
 Notes:
 MODEL_NAME (SIM, base_L will be pulled from that)
@@ -115,6 +83,10 @@ req_group.add_argument('TL_TYPE',type=str, help='Type of transfer learning to be
 opt_group = parser.add_argument_group('optional arguments')
 opt_group.add_argument('--MULTI_FLAG',action='store_true',help='If set, use multiprocessing.')
 opt_group.add_argument('--LOW_MEM_FLAG', action='store_false', help='If not set, will load less training data and report less metrics.')
+opt_group.add_argument('--LOAD_INTO_MEM',action='store_true',help='If set, will load entire dataset into memory.')
+opt_group.add_argument('--TENSORBOARD_FLAG',action='store_true',help='If set, will use TensorBoard.')
+opt_group.add_argument('--EPOCHS',type=int, help='Number of epochs for training. Default is 500.')
+opt_group.add_argument('--BATCH_SIZE',type=int, help='Batch size for training. Default is 8.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 MODEL_NAME = args.MODEL_NAME
@@ -122,6 +94,10 @@ FN_DEN = args.FN_DEN
 TL_TYPE = args.TL_TYPE
 MULTI_FLAG = args.MULTI_FLAG
 LOW_MEM_FLAG = args.LOW_MEM_FLAG
+LOAD_INTO_MEM = args.LOAD_INTO_MEM
+TENSORBOARD_FLAG = args.TENSORBOARD_FLAG
+epochs = args.EPOCHS
+batch_size = args.BATCH_SIZE
 #===============================================================
 # hp dict is the old model, hp_dict_model is the new model
 #===============================================================
@@ -173,50 +149,96 @@ elif LOSS == 'FOCAL_CCE':
     #loss = [nets.categorical_focal_loss(alpha=0.25,gamma=2.0)] 
     loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma)
 if not LOW_MEM_FLAG:
-    metrics += ['f1_score','precision','recall']
+  #metrics += ['f1_score','precision','recall']
+  pass
 #===============================================================
 # Load data
 #===============================================================
 # parse transfer L from FN_DEN
 if SIM == 'TNG':
   tran_L = int(FN_DEN.split('_L')[1].split('_')[0])
+  X_PREFIX = f'{SIM}_L{tran_L}_Nm={GRID}'
+  Y_PREFIX = f'{SIM}_Nm={GRID}'
+  FILE_X_TRAIN = DATA_PATH + X_PREFIX + '_X_train.npy'
+  FILE_Y_TRAIN = DATA_PATH + Y_PREFIX + '_Y_train.npy'
+  FILE_X_TEST = DATA_PATH + X_PREFIX + '_X_test.npy'
+  FILE_Y_TEST = DATA_PATH + Y_PREFIX + '_Y_test.npy'
   FILE_MASK = DATA_PATH + f'TNG300-3-Dark-mask-Nm={GRID}-th={LAMBDA_TH}-sig={SIGMA}.fvol'
   FILE_FIG = FIG_DIR_PATH + 'TNG/'
 elif SIM == 'Bolshoi':
   tran_L = int(FN_DEN.split('L=')[1].split('.0')[0])
+  X_PREFIX = f'BOL_L{tran_L}_Nm={GRID}'
+  Y_PREFIX = f'BOL_Nm={GRID}'
+  FILE_X_TRAIN = DATA_PATH + X_PREFIX + '_X_train.npy'
+  FILE_Y_TRAIN = DATA_PATH + Y_PREFIX + '_Y_train.npy'
+  FILE_X_TEST = DATA_PATH + X_PREFIX + '_X_test.npy'
+  FILE_Y_TEST = DATA_PATH + Y_PREFIX + '_Y_test.npy'
   FILE_MASK = DATA_PATH + f'Bolshoi_bolshoi.delta416_mask_Nm={GRID}_sig={SIGMA}_thresh={LAMBDA_TH}.fvol'
   FILE_FIG = FIG_DIR_PATH + 'Bolshoi/'
 if not os.path.exists(FILE_FIG):
-    os.makedirs(FILE_FIG)
+  os.makedirs(FILE_FIG)
+if LOSS == 'SCCE':
+  Y_PREFIX += '_int'
+# load data!!!
+if LOAD_INTO_MEM:
+  # load entire dataset into memory
+  print('>>> Loading full train, val data into memory')
+  if LOW_MEM_FLAG:
+    features, labels = nets.load_dataset_all(FILE_DEN,FILE_MASK,SUBGRID)
+  else:
+    features, labels = nets.load_dataset_all_overlap(FILE_DEN,FILE_MASK,SUBGRID,OFF)
+  print('>>> Data loaded!')
+  print('Features shape:',features.shape)
+  print('Labels shape:',labels.shape)
+  # split into training and val sets:
+  test_size = 0.2
+  X_index = np.arange(0, features.shape[0])
+  X_train, X_test, Y_train, Y_test = nets.train_test_split(X_index,labels,
+                                                          test_size=test_size,
+                                                          random_state=seed)
+  X_train = features[X_train]; X_test = features[X_test]
+  del features; del labels # memory purposes
+  print(f'>>> Split into training ({(1-test_size)*100}%) and validation ({test_size*100}%) sets')
+  print('X_train shape: ',X_train.shape); print('Y_train shape: ',Y_train.shape)
+  print('X_test shape: ',X_test.shape); print('Y_test shape: ',Y_test.shape)
+  if LOSS != 'SCCE':
+    print('>>> Converting to one-hot encoding')
+    Y_train = nets.to_categorical(Y_train, num_classes=N_CLASSES,dtype='uint8')
+    Y_test  = nets.to_categorical(Y_test, num_classes=N_CLASSES,dtype='uint8')
+    print('>>> One-hot encoding complete')
+    print('Y_train shape: ',Y_train.shape)
+    print('Y_test shape: ',Y_test.shape)
+else:
+  # load data from saved files into tf.data.Dataset
+  print('>>> Loading train, val data into tf.data.Dataset from memmapped .npy files')
+  print('X_train:',FILE_X_TRAIN); print('Y_train:',FILE_Y_TRAIN)
+  print('X_test:',FILE_X_TEST); print('Y_test:',FILE_Y_TEST)
+  last_dim = 1 if LOSS == 'SCCE' else N_CLASSES
+  train_dataset = tf.data.Dataset.from_generator(
+    lambda: nets.data_gen_mmap(FILE_X_TRAIN,FILE_Y_TRAIN),
+    output_signature=(
+      tf.TensorSpec(shape=(SUBGRID,SUBGRID,SUBGRID,1),dtype=tf.float32),
+      tf.TensorSpec(shape=(SUBGRID,SUBGRID,SUBGRID,last_dim),dtype=tf.float32)
+    )
+  )
+  test_dataset = tf.data.Dataset.from_generator(
+    lambda: nets.data_gen_mmap(FILE_X_TEST,FILE_Y_TEST),
+    output_signature=(
+      tf.TensorSpec(shape=(SUBGRID,SUBGRID,SUBGRID,1),dtype=tf.float32),
+      tf.TensorSpec(shape=(SUBGRID,SUBGRID,SUBGRID,last_dim),dtype=tf.float32)
+    )
+  )
+  # shuffle
+  train_dataset = train_dataset.shuffle(buffer_size=1024).batch(batch_size)
+  test_dataset = test_dataset.batch(batch_size)
+  # batch and prefetch
+  train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
+  test_dataset = test_dataset.prefetch(tf.data.experimental.AUTOTUNE)
+  print('>>> Data loaded!')
 print(f'Transfer learning on delta with L={tran_L}')
 print('>>> Loading data!')
 print('Density field:',FILE_DEN)
 print('Mask field:',FILE_MASK)
-if LOW_MEM_FLAG:
-  features, labels = nets.load_dataset_all(FILE_DEN,FILE_MASK,SUBGRID)
-else:
-  features, labels = nets.load_dataset_all_overlap(FILE_DEN,FILE_MASK,SUBGRID,OFF)
-print('>>> Data loaded!')
-print('Features shape:',features.shape)
-print('Labels shape:',labels.shape)
-# split into training and val sets:
-test_size = 0.2
-X_index = np.arange(0, features.shape[0])
-X_train, X_test, Y_train, Y_test = nets.train_test_split(X_index,labels,
-                                                         test_size=test_size,
-                                                         random_state=seed)
-X_train = features[X_train]; X_test = features[X_test]
-del features; del labels # memory purposes
-print(f'>>> Split into training ({(1-test_size)*100}%) and validation ({test_size*100}%) sets')
-print('X_train shape: ',X_train.shape); print('Y_train shape: ',Y_train.shape)
-print('X_test shape: ',X_test.shape); print('Y_test shape: ',Y_test.shape)
-if LOSS != 'SCCE':
-  print('>>> Converting to one-hot encoding')
-  Y_train = nets.to_categorical(Y_train, num_classes=N_CLASSES,dtype='uint8')
-  Y_test  = nets.to_categorical(Y_test, num_classes=N_CLASSES,dtype='uint8')
-  print('>>> One-hot encoding complete')
-  print('Y_train shape: ',Y_train.shape)
-  print('Y_test shape: ',Y_test.shape)
 # gonna skip saving val data bc I assume it is already...
 #================================================================
 # load and clone model
@@ -328,8 +350,8 @@ if LOSS == 'SCCE':
 metrics = nets.ComputeMetrics((X_test,Y_test), N_epochs = N_epochs_metric, avg='micro', one_hot=ONE_HOT_FLAG)
 model_chkpt = nets.ModelCheckpoint(MODEL_PATH+CLONE_NAME+'.keras',monitor='val_loss',
                                    save_best_only=True,verbose=2)
-#log_dir = "logs/fit/" + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") 
-#tb_call = nets.TensorBoard(log_dir=log_dir) # do we even need this if we CSV log?
+log_dir = ROOT_DIR + 'logs/fit/' + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") 
+tb_call = nets.TensorBoard(log_dir=log_dir) # do we even need this if we CSV log?
 csv_logger = nets.CSVLogger(MODEL_PATH+CLONE_NAME+'_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") + '_train_log.csv')
 reduce_lr = nets.ReduceLROnPlateau(monitor='val_loss',factor=0.25,patience=lr_patience, 
                                    verbose=1,min_lr=1e-6)
@@ -339,16 +361,22 @@ if LOW_MEM_FLAG:
   callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger]
 else:
   callbacks = [metrics,model_chkpt,reduce_lr,early_stop,csv_logger]
-history = clone.fit(X_train, Y_train, batch_size = batch_size, epochs = epochs,
-                    validation_data=(X_test,Y_test), verbose = 2, shuffle = True,
-                    callbacks = callbacks)
+if TENSORBOARD_FLAG:
+  callbacks.append(tb_call)
+if LOAD_INTO_MEM:
+  history = clone.fit(X_train, Y_train, batch_size = batch_size, epochs = epochs,
+                      validation_data=(X_test,Y_test), verbose = 2, shuffle = True,
+                      callbacks = callbacks)
+else:
+  history = clone.fit(train_dataset,epochs=epochs,validation_data=test_dataset,verbose=2,
+                      callbacks=callbacks)
 #================================================================
 # plot performance metrics:
 #================================================================
 CLONE_FIG_DIR = FILE_FIG + CLONE_NAME + '/'
 if not os.path.exists(CLONE_FIG_DIR):
-    os.makedirs(CLONE_FIG_DIR)
-    print('>>> Created directory for figures:',CLONE_FIG_DIR)
+  os.makedirs(CLONE_FIG_DIR)
+  print('>>> Created directory for figures:',CLONE_FIG_DIR)
 FILE_METRICS = CLONE_FIG_DIR + CLONE_NAME + '_metrics.png'
 plotter.plot_training_metrics_all(history,FILE_METRICS,savefig=True)
 #===============================================================
@@ -372,7 +400,16 @@ scores['EPOCHS'] = epochs
 #===============================================================
 # Predict, record metrics, and plot metrics on TEST DATA
 #===============================================================
-Y_pred = nets.run_predict_model(clone,X_test,batch_size,output_argmax=False)
+if LOAD_INTO_MEM:
+  Y_pred = nets.run_predict_model(clone,X_test,batch_size,output_argmax=False)
+else:
+  Y_pred_list = []; Y_test_list = []
+  for X_batch, Y_batch in test_dataset:
+    Y_pred = clone.predict(X_batch,verbose=0)
+    Y_pred_list.append(Y_pred)
+    Y_test_list.append(Y_batch.numpy())
+  Y_pred = np.concatenate(Y_pred_list,axis=0)
+  Y_test = np.concatenate(Y_test_list,axis=0)
 # since output argmax = False, Y_pred shape = [N_samples,SUBGRID,SUBGRID,SUBGRID,N_CLASSES]
 # adjust Y_test shape to be [N_samples,SUBGRID,SUBGRID,SUBGRID,1]:
 if LOSS != 'SCCE':
