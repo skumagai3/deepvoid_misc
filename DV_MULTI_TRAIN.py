@@ -76,6 +76,7 @@ Optional Flags:
   that will load the data in batches instead of all at once. Default is False.
   --BATCH_SIZE: Batch size. Default is 4.
   --EPOCHS: Number of epochs to train for. Default is 500.
+  --TENSORBOARD_FLAG: If set, use tensorboard. Default is False.
 '''
 parser = argparse.ArgumentParser(
   prog='DV_MULTI_TRAIN.py',
@@ -103,6 +104,7 @@ opt_group.add_argument('--LOAD_MODEL_FLAG', action='store_true', help='If set, l
 opt_group.add_argument('--LOAD_INTO_MEM', action='store_true', help='If set, load all training and test data into memory. Default is False, aka to load from train, test .npy files into a tf.data.Dataset object.')
 opt_group.add_argument('--BATCH_SIZE', type=int, default=8, help='Batch size. Default is 4.')
 opt_group.add_argument('--EPOCHS', type=int, default=500, help='Number of epochs to train for. Default is 500.')
+opt_group.add_argument('--TENSORBOARD_FLAG', action='store_true', help='If set, use tensorboard.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 SIM = args.SIM
@@ -122,6 +124,7 @@ LOAD_MODEL_FLAG = args.LOAD_MODEL_FLAG
 LOAD_INTO_MEM = args.LOAD_INTO_MEM
 batch_size = args.BATCH_SIZE
 epochs = args.EPOCHS
+TENSORBOARD_FLAG = args.TENSORBOARD_FLAG
 print('#############################################')
 print('>>> Running DV_MULTI_TRAIN.py')
 print('>>> Root directory:',ROOT_DIR)
@@ -460,8 +463,8 @@ if LOSS == 'SCCE':
 #metrics = nets.ComputeMetrics((X_test,Y_test), N_epochs = N_epochs_metric, avg='micro', one_hot=ONE_HOT_FLAG)
 model_chkpt = nets.ModelCheckpoint(FILE_OUT + MODEL_NAME + '.keras', monitor='val_loss',
                                    save_best_only=True,verbose=2)
-#log_dir = "logs/fit/" + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") 
-#tb_call = nets.TensorBoard(log_dir=log_dir) # do we even need this if we CSV log?
+log_dir = ROOT_DIR + 'logs/fit/' + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") 
+tb_call = nets.TensorBoard(log_dir=log_dir) # do we even need this if we CSV log?
 csv_logger = nets.CSVLogger(FILE_OUT+MODEL_NAME+'_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") + '_train_log.csv')
 reduce_lr = nets.ReduceLROnPlateau(monitor='val_loss',factor=0.25,patience=lr_patience, 
                                    verbose=1,min_lr=1e-6)
@@ -472,6 +475,8 @@ if LOW_MEM_FLAG:
 else:
   #callbacks = [metrics,model_chkpt,reduce_lr,early_stop,csv_logger]
   callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger]
+if TENSORBOARD_FLAG:
+  callbacks.append(tb_call)
 #history = model.fit(X_train, Y_train, batch_size = batch_size, epochs = epochs, 
 #                    validation_data=(X_test,Y_test), verbose = 2, shuffle = True,
 #                    callbacks = callbacks)
