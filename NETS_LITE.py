@@ -1246,6 +1246,24 @@ def get_layer_index(model, layer_name):
       return i
   return None
 
+# adding a function that already existed i think?
+def load_dict_from_text(file_path,string_break='total_params'):
+  '''
+  Load a dictionary from a text file. 
+  file_path: str, path to text file
+  string_break: str, string to break at. def 'total_params'
+  '''
+  dict_out = dict()
+  with open(file_path, 'r') as f:
+    for line in f:
+      print(line)
+      if line.split(':')[0] == string_break:
+        break
+      else:
+        dict_out[line.split(':')[0]] = line.split(':')[1].strip()
+        
+
+
 # adding generator functions for tf.data.Dataset
 def data_gen_mmap(FILE_X,FILE_Y):
   '''

@@ -123,6 +123,8 @@ TL_TYPE = args.TL_TYPE
 MULTI_FLAG = args.MULTI_FLAG
 LOW_MEM_FLAG = args.LOW_MEM_FLAG
 #===============================================================
+# hp dict is the old model, hp_dict_model is the new model
+#===============================================================
 hp_dict = nets.parse_model_name(MODEL_NAME)
 SIM = hp_dict['SIM'] # TNG or Bolshoi
 DEPTH = hp_dict['DEPTH']
@@ -136,7 +138,6 @@ UNIFORM_FLAG = hp_dict['UNIFORM_FLAG']
 LOSS = hp_dict['LOSS']
 model_TL_TYPE = hp_dict['TL_TYPE']
 base_L = hp_dict['base_L']
-model_tran_L = hp_dict['tran_L']
 DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 #================================================================
 # set paths:
@@ -156,23 +157,10 @@ FILE_MODEL = MODEL_PATH + MODEL_NAME
 # Parse hp_dict file for attributes, set metrics
 #================================================================
 hp_dict_model = {}
+hp_dict_model['MODEL_NAME_ATTRIBUTES'] = hp_dict
 hp_dict_path = MODEL_PATH + MODEL_NAME + '_hps.txt'
-try:
-    if os.path.exists(hp_dict_path):
-        hp_dict = nets.load_dict_from_text(hp_dict_path)
-    else:
-        hp_dict_path = MODEL_PATH + MODEL_NAME + '.keras_hps.txt'
-        hp_dict = nets.load_dict_from_text(hp_dict_path)
-except FileNotFoundError:
-    print('>>> Could not find hp_dict file!')
-    sys.exit()
-with open(hp_dict_path,'r') as f:
-    for line in f:
-        print(line)
-        if line.split(':')[0] == 'FILE_MASK':
-            break
-        else:
-            hp_dict[line.split(':')[0]] = line.split(':')[1].strip()
+hp_dict = nets.load_dict_from_text(hp_dict_path)
+hp_dict_model['BASE_MODEL_ATTRIBUTES'] = hp_dict
 metrics = ['accuracy','categorical_accuracy']
 if LOSS == 'CCE':
     loss = nets.CategoricalCrossentropy()
