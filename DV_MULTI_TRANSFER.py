@@ -360,7 +360,10 @@ if LOW_MEM_FLAG:
   # dont calc metrics, too memory intensive
   callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger]
 else:
-  callbacks = [metrics,model_chkpt,reduce_lr,early_stop,csv_logger]
+  if LOAD_INTO_MEM: # metrics doesnt work with tf.data.Dataset right now
+    callbacks = [metrics,model_chkpt,reduce_lr,early_stop,csv_logger]
+  else:
+    callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger]
 if TENSORBOARD_FLAG:
   callbacks.append(tb_call)
 if LOAD_INTO_MEM:
