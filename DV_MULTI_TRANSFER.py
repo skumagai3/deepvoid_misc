@@ -96,6 +96,7 @@ MODEL_NAME (SIM, base_L will be pulled from that)
 TL_TYPEs:
 - ENC: freeze entire encoding side (and bottleneck)
 - LL: freeze entire model except last conv block and output
+- ENC_EO: freeze every other encoding conv block
 (not implemented):
 - ENC_D{freeze_depth}: freeze encoding side down to some depth?
 
@@ -247,6 +248,14 @@ if MULTI_FLAG:
             up_to_last_decode_idx -= 2 # dont want to freeze that block, rather the one before!
             for layer in clone.layers[:up_to_last_decode_idx]:
                 layer.trainable = False
+        elif TL_TYPE == 'ENC_EO':
+           # freeze every other block on the encoding side
+            for i in range(0,DEPTH,2):
+                block_name = f'encoder_block_D{i}'
+                block_idx = nets.get_layer_index(clone,block_name)
+                print('Freezing',block_name)
+                for layer in clone.layers[:block_idx]:
+                    layer.trainable = False
         # compile model:
         clone.compile(optimizer=nets.Adam(learning_rate=LR),loss=loss,
                       metrics=metrics)

@@ -17,7 +17,7 @@ Parameters:
         ROOT_DIR: Root directory where data, models, figures, etc. are stored.
         MODEL_NAME: Name of the model.
         FN_DEN: Filename of the density field.
-        TL_TYPE: Transfer learning type. Example: 'ENC'.
+        TL_TYPE: Transfer learning type. Example: 'ENC', 'LL', 'ENC_EO'.
 
 Optional Flags:
   --MULTI_FLAG: If set to 1, use multiprocessing. Default is 0.
@@ -49,7 +49,7 @@ LOSS="SCCE"; echo "Loss: $LOSS"; # make blank if CCE
 #######################################################################
 ### Interparticle separation for transfer learning
 tran_L=5; echo "Transfer lambda: $tran_L";
-TL_TYPE="ENC"; echo "Transfer type: $TL_TYPE";
+TL_TYPE="ENC_EO"; echo "Transfer type: $TL_TYPE";
 #######################################################################
 ### Select SIM: TNG/Bolshoi
 SIM="TNG"; 
@@ -90,6 +90,6 @@ CMD_ARGS="$ROOT_DIR $MODEL_NAME $FN_DEN $TL_TYPE"
 echo "Command line arguments: $CMD_ARGS";
 
 # Running the Python script with dynamically constructed arguments
-python3 $ROOT_DIR/deepvoid_misc/DV_MULTI_TRANSFER.py $CMD_ARGS > ${output_fn} 2> ${error_fn};
+python3 $./deepvoid_misc/DV_MULTI_TRANSFER.py $CMD_ARGS > ${output_fn} 2> ${error_fn};
 
 kill $NVIDIA_SMI_PID
