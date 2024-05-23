@@ -214,6 +214,7 @@ nets.save_scores_from_model(FILE_DEN, FILE_MSK, FILE_OUT+MODEL_NAME, FIG_OUT,
 # ORTHO_FLAG = False.... VAL_FLAG = False
 # 45 rotated filepaths: path_to_TNG/ or path_to_BOL/ + '45deg/' + FN_DEN/FN_MSK
 #===============================================================================
+'''
 # check if rotated file exists
 if os.path.exists(DATA_PATH+'45deg/'+FN_DEN) and os.path.exists(DATA_PATH+'45deg/'+FN_MSK):
     pass
@@ -257,4 +258,5 @@ nets.save_slices_from_fvol(X_test,Y_test,Y_pred,FILE_OUT+MODEL_NAME,
                            FIG_OUT+'45deg/',L,BOXSIZE=BoxSize,
                            GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,
                            BOLSHOI_FLAG=BOLSHOI_FLAG)
+'''
 print('>>> Finished predicting on training data')
