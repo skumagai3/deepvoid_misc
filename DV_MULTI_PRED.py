@@ -142,7 +142,7 @@ model.summary()
 #===============================================================================
 # we want to extract L from FILE_DEN...not necessarily base_L
 if SIM == 'TNG':
-    if FN_DEN == 'DM_DEN_snap99_Nm=512.fvol' or FN_DEN == 'DM_DEN_snap99_Nm=128.fvol':
+    if FN_DEN == 'DM_DEN_snap99_Nm=512.fvol' or FN_DEN == 'DM_DEN_snap99_Nm=128.fvol' or FN_DEN == 'DM_DEN_snap99_Nm=256.fvol':
         L = 0.33
     else:
         # recall TNG files have names like subs1_mass_Nm512_L3_d_None_smooth.fvol
