@@ -156,6 +156,15 @@ FILE_MODEL = MODEL_PATH + MODEL_NAME
 # Parse hp_dict file for attributes, set metrics
 #================================================================
 hp_dict_model = {}
+hp_dict_path = MODEL_PATH + MODEL_NAME + '_hps.txt'
+if os.path.exists(hp_dict_path):
+    hp_dict = nets.load_dict_from_text(hp_dict_path)
+else:
+    try:
+        hp_dict_path = MODEL_PATH + MODEL_NAME + '.keras_hps.txt'
+    except:
+        print('>>> Could not find hp_dict file!')
+        sys.exit()
 with open(MODEL_PATH+MODEL_NAME+'_hps.txt','r') as f:
     for line in f:
         print(line)

@@ -42,17 +42,17 @@ NVIDIA_SMI_PID=$!;
 # Choose model hyperparameters, choose base interparticle separation
 # full dm density: TNG: 0.33, BOL: 0.122
 # L = 3,5,7,10 for both
-base_L=0.33; echo "Lambda: $base_L"; 
-D=3; echo "Depth: $D";
+base_L=0.122; echo "Lambda: $base_L"; 
+D=4; echo "Depth: $D";
 F=16;  echo "Filters: $F";
 LOSS="SCCE"; echo "Loss: $LOSS"; # make blank if CCE
 #######################################################################
 ### Interparticle separation for transfer learning
-tran_L=5; echo "Transfer lambda: $tran_L";
+tran_L=7; echo "Transfer lambda: $tran_L";
 TL_TYPE="ENC_EO"; echo "Transfer type: $TL_TYPE";
 #######################################################################
 ### Select SIM: TNG/Bolshoi
-SIM="TNG"; 
+SIM="BOL"; 
 echo "Simulation: $SIM"; 
 #######################################################################
 if [ $SIM = "TNG" ]
@@ -81,7 +81,7 @@ fi
 #######################################################################
 # optional flags:
 MULTI_FLAG=0; echo "Multiprocessing: $MULTI_FLAG"; # 0 for no, 1 for multiple GPUs
-LOW_MEM_FLAG=1; echo "Low memory flag: $LOW_MEM_FLAG"; # 0 for no, 1 for yes
+LOW_MEM_FLAG=0; echo "Low memory flag: $LOW_MEM_FLAG"; # 0 for no, 1 for yes
 
 # Constructing command line arguments dynamically
 CMD_ARGS="$ROOT_DIR $MODEL_NAME $FN_DEN $TL_TYPE"
