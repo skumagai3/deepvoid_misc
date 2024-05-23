@@ -165,7 +165,7 @@ else:
     except:
         print('>>> Could not find hp_dict file!')
         sys.exit()
-with open(MODEL_PATH+MODEL_NAME+'_hps.txt','r') as f:
+with open(hp_dict_path,'r') as f:
     for line in f:
         print(line)
         if line.split(':')[0] == 'FILE_MASK':
