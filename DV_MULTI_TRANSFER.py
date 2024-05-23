@@ -115,6 +115,8 @@ LOSS = hp_dict['LOSS']
 model_TL_TYPE = hp_dict['TL_TYPE']
 base_L = hp_dict['base_L']
 DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
+if GRID == 640:
+  SUBGRID = 128; OFF = 64
 #================================================================
 # set paths:
 #================================================================
@@ -210,6 +212,7 @@ if LOAD_INTO_MEM:
     print('>>> One-hot encoding complete')
     print('Y_train shape: ',Y_train.shape)
     print('Y_test shape: ',Y_test.shape)
+  print('>>> Data loaded!')
 else:
   # load data from saved files into tf.data.Dataset
   print('>>> Loading train, val data into tf.data.Dataset from memmapped .npy files')
@@ -238,7 +241,6 @@ else:
   test_dataset = test_dataset.prefetch(tf.data.experimental.AUTOTUNE)
   print('>>> Data loaded!')
 print(f'Transfer learning on delta with L={tran_L}')
-print('>>> Loading data!')
 print('Density field:',FILE_DEN)
 print('Mask field:',FILE_MASK)
 # gonna skip saving val data bc I assume it is already...
@@ -282,6 +284,10 @@ if MULTI_FLAG:
             freeze_blocks = []
             freeze_blocks.append(block_idx)
             print('Freezing',block_name)
+          # get bottleneck index, freeze second conv
+          bottle_idx = nets.get_layer_index(clone,'bottleneck_1')
+          print('Freezing bottleneck_1')
+          freeze_blocks.append(bottle_idx)
           for i in range(len(freeze_blocks)):
             layer = clone.layers[freeze_blocks[i]]
             layer.trainable = False
@@ -319,6 +325,9 @@ else:
         freeze_blocks = []
         freeze_blocks.append(block_idx)
         print('Freezing',block_name)
+      bottle_idx = nets.get_layer_index(clone,'bottleneck_1')
+      print('Freezing bottleneck_1')
+      freeze_blocks.append(bottle_idx)
       for i in range(len(freeze_blocks)):
         layer = clone.layers[freeze_blocks[i]]
         layer.trainable = False
