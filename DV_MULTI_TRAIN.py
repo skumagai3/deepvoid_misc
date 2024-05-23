@@ -390,8 +390,6 @@ if LOSS == 'CCE':
   loss = nets.CategoricalCrossentropy()
 elif LOSS == 'SCCE':
   loss = nets.SparseCategoricalCrossentropy()
-  # replace 'categorical_accuracy' with 'sparse_categorical_accuracy'
-  metrics = ['accuracy']
 elif LOSS == 'FOCAL_CCE':
   loss = [nets.categorical_focal_loss(alpha=alpha,gamma=gamma)]
   #loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma) # only works on 2.16.1
@@ -515,12 +513,6 @@ scores['TRAIN_LOSS'] = history.history['loss'][-1]
 scores['VAL_LOSS'] = history.history['val_loss'][-1]
 scores['TRAIN_ACC'] = history.history['accuracy'][-1]
 scores['VAL_ACC'] = history.history['val_accuracy'][-1]
-if LOSS == 'SCCE':
-  scores['TRAIN_CAT_ACC'] = history.history['sparse_categorical_accuracy'][-1]
-  scores['VAL_CAT_ACC'] = history.history['val_sparse_categorical_accuracy'][-1]
-else:
-  scores['TRAIN_CAT_ACC'] = history.history['categorical_accuracy'][-1]
-  scores['VAL_CAT_ACC'] = history.history['val_categorical_accuracy'][-1]
 if LOSS == 'FOCAL_CCE':
   scores['FOCAL_ALPHA'] = alpha
   scores['FOCAL_GAMMA'] = gamma
