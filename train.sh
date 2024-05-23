@@ -25,6 +25,7 @@ Optional Flags:
   --LOAD_MODEL: If set to 1, load a previously trained model. Default is 0.
   --LOAD_INTO_MEM: If set to 1, load the entire dataset into memory. Default is 0.
   --BATCH_SIZE: Batch size for training. Default is 4.
+  --EPOCHS: Number of epochs to train. Default is 500.
 END_COMMENT
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
 current_time=$(date +"%Y%m%d-%H%M"); echo "Current time: $current_time";
@@ -63,6 +64,7 @@ UNIFORM_FLAG=0; echo "Uniform Flag: $UNIFORM_FLAG";
 LOAD_MODEL=0; echo "Load Model: $LOAD_MODEL";
 LOAD_INTO_MEM=0; echo "Load into memory: $LOAD_INTO_MEM";
 BATCH_SIZE=4; echo "Batch Size: $BATCH_SIZE";
+EPOCHS=500; echo "Epochs: $EPOCHS";
 
 # Constructing command line arguments dynamically
 CMD_ARGS="$ROOT_DIR $SIM $L $D $F $LOSS $GRID"
@@ -75,6 +77,7 @@ CMD_ARGS="$ROOT_DIR $SIM $L $D $F $LOSS $GRID"
 [ "$LOAD_MODEL" -eq 1 ] && CMD_ARGS+=" --LOAD_MODEL"
 [ "$LOAD_INTO_MEM" -eq 1 ] && CMD_ARGS+=" --LOAD_INTO_MEM"
 CMD_ARGS+=" --BATCH_SIZE $BATCH_SIZE"
+CMD_ARGS+=" --EPOCHS $EPOCHS"
 echo "Command line arguments: $CMD_ARGS";
 
 # Running the Python script with dynamically constructed arguments

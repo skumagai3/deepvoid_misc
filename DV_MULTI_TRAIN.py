@@ -75,6 +75,7 @@ Optional Flags:
   If not set, load data from X_train, Y_train, X_test, Y_test .npy files into a tf.data.Dataset object 
   that will load the data in batches instead of all at once. Default is False.
   --BATCH_SIZE: Batch size. Default is 4.
+  --EPOCHS: Number of epochs to train for. Default is 500.
 '''
 parser = argparse.ArgumentParser(
   prog='DV_MULTI_TRAIN.py',
@@ -101,6 +102,7 @@ opt_group.add_argument('--FOCAL_GAMMA', type=float, default=2.0, help='Focal los
 opt_group.add_argument('--LOAD_MODEL_FLAG', action='store_true', help='If set, load model from FILE_OUT if it exists.')
 opt_group.add_argument('--LOAD_INTO_MEM', action='store_true', help='If set, load all training and test data into memory. Default is False, aka to load from train, test .npy files into a tf.data.Dataset object.')
 opt_group.add_argument('--BATCH_SIZE', type=int, default=8, help='Batch size. Default is 4.')
+opt_group.add_argument('--EPOCHS', type=int, default=500, help='Number of epochs to train for. Default is 500.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 SIM = args.SIM
@@ -119,6 +121,7 @@ gamma = args.FOCAL_GAMMA
 LOAD_MODEL_FLAG = args.LOAD_MODEL_FLAG
 LOAD_INTO_MEM = args.LOAD_INTO_MEM
 batch_size = args.BATCH_SIZE
+epochs = args.EPOCHS
 print('#############################################')
 print('>>> Running DV_MULTI_TRAIN.py')
 print('>>> Root directory:',ROOT_DIR)

@@ -984,9 +984,17 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
   BATCH_SIZE = 8 # NOTE can fiddle w this
   ### load model:
   if COMPILE:
-    model = load_model(FILE_MODEL)
+    try: 
+      model = load_model(FILE_MODEL)
+    except IOError:
+      print('Model not found. Trying with .keras extension...')
+      model = load_model(FILE_MODEL+'.keras')
   else:
-    model = load_model(FILE_MODEL, compile=False)
+    try:
+      model = load_model(FILE_MODEL, compile=False)
+    except IOError:
+      print('Model not found. Trying with .keras extension...')
+      model = load_model(FILE_MODEL+'.keras', compile=False)
 
   X_test = load_dataset(FILE_DEN,SUBGRID,OFF,preproc='mm')
   Y_pred = run_predict_model(model, X_test, BATCH_SIZE)
