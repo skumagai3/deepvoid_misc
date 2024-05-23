@@ -159,6 +159,8 @@ if SIM == 'TNG':
   tran_L = int(FN_DEN.split('_L')[1].split('_')[0])
   X_PREFIX = f'{SIM}_L{tran_L}_Nm={GRID}'
   Y_PREFIX = f'{SIM}_Nm={GRID}'
+  if LOSS == 'SCCE':
+    Y_PREFIX += '_int'
   FILE_X_TRAIN = DATA_PATH + X_PREFIX + '_X_train.npy'
   FILE_Y_TRAIN = DATA_PATH + Y_PREFIX + '_Y_train.npy'
   FILE_X_TEST = DATA_PATH + X_PREFIX + '_X_test.npy'
@@ -169,6 +171,8 @@ elif SIM == 'Bolshoi':
   tran_L = int(FN_DEN.split('L=')[1].split('.0')[0])
   X_PREFIX = f'BOL_L{tran_L}_Nm={GRID}'
   Y_PREFIX = f'BOL_Nm={GRID}'
+  if LOSS == 'SCCE':
+    Y_PREFIX += '_int'
   FILE_X_TRAIN = DATA_PATH + X_PREFIX + '_X_train.npy'
   FILE_Y_TRAIN = DATA_PATH + Y_PREFIX + '_Y_train.npy'
   FILE_X_TEST = DATA_PATH + X_PREFIX + '_X_test.npy'
@@ -177,8 +181,6 @@ elif SIM == 'Bolshoi':
   FILE_FIG = FIG_DIR_PATH + 'Bolshoi/'
 if not os.path.exists(FILE_FIG):
   os.makedirs(FILE_FIG)
-if LOSS == 'SCCE':
-  Y_PREFIX += '_int'
 # load data!!!
 if LOAD_INTO_MEM:
   # load entire dataset into memory
