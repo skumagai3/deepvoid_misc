@@ -60,7 +60,7 @@ then
     GRID=256; echo "GRID: $GRID"; ###### NOTE adjust grid here ########
     [ $GRID -eq 512 ] && SIGMA=2.4 || [ $GRID -eq 128 ] && SIGMA=0.6 || [ $GRID -eq 256 ] && SIGMA=1.2
     FN_DEN="subs1_mass_Nm${GRID}_L${tran_L}_d_None_smooth.fvol";
-elif [ $SIM = "Bolshoi" ]
+elif [ $SIM = "Bolshoi" ] || [ $SIM = "BOL" ]
 then
     SIGMA=0.916; # 640 grid
     GRID=640; echo "GRID: $GRID";
