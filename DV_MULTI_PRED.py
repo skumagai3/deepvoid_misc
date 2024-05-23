@@ -130,7 +130,11 @@ if not os.path.exists(FIG_OUT):
 #===============================================================================
 # load model (set compile=False if necessary?)
 #===============================================================================
-model = nets.load_model(FILE_OUT+MODEL_NAME)
+try:
+    model = nets.load_model(FILE_OUT+MODEL_NAME)
+except OSError:
+    print('Model not found. Trying with .keras extension')
+    model = nets.load_model(FILE_OUT+MODEL_NAME+'.keras')
 model.summary()
 #===============================================================================
 # Check if validation set exists, if so, score on that
