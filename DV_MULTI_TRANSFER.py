@@ -179,13 +179,13 @@ if not LOW_MEM_FLAG:
 #===============================================================
 # parse transfer L from FN_DEN
 if SIM == 'TNG':
-    tran_L = int(FN_DEN.split('_L')[1].split('_')[0])
-    FILE_MASK = DATA_PATH + f'TNG300-3-Dark-mask-Nm={GRID}-th={LAMBDA_TH}-sig={SIGMA}.fvol'
-    FILE_FIG = FIG_DIR_PATH + 'TNG/'
+  tran_L = int(FN_DEN.split('_L')[1].split('_')[0])
+  FILE_MASK = DATA_PATH + f'TNG300-3-Dark-mask-Nm={GRID}-th={LAMBDA_TH}-sig={SIGMA}.fvol'
+  FILE_FIG = FIG_DIR_PATH + 'TNG/'
 elif SIM == 'Bolshoi':
-    tran_L = int(FN_DEN.split('L=')[1].split('.0')[0])
-    FILE_MASK = DATA_PATH + f'Bolshoi_bolshoi.delta416_mask_Nm={GRID}_sig={SIGMA}_thresh={LAMBDA_TH}.fvol'
-    FILE_FIG = FIG_DIR_PATH + 'Bolshoi/'
+  tran_L = int(FN_DEN.split('L=')[1].split('.0')[0])
+  FILE_MASK = DATA_PATH + f'Bolshoi_bolshoi.delta416_mask_Nm={GRID}_sig={SIGMA}_thresh={LAMBDA_TH}.fvol'
+  FILE_FIG = FIG_DIR_PATH + 'Bolshoi/'
 if not os.path.exists(FILE_FIG):
     os.makedirs(FILE_FIG)
 print(f'Transfer learning on delta with L={tran_L}')
@@ -235,25 +235,30 @@ if MULTI_FLAG:
         del model
         N_layers = len(clone.layers); print(f'Model has {N_layers} layers')
         if TL_TYPE == 'ENC':
-            first_up_name = f'decoder_block_D{DEPTH-1}_upsample'
-            up_idx = nets.get_layer_index(clone,first_up_name) # up to 1st upsample layer
-            print('Freezing all layers up to', clone.layers[up_idx].name)
-            for layer in clone.layers[:up_idx]:
-                layer.trainable = False
+          first_up_name = f'decoder_block_D{DEPTH-1}_upsample'
+          up_idx = nets.get_layer_index(clone,first_up_name) # up to 1st upsample layer
+          print('Freezing all layers up to', clone.layers[up_idx].name)
+          for layer in clone.layers[:up_idx]:
+            layer.trainable = False
         elif TL_TYPE == 'LL':
-            print('Freezing all layers up to last convolutional block')
-            up_to_last_decode_idx = nets.get_layer_index(clone,'decoder_block_D0')
-            up_to_last_decode_idx -= 2 # dont want to freeze that block, rather the one before!
-            for layer in clone.layers[:up_to_last_decode_idx]:
-                layer.trainable = False
+          print('Freezing all layers up to last convolutional block')
+          up_to_last_decode_idx = nets.get_layer_index(clone,'decoder_block_D0')
+          up_to_last_decode_idx -= 2 # dont want to freeze that block, rather the one before!
+          for layer in clone.layers[:up_to_last_decode_idx]:
+            layer.trainable = False
         elif TL_TYPE == 'ENC_EO':
-           # freeze every other block on the encoding side
-            for i in range(0,DEPTH,2):
-                block_name = f'encoder_block_D{i}'
-                block_idx = nets.get_layer_index(clone,block_name)
-                print('Freezing',block_name)
-                for layer in clone.layers[:block_idx]:
-                    layer.trainable = False
+          # freeze every other block on the encoding side
+          # blocks are named: enocder_block_D{i}
+          # and encoder_block_D{i}_1, so we freeze the latter
+          print('Freezing every other encoding block')
+          for i in range(0,DEPTH):
+            block_name = f'encoder_block_D{i}_1'
+            block_idx = nets.get_layer_index(clone,block_name)
+            freeze_blocks = []
+            freeze_blocks.append(block_idx)
+            print('Freezing',block_name)
+            for layer in clone.layers[freeze_blocks]:
+              layer.trainable = False
         # compile model:
         clone.compile(optimizer=nets.Adam(learning_rate=LR),loss=loss,
                       metrics=metrics)
