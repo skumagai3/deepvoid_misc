@@ -530,7 +530,7 @@ if LOAD_INTO_MEM:
 else:
   Y_pred_list = []; Y_test_list = []
   for X_batch, Y_batch in test_dataset:
-    Y_pred_batch = model.predict(X_batch)
+    Y_pred_batch = model.predict(X_batch,verbose=0)
     Y_pred_list.append(Y_pred_batch)
     Y_test_list.append(Y_batch.numpy()) # NOTE this may OOM???
   Y_pred = np.concatenate(Y_pred_list,axis=0)
