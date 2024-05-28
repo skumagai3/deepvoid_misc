@@ -139,19 +139,18 @@ hp_dict_model['MODEL_NAME_ATTRIBUTES'] = hp_dict
 hp_dict_path = MODEL_PATH + MODEL_NAME + '_hps.txt'
 hp_dict = nets.load_dict_from_text(hp_dict_path)
 hp_dict_model['BASE_MODEL_ATTRIBUTES'] = hp_dict
-metrics = ['accuracy','categorical_accuracy']
+metrics = ['accuracy']
 if LOSS == 'CCE':
     loss = nets.CategoricalCrossentropy()
 elif LOSS == 'SCCE':
     loss = nets.SparseCategoricalCrossentropy()
-    metrics = ['accuracy','sparse_categorical_accuracy']
 elif LOSS == 'FOCAL_CCE':
     alpha = hp_dict_model['focal_alpha']
     gamma = hp_dict_model['focal_gamma']
     #loss = [nets.categorical_focal_loss(alpha=0.25,gamma=2.0)] 
     loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma)
 if not LOW_MEM_FLAG:
-  #metrics += ['f1_score','precision','recall']
+  metrics += ['f1_score','precision','recall']
   pass
 #===============================================================
 # Load data
