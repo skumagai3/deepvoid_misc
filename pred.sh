@@ -37,7 +37,7 @@ F=16; echo "Filters: $F";
 LOSS="SCCE"; echo "Loss: $LOSS";
 GRID=640; echo "Grid: $GRID";
 TH=0.65; echo "Threshold: $TH";
-TL_FLAG=0; echo "Transfer Flag: $TL_FLAG";
+TL_FLAG=1; echo "Transfer Flag: $TL_FLAG";
 ### CHOOSE LAMBDA TO PREDICT ON ###
 TRAN_L=7; echo "Transfer/pred Lambda: $TRAN_L";
 # sigma = 0.6 for 128, 1.2 for 256, 2.4 for 512
