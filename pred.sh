@@ -40,6 +40,10 @@ TH=0.65; echo "Threshold: $TH";
 TL_FLAG=1; echo "Transfer Flag: $TL_FLAG";
 ### CHOOSE LAMBDA TO PREDICT ON ###
 TRAN_L=7; echo "Transfer/pred Lambda: $TRAN_L";
+#######################################################################
+if [ "$TL_FLAG" = 0 ]; then
+  TRAN_L=$BASE_L;
+fi
 if [ "$GRID" = "128" ]; then
   SIG=0.6;
 elif [ "$GRID" = "256" ]; then
