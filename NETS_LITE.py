@@ -28,6 +28,7 @@ from keras import backend as K
 from keras.losses import CategoricalCrossentropy, SparseCategoricalCrossentropy
 #from keras.losses import CategoricalFocalCrossentropy # not available in tf 2.10.0!!!
 from keras.callbacks import Callback, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, TensorBoard, CSVLogger
+from keras.saving import register_keras_serializable
 
 from sklearn.preprocessing import label_binarize
 from sklearn.metrics import precision_recall_fscore_support, balanced_accuracy_score, roc_auc_score, matthews_corrcoef
@@ -370,7 +371,7 @@ def categorical_focal_loss(alpha, gamma=2.):
   """
 
   alpha = np.array(alpha, dtype=np.float32)
-
+  @register_keras_serializable()
   def categorical_focal_loss_fixed(y_true, y_pred):
     """
     :param y_true: A tensor of the same shape as `y_pred`

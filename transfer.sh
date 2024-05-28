@@ -43,6 +43,10 @@ nvidia-smi --query-gpu=timestamp,name,memory.used,memory.free,memory.total,tempe
 NVIDIA_SMI_PID=$!;
 
 #######################################################################
+### Select SIM: TNG/Bolshoi
+SIM="BOL"; 
+echo "Simulation: $SIM"; 
+#######################################################################
 # Choose model hyperparameters, choose base interparticle separation
 # full dm density: TNG: 0.33, BOL: 0.122
 # L = 3,5,7,10 for both
@@ -54,10 +58,6 @@ LOSS="SCCE"; echo "Loss: $LOSS"; # make blank if CCE
 ### Interparticle separation for transfer learning
 tran_L=7; echo "Transfer lambda: $tran_L";
 TL_TYPE="ENC_EO"; echo "Transfer type: $TL_TYPE";
-#######################################################################
-### Select SIM: TNG/Bolshoi
-SIM="BOL"; 
-echo "Simulation: $SIM"; 
 #######################################################################
 if [ $SIM = "TNG" ]
 then
