@@ -67,7 +67,7 @@ if [ "$TL_FLAG" = 1 ]; then
 fi
 # set model and mask filenames:
 if [ "$SIM" = "TNG" ]; then
-  MODEL_NAME="TNG_${MODEL_NAME}";
+  MODEL_NAME="TNG${MODEL_NAME}";
   FN_MSK="TNG300-3-Dark-mask-Nm=${GRID}-th=${TH}-sig=${SIG}.fvol";
   if [ TRAN_L = 0.33]; then
     FN_DEN="DM_DEN_snap99_Nm=${GRID}.fvol"; # full TNG density
@@ -75,7 +75,7 @@ if [ "$SIM" = "TNG" ]; then
     FN_DEN="subs1_mass_Nm${GRID}_L${TRAN_L}_d_None_smooth.fvol"; # subhalo TNG density
   fi
 elif [ "$SIM" = "BOL" ]; then
-  MODEL_NAME="Bolshoi_${MODEL_NAME}";
+  MODEL_NAME="Bolshoi${MODEL_NAME}";
   FN_MSK="Bolshoi_bolshoi.delta416_mask_Nm=${GRID}_sig=${SIG}_thresh=${TH}.fvol";
   FN_DEN="Bolshoi_halo_CIC_${GRID}_L=${TRAN_L}.fvol"; # full/subhalo BOL density
 fi
