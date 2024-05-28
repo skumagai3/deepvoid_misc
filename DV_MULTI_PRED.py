@@ -152,7 +152,7 @@ if SIM == 'BOL':
         L = 0.122
     else:
         # recall BOL files have names like Bolshoi_halo_CIC_640_L=5.0.fvol
-        L = int(float(FN_DEN.split('L')[1].split('.fvol')[0]))
+        L = int(float(FN_DEN.split('L=')[1].split('.fvol')[0]))
 X_VAL_DATA_NAME = f'{SIM}_L{L}_Nm={GRID}'
 Y_VAL_DATA_NAME = f'{SIM}_Nm={GRID}'
 if LOSS == 'SCCE':
