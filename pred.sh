@@ -70,7 +70,7 @@ fi
 if [ "$SIM" = "TNG" ]; then
   MODEL_NAME="TNG${MODEL_NAME}";
   FN_MSK="TNG300-3-Dark-mask-Nm=${GRID}-th=${TH}-sig=${SIG}.fvol";
-  if [ TRAN_L = 0.33]; then
+  if [ "$TRAN_L" = 0.33]; then
     FN_DEN="DM_DEN_snap99_Nm=${GRID}.fvol"; # full TNG density
   else
     FN_DEN="subs1_mass_Nm${GRID}_L${TRAN_L}_d_None_smooth.fvol"; # subhalo TNG density
@@ -78,7 +78,7 @@ if [ "$SIM" = "TNG" ]; then
 elif [ "$SIM" = "BOL" ]; then
   MODEL_NAME="Bolshoi${MODEL_NAME}";
   FN_MSK="Bolshoi_bolshoi.delta416_mask_Nm=${GRID}_sig=${SIG}_thresh=${TH}.fvol";
-  if [ TRAN_L = 0.122 ]; then
+  if [ "$TRAN_L" = 0.122 ]; then
     FN_DEN="Bolshoi_halo_CIC_${GRID}_L=${TRAN_L}.fvol"; # full BOL density
   else
     FN_DEN="Bolshoi_halo_CIC_${GRID}_L=${TRAN_L}.0.fvol"; # full/subhalo BOL density
