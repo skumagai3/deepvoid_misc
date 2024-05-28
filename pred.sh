@@ -11,6 +11,8 @@ Parameters:
   FN_DEN: Filepath for the density cube.
   FN_MSK: Filepath for the mask cube.
   GRID: Desired cube size on a side in voxels.
+  TH: Threshold for the mask. always 0.65
+  TL_FLAG: Transfer flag. 0 for base models, 1 for transfer learning models.
 END_COMMENT
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
 current_time=$(date +"%Y%m%d-%H%M"); echo "Current time: $current_time";
@@ -31,10 +33,11 @@ echo ">>> MODEL PARAMETERS:";
 SIM="TNG"; echo "Simulation: $SIM";
 BASE_L=0.33; echo "Base Lambda: $BASE_L";
 D=3; echo "Depth: $D";
-F=4; echo "Filters: $F";
-LOSS="FOCAL_CCE"; echo "Loss: $LOSS";
-GRID=256; echo "Grid: $GRID";
+F=32; echo "Filters: $F";
+LOSS="SCCE"; echo "Loss: $LOSS";
+GRID=512; echo "Grid: $GRID";
 TH=0.65; echo "Threshold: $TH";
+TL_FLAG=0; echo "Transfer Flag: $TL_FLAG";
 # sigma = 0.6 for 128, 1.2 for 256, 2.4 for 512
 if [ "$GRID" = "128" ]; then
   SIG=0.6;
@@ -52,20 +55,32 @@ elif [ "$LOSS" = "FOCAL_CCE" ]; then
 elif [ "$LOSS" = "SCCE" ]; then
   LOSS_SUFFIX="_SCCE"
 fi
-MODEL_NAME="TNG_D${D}-F${F}-Nm${GRID}-th${TH}-sig${SIG}-base_L${BASE_L}_${LOSS_SUFFIX}";
-echo "Model Name: $MODEL_NAME";
-# set mask filename:
-if [ "$SIM" = "TNG" ]; then
-  FN_MSK="TNG300-3-Dark-mask-Nm=${GRID}-th=${TH}-sig=${SIG}.fvol";
-elif [ "$SIM" = "BOL" ]; then
-  FN_MSK="Bolshoi_bolshoi.delta416_mask_Nm=${GRID}_sig=${SIG}_thresh=${TH}.fvol";
+
+### BASE MODELS ###
+MODEL_NAME="_D${D}-F${F}-Nm${GRID}-th${TH}-sig${SIG}-base_L${BASE_L}_${LOSS_SUFFIX}";
+### TL MODELS ###
+### CHOOSE LAMBDA TO PREDICT ON ###
+TRAN_L=7; echo "Transfer/pred Lambda: $TRAN_L";
+if [ "$TL_FLAG" = 1 ]; then
+  TL_TYPE="ENC_EO"; echo "Transfer type: $TL_TYPE";
+  MODEL_NAME="_D${D}-F${F}-Nm${GRID}-th${TH}-sig${SIG}-base_L${BASE_L}_${LOSS_SUFFIX}_${TL_TYPE}_tran_L${TRAN_L}";
 fi
+# set model and mask filenames:
+if [ "$SIM" = "TNG" ]; then
+  MODEL_NAME="TNG_${MODEL_NAME}";
+  FN_MSK="TNG300-3-Dark-mask-Nm=${GRID}-th=${TH}-sig=${SIG}.fvol";
+  if [ TRAN_L = 0.33]; then
+    FN_DEN="DM_DEN_snap99_Nm=${GRID}.fvol"; # full TNG density
+  else
+    FN_DEN="subs1_mass_Nm${GRID}_L${TRAN_L}_d_None_smooth.fvol"; # subhalo TNG density
+  fi
+elif [ "$SIM" = "BOL" ]; then
+  MODEL_NAME="Bolshoi_${MODEL_NAME}";
+  FN_MSK="Bolshoi_bolshoi.delta416_mask_Nm=${GRID}_sig=${SIG}_thresh=${TH}.fvol";
+  FN_DEN="Bolshoi_halo_CIC_${GRID}_L=${TRAN_L}.fvol"; # full/subhalo BOL density
+fi
+echo "Model Name: $MODEL_NAME";
 echo "Mask Field: $FN_MSK";
-### set density filename: ### 
-PRED_L=0.33; # lambda for the prediction
-FN_DEN="DM_DEN_snap99_Nm=${GRID}.fvol"; # full TNG density
-FN_DEN="subs1_mass_Nm${GRID}_L${PRED_L}_d_None_smooth.fvol"; # subhalo TNG density
-FN_DEN="Bolshoi_halo_CIC_${GRID}_L=${PRED_L}.fvol"; # full/subhalo BOL density
 echo "Density Field: $FN_DEN";
 
 python3 ./deepvoid_misc/DV_MULTI_PRED.py $ROOT_DIR $SIM $MODEL_NAME $FN_DEN $FN_MSK $GRID > ${output_fn} 2> ${error_fn};
