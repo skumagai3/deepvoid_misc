@@ -342,6 +342,7 @@ def load_dataset(file_in, SUBGRID, OFF, preproc='mm',sigma=None,return_int=False
 #---------------------------------------------------------
 # Focal loss function
 #---------------------------------------------------------
+@register_keras_serializable()
 def categorical_focal_loss(alpha, gamma=2.):
   """
   Softmax version of focal loss.
