@@ -30,12 +30,12 @@ NVIDIA_SMI_PID=$!;
 
 # BASE MODELS:
 echo ">>> MODEL PARAMETERS:";
-SIM="TNG"; echo "Simulation: $SIM";
-BASE_L=0.33; echo "Base Lambda: $BASE_L";
-D=3; echo "Depth: $D";
-F=32; echo "Filters: $F";
+SIM="BOL"; echo "Simulation: $SIM";
+BASE_L=0.122; echo "Base Lambda: $BASE_L";
+D=4; echo "Depth: $D";
+F=16; echo "Filters: $F";
 LOSS="SCCE"; echo "Loss: $LOSS";
-GRID=512; echo "Grid: $GRID";
+GRID=640; echo "Grid: $GRID";
 TH=0.65; echo "Threshold: $TH";
 TL_FLAG=0; echo "Transfer Flag: $TL_FLAG";
 ### CHOOSE LAMBDA TO PREDICT ON ###
@@ -53,9 +53,9 @@ echo "Sigma: $SIG";
 if [ "$LOSS" = "CCE" ]; then
   LOSS_SUFFIX=""
 elif [ "$LOSS" = "FOCAL_CCE" ]; then
-  LOSS_SUFFIX="_FOCAL"
+  LOSS_SUFFIX="FOCAL"
 elif [ "$LOSS" = "SCCE" ]; then
-  LOSS_SUFFIX="_SCCE"
+  LOSS_SUFFIX="SCCE"
 fi
 
 ### BASE MODELS ###
