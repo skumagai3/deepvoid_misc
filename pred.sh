@@ -38,6 +38,8 @@ LOSS="SCCE"; echo "Loss: $LOSS";
 GRID=512; echo "Grid: $GRID";
 TH=0.65; echo "Threshold: $TH";
 TL_FLAG=0; echo "Transfer Flag: $TL_FLAG";
+### CHOOSE LAMBDA TO PREDICT ON ###
+TRAN_L=7; echo "Transfer/pred Lambda: $TRAN_L";
 # sigma = 0.6 for 128, 1.2 for 256, 2.4 for 512
 if [ "$GRID" = "128" ]; then
   SIG=0.6;
@@ -59,8 +61,6 @@ fi
 ### BASE MODELS ###
 MODEL_NAME="_D${D}-F${F}-Nm${GRID}-th${TH}-sig${SIG}-base_L${BASE_L}_${LOSS_SUFFIX}";
 ### TL MODELS ###
-### CHOOSE LAMBDA TO PREDICT ON ###
-TRAN_L=7; echo "Transfer/pred Lambda: $TRAN_L";
 if [ "$TL_FLAG" = 1 ]; then
   TL_TYPE="ENC_EO"; echo "Transfer type: $TL_TYPE";
   MODEL_NAME="_D${D}-F${F}-Nm${GRID}-th${TH}-sig${SIG}-base_L${BASE_L}_${LOSS_SUFFIX}_${TL_TYPE}_tran_L${TRAN_L}";
