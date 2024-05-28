@@ -40,13 +40,14 @@ TH=0.65; echo "Threshold: $TH";
 TL_FLAG=1; echo "Transfer Flag: $TL_FLAG";
 ### CHOOSE LAMBDA TO PREDICT ON ###
 TRAN_L=7; echo "Transfer/pred Lambda: $TRAN_L";
-# sigma = 0.6 for 128, 1.2 for 256, 2.4 for 512
 if [ "$GRID" = "128" ]; then
   SIG=0.6;
 elif [ "$GRID" = "256" ]; then
   SIG=1.2;
 elif [ "$GRID" = "512" ]; then
   SIG=2.4;
+elif [ "$GRID" = "640" ]; then
+  SIG=0.916;
 fi
 echo "Sigma: $SIG";
 # if loss is CCE, add nothing. if loss is FOCAL_CCE, add FOCAL. if loss is SCCE, add SCCE.
@@ -77,7 +78,11 @@ if [ "$SIM" = "TNG" ]; then
 elif [ "$SIM" = "BOL" ]; then
   MODEL_NAME="Bolshoi${MODEL_NAME}";
   FN_MSK="Bolshoi_bolshoi.delta416_mask_Nm=${GRID}_sig=${SIG}_thresh=${TH}.fvol";
-  FN_DEN="Bolshoi_halo_CIC_${GRID}_L=${TRAN_L}.fvol"; # full/subhalo BOL density
+  if [ TRAN_L = 0.122 ]; then
+    FN_DEN="Bolshoi_halo_CIC_${GRID}_L=${TRAN_L}.fvol"; # full BOL density
+  else
+    FN_DEN="Bolshoi_halo_CIC_${GRID}_L=${TRAN_L}.0.fvol"; # full/subhalo BOL density
+  fi
 fi
 echo "Model Name: $MODEL_NAME";
 echo "Mask Field: $FN_MSK";
