@@ -64,7 +64,7 @@ MODEL_NAME="_D${D}-F${F}-Nm${GRID}-th${TH}-sig${SIG}-base_L${BASE_L}_${LOSS_SUFF
 ### TL MODELS ###
 if [ "$TL_FLAG" = 1 ]; then
   TL_TYPE="ENC_EO"; echo "Transfer type: $TL_TYPE";
-  MODEL_NAME="_D${D}-F${F}-Nm${GRID}-th${TH}-sig${SIG}-base_L${BASE_L}_${LOSS_SUFFIX}_${TL_TYPE}_tran_L${TRAN_L}";
+  MODEL_NAME="_D${D}-F${F}-Nm${GRID}-th${TH}-sig${SIG}-base_L${BASE_L}_${LOSS_SUFFIX}_TL_${TL_TYPE}_tran_L${TRAN_L}";
 fi
 # set model and mask filenames:
 if [ "$SIM" = "TNG" ]; then
