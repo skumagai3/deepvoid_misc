@@ -331,8 +331,9 @@ else:
     )
   )
 # 5/28 try caching to see if it speeds up training
-train_dataset = train_dataset.cache()
-test_dataset = test_dataset.cache()
+# NOTE: results in OOM on colab
+#train_dataset = train_dataset.cache()
+#test_dataset = test_dataset.cache()
 # shuffle and batch the datasets
 train_dataset = train_dataset.shuffle(buffer_size=1024).batch(batch_size)
 test_dataset = test_dataset.batch(batch_size)
