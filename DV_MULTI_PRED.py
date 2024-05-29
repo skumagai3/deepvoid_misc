@@ -180,6 +180,7 @@ else:
 #===============================================================================
 batch_size = 4
 Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False)
+print('>>> Finished predicting on validation data')
 #===============================================================================
 # set up score_dict. 
 # VAL_FLAG is True if scores are based on val set
