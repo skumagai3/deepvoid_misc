@@ -149,7 +149,6 @@ print('LOAD_MODEL_FLAG =',LOAD_MODEL_FLAG)
 print('LOAD_INTO_MEM =',LOAD_INTO_MEM)
 print('LOW_MEM_FLAG =',LOW_MEM_FLAG)
 print('MULTI_FLAG =',MULTI_FLAG)
-print()
 print('TENSORBOARD =',TENSORBOARD_FLAG)
 print('#############################################')
 #===============================================================
