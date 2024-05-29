@@ -28,7 +28,8 @@ from keras import backend as K
 from keras.losses import CategoricalCrossentropy, SparseCategoricalCrossentropy
 #from keras.losses import CategoricalFocalCrossentropy # not available in tf 2.10.0!!!
 from keras.callbacks import Callback, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, TensorBoard, CSVLogger
-from keras.saving import register_keras_serializable
+#from keras.saving import register_keras_serializable
+from keras import regularizers
 
 from sklearn.preprocessing import label_binarize
 from sklearn.metrics import precision_recall_fscore_support, balanced_accuracy_score, roc_auc_score, matthews_corrcoef
@@ -342,7 +343,7 @@ def load_dataset(file_in, SUBGRID, OFF, preproc='mm',sigma=None,return_int=False
 #---------------------------------------------------------
 # Focal loss function
 #---------------------------------------------------------
-@register_keras_serializable()
+#@register_keras_serializable()
 def categorical_focal_loss(alpha, gamma=2.):
   """
   Softmax version of focal loss.
@@ -372,7 +373,7 @@ def categorical_focal_loss(alpha, gamma=2.):
   """
 
   alpha = np.array(alpha, dtype=np.float32)
-  @register_keras_serializable()
+  #@register_keras_serializable()
   def categorical_focal_loss_fixed(y_true, y_pred):
     """
     :param y_true: A tensor of the same shape as `y_pred`
@@ -397,17 +398,19 @@ def categorical_focal_loss(alpha, gamma=2.):
 #---------------------------------------------------------
 # U-Net creator
 #---------------------------------------------------------
-def conv_block(input_tensor, filters, name, activation='relu', batch_normalization=True, dropout_rate=None, BN_scheme='last', DROP_scheme='last'):
+def conv_block(input_tensor, filters, name, activation='relu', batch_normalization=True, dropout_rate=None, BN_scheme='last', DROP_scheme='last', kernel_regularizer=None, kernel_initializer='he_normal'):
   '''
   Convolutional block for U-Net. 
   input_tensor: input tensor
   filters: int number of filters
   name: str name of block
-  activation: str activation function
+  activation: str activation function. Default is 'relu'. Options are 'relu', 'elu', 'selu', 'tanh', 'sigmoid', 'softmax', 'LeakyReLU'
   batch_normalization: bool whether or not to use batch normalization
   dropout_rate: float dropout rate
   BN_scheme: str batch normalization scheme. 'last' = last conv layer of block, 'all' = both layers, 'none' = no batch normalization.
   DROP_scheme: str dropout scheme. 'last' = last conv layer of block, 'all' = both layers, 'none' = no dropout. needs to be none if dropout_rate is 0.0
+  kernel_regularizer: float regularizer for kernel weights. Default is None. Only L2 regularization is supported.
+  kernel_initializer: str initializer for kernel weights. Default is 'he_normal'. Options are 'he_normal', 'he_uniform', 'glorot_normal', 'glorot_uniform', 'lecun_normal', 'lecun_uniform'.
 
   here we assume that BN layers should come after the conv layers and before the activation layers.
   we assume that drop layers should come after the activation layers.
@@ -416,14 +419,20 @@ def conv_block(input_tensor, filters, name, activation='relu', batch_normalizati
     DROP_scheme = 'none'
   if batch_normalization == False:
     BN_scheme = 'none'
+  if kernel_regularizer is not None:
+    kernel_regularizer = regularizers.l2(kernel_regularizer)
   
-  x = Conv3D(filters, kernel_size=(3, 3, 3), padding='same', name=name)(input_tensor)
+  x = Conv3D(filters, kernel_size=(3, 3, 3), padding='same',
+             name=name, kernel_regularizer=kernel_regularizer,
+             kernel_initializer=kernel_initializer)(input_tensor)
   if BN_scheme == 'all':
     x = BatchNormalization()(x)
   x = Activation(activation)(x)
   if DROP_scheme == 'all':
     x = Dropout(dropout_rate)(x)
-  x = Conv3D(filters, kernel_size=(3, 3, 3), padding='same', name=name+'_1')(x)
+  x = Conv3D(filters, kernel_size=(3, 3, 3), padding='same', 
+             name=name+'_1', kernel_regularizer=kernel_regularizer,
+             kernel_initializer=kernel_initializer)(x)
   if BN_scheme == 'all' or BN_scheme == 'last':
     x = BatchNormalization()(x)
   x = Activation(activation)(x)
@@ -431,7 +440,7 @@ def conv_block(input_tensor, filters, name, activation='relu', batch_normalizati
     x = Dropout(dropout_rate/2.0)(x) # only half the dropout rate here????
   return x
 #---------------------------------------------------------
-def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation='relu', last_activation='softmax', batch_normalization=False, BN_scheme='last', dropout_rate=None, DROP_scheme='last', model_name='3D_U_Net', report_params=False):
+def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation='relu', last_activation='softmax', batch_normalization=False, BN_scheme='last', dropout_rate=None, DROP_scheme='last', REG_FLAG = False, model_name='3D_U_Net', report_params=False):
   '''
   Constructs a 3D U-Net model for semantic segmentation.
 
@@ -446,6 +455,7 @@ def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation=
   - BN_scheme (str): The batch normalization scheme to use. 'all' = after each conv layer, 'last' = after last conv layer, 'none' = no batch normalization. Default is 'last'.
   - dropout_rate (float): The dropout rate to use after each convolutional layer. Default is None.
   - DROP_scheme (str): The dropout scheme to use. 'all' = after each conv layer, 'last' = after last conv layer, 'none' = no dropout. Default is 'last'.
+  - REG_FLAG (bool): Whether to use L2 regularization on the kernel weights. Default is False.
   - model_name (str): The name of the model. Default is '3D_U_Net'.
   - report_params (bool): Whether to return the number of trainable and non-trainable parameters. Default is False.
 
@@ -460,6 +470,9 @@ def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation=
   # check if batch normalization is False
   if batch_normalization == False:
     BN_scheme = 'none'
+  # check if L2 regularization is used
+  if REG_FLAG == False:
+    REG_FLAG = None
   # Input
   inputs = Input(input_shape)
   
@@ -469,12 +482,15 @@ def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation=
   for d in range(depth):
     filters = initial_filters * (2 ** d)
     block_name = f'encoder_block_D{d}'
-    x = conv_block(x, filters, block_name, activation, batch_normalization, dropout_rate, BN_scheme, DROP_scheme)
+    x = conv_block(x, filters, block_name, activation, batch_normalization,
+                   dropout_rate, BN_scheme, DROP_scheme, REG_FLAG)
     encoder_outputs.append(x)
     x = MaxPooling3D(pool_size=(2, 2, 2),name=block_name+'_maxpool')(x)
   
   # Bottom
-  x = conv_block(x, initial_filters * (2 ** depth), 'bottleneck', activation, batch_normalization, dropout_rate, BN_scheme, DROP_scheme)
+  x = conv_block(x, initial_filters * (2 ** depth), 'bottleneck', activation,
+                 batch_normalization, dropout_rate, BN_scheme, DROP_scheme,
+                 REG_FLAG)
   
   # Decoder path
   for d in reversed(range(depth)):
@@ -482,7 +498,9 @@ def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation=
     block_name = f'decoder_block_D{d}'
     x = UpSampling3D(size=(2, 2, 2),name=block_name+'_upsample')(x)
     x = Concatenate(axis=-1,name=block_name+'_concat')([x, encoder_outputs[d]])
-    x = conv_block(x, filters, block_name, activation, batch_normalization, dropout_rate, BN_scheme, DROP_scheme)
+    x = conv_block(x, filters, block_name, activation,
+                   batch_normalization, dropout_rate,
+                   BN_scheme, DROP_scheme, REG_FLAG)
   
   # Output
   outputs = Conv3D(num_classes, kernel_size=(1, 1, 1), name='output_conv')(x)

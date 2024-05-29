@@ -34,7 +34,6 @@ lr_patience = 10; print('learning rate patience: ',lr_patience)
 N_epochs_metric = 10
 print(f'classification metrics calculated every {N_epochs_metric} epochs')
 KERNEL = (3,3,3)
-LR = 3e-3 # increased to 3e-3 since we have LRreduceonplateau anyway
 #===============================================================
 # Set random seed
 #===============================================================
@@ -75,6 +74,8 @@ Optional Flags:
   that will load the data in batches instead of all at once. Default is False.
   --BATCH_SIZE: Batch size. Default is 4.
   --EPOCHS: Number of epochs to train for. Default is 500.
+  --LEARNING_RATE: Initial learning rate. Default is 0.001.
+  --REGULARIZE_FLAG: If set, use L2 regularization. Default is False.
   --TENSORBOARD_FLAG: If set, use tensorboard. Default is False.
 '''
 parser = argparse.ArgumentParser(
@@ -103,6 +104,8 @@ opt_group.add_argument('--LOAD_MODEL_FLAG', action='store_true', help='If set, l
 opt_group.add_argument('--LOAD_INTO_MEM', action='store_true', help='If set, load all training and test data into memory. Default is False, aka to load from train, test .npy files into a tf.data.Dataset object.')
 opt_group.add_argument('--BATCH_SIZE', type=int, default=8, help='Batch size. Default is 4.')
 opt_group.add_argument('--EPOCHS', type=int, default=500, help='Number of epochs to train for. Default is 500.')
+opt_group.add_argument('--LEARNING_RATE', type=float, default=0.001, help='Initial learning rate. Default is 3e-3.')
+opt_group.add_argument('--REGULARIZE_FLAG', action='store_true', help='If set, use L2 regularization.')
 opt_group.add_argument('--TENSORBOARD_FLAG', action='store_true', help='If set, use tensorboard.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
@@ -123,6 +126,8 @@ LOAD_MODEL_FLAG = args.LOAD_MODEL_FLAG
 LOAD_INTO_MEM = args.LOAD_INTO_MEM
 batch_size = args.BATCH_SIZE
 epochs = args.EPOCHS
+LR = args.LEARNING_RATE
+REGULARIZE_FLAG = args.REGULARIZE_FLAG
 TENSORBOARD_FLAG = args.TENSORBOARD_FLAG
 print('#############################################')
 print('>>> Running DV_MULTI_TRAIN.py')
@@ -141,6 +146,9 @@ if LOSS == 'FOCAL_CCE':
 print('MULTI_FLAG =',MULTI_FLAG)
 print('GRID =',GRID)
 print('BATCH_SIZE =',batch_size)
+print('EPOCHS =',epochs)
+print('LEARNING_RATE =',LR)
+print('L2_REGULARIZATION =',REGULARIZE_FLAG)
 print('#############################################')
 #===============================================================
 # set paths
@@ -426,7 +434,8 @@ if MULTI_FLAG:
       model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
                           batch_normalization=BATCHNORM,
                           dropout_rate=DROPOUT,
-                          model_name=MODEL_NAME)
+                          model_name=MODEL_NAME,
+                          REG_FLAG=REGULARIZE_FLAG)
       model.compile(optimizer=nets.Adam(learning_rate=LR),
                                         loss=loss,
                                         metrics=metrics)
@@ -439,7 +448,8 @@ else:
     model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
                           batch_normalization=BATCHNORM,
                           dropout_rate=DROPOUT,
-                          model_name=MODEL_NAME)
+                          model_name=MODEL_NAME,
+                          REG_FLAG=REGULARIZE_FLAG)
     model.compile(optimizer=nets.Adam(learning_rate=LR),
                                           loss=loss,
                                           metrics=metrics)

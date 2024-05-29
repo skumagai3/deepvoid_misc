@@ -26,6 +26,8 @@ Optional Flags:
   --LOAD_INTO_MEM: If set to 1, load the entire dataset into memory. Default is 0.
   --BATCH_SIZE: Batch size for training. Default is 4.
   --EPOCHS: Number of epochs to train. Default is 500.
+  --LEARNING_RATE: Learning rate for the optimizer. Default is 0.001.
+  --REG_FLAG: If set to 1, use L2 regularization. Default is 0.
   --TENSORBOARD: If set, use TensorBoard. Default is to not.
 END_COMMENT
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
@@ -66,6 +68,8 @@ LOAD_MODEL=0; echo "Load Model: $LOAD_MODEL";
 LOAD_INTO_MEM=0; echo "Load into memory: $LOAD_INTO_MEM";
 BATCH_SIZE=4; echo "Batch Size: $BATCH_SIZE";
 EPOCHS=500; echo "Epochs: $EPOCHS";
+LEARNING_RATE=0.001; echo "Learning Rate: $LEARNING_RATE";
+REG_FLAG=1; echo "Regularization: $REG_FLAG";
 TENSORBOARD=0; echo "TensorBoard: $TENSORBOARD";
 
 # Constructing command line arguments dynamically
@@ -80,6 +84,8 @@ CMD_ARGS="$ROOT_DIR $SIM $L $D $F $LOSS $GRID"
 [ "$LOAD_INTO_MEM" -eq 1 ] && CMD_ARGS+=" --LOAD_INTO_MEM"
 CMD_ARGS+=" --BATCH_SIZE $BATCH_SIZE"
 CMD_ARGS+=" --EPOCHS $EPOCHS"
+CMD_ARGS+=" --LEARNING_RATE $LEARNING_RATE"
+[ "$REG_FLAG" -eq 1 ] && CMD_ARGS+=" --REG_FLAG"
 [ "$TENSORBOARD" -eq 1 ] && CMD_ARGS+=" --TENSORBOARD"
 echo "Command line arguments: $CMD_ARGS";
 
