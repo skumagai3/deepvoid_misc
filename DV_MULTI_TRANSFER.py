@@ -22,8 +22,8 @@ nets.K.set_image_data_format('channels_last')
 #===============================================================
 # Set training parameters:
 #===============================================================
-patience = 50; print('patience: ',patience)
-lr_patience = 20; print('learning rate patience: ',lr_patience)
+patience = 25; print('patience: ',patience)
+lr_patience = 10; print('learning rate patience: ',lr_patience)
 N_epochs_metric = 10
 print(f'classification metrics calculated every {N_epochs_metric} epochs')
 KERNEL = (3,3,3)

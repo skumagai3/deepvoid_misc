@@ -29,9 +29,8 @@ nets.K.set_image_data_format('channels_last')
 # less subcubes loaded into memory at once.
 LOW_MEM_FLAG = True 
 epochs = 500; print('epochs: ',epochs)
-patience = 50; print('patience: ',patience)
-lr_patience = 20; print('learning rate patience: ',lr_patience)
-# batch_size = 8; print('batch_size: ',batch_size) # set in arg parsing
+patience = 25; print('patience: ',patience)
+lr_patience = 10; print('learning rate patience: ',lr_patience)
 N_epochs_metric = 10
 print(f'classification metrics calculated every {N_epochs_metric} epochs')
 KERNEL = (3,3,3)
@@ -331,6 +330,9 @@ else:
       tf.TensorSpec(shape=(SUBGRID,SUBGRID,SUBGRID,last_dim),dtype=tf.float32)
     )
   )
+# 5/28 try caching to see if it speeds up training
+train_dataset = train_dataset.cache()
+test_dataset = test_dataset.cache()
 # shuffle and batch the datasets
 train_dataset = train_dataset.shuffle(buffer_size=1024).batch(batch_size)
 test_dataset = test_dataset.batch(batch_size)
