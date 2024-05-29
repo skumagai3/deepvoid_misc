@@ -15,9 +15,9 @@ import NETS_LITE as nets
 import absl.logging
 import plotter
 absl.logging.set_verbosity(absl.logging.ERROR)
-print('TensorFlow version: ', tf.__version__)
-#print('Keras version: ', tf.keras.__version__)
-print('CUDA?: ',tf.test.is_built_with_cuda())
+print('TensorFlow version:', tf.__version__)
+#print('Keras version:', tf.keras.__version__)
+print('CUDA?:',tf.test.is_built_with_cuda())
 nets.K.set_image_data_format('channels_last')
 # only use with Nvidia GPUs with compute capability >= 7.0!
 #from tensorflow.keras import mixed_precision  # type: ignore
@@ -25,19 +25,16 @@ nets.K.set_image_data_format('channels_last')
 #===============================================================
 # Set training parameters:
 #===============================================================
-# set to True if you want to use less memory, but no metrics and 
-# less subcubes loaded into memory at once.
-LOW_MEM_FLAG = True 
-epochs = 500; print('epochs: ',epochs)
-patience = 25; print('patience: ',patience)
-lr_patience = 10; print('learning rate patience: ',lr_patience)
+epochs = 500; print('epochs:',epochs)
+patience = 25; print('patience:',patience)
+lr_patience = 10; print('learning rate patience:',lr_patience)
 N_epochs_metric = 10
 print(f'classification metrics calculated every {N_epochs_metric} epochs')
 KERNEL = (3,3,3)
 #===============================================================
 # Set random seed
 #===============================================================
-seed = 12
+seed = 12; print('Setting random seed:',seed)
 np.random.seed(seed)
 tf.random.set_seed(seed)
 #===============================================================
@@ -136,19 +133,24 @@ print('>>> Parameters:')
 print('Simulation =', SIM); 
 print('L =',L); 
 print('DEPTH =',DEPTH); print('FILTERS =',FILTERS)
-print('UNIFORM_FLAG =',UNIFORM_FLAG)
+print('GRID =',GRID)
 print('BATCHNORM =',BATCHNORM)
 print('DROPOUT =',DROPOUT)
+print('L2_REGULARIZATION =',REGULARIZE_FLAG)
+print('LEARNING_RATE =',LR)
 print('LOSS =',LOSS)
 if LOSS == 'FOCAL_CCE':
   print('FOCAL_ALPHA =',alpha)
   print('FOCAL_GAMMA =',gamma)
-print('MULTI_FLAG =',MULTI_FLAG)
-print('GRID =',GRID)
 print('BATCH_SIZE =',batch_size)
 print('EPOCHS =',epochs)
-print('LEARNING_RATE =',LR)
-print('L2_REGULARIZATION =',REGULARIZE_FLAG)
+print('UNIFORM_FLAG =',UNIFORM_FLAG)
+print('LOAD_MODEL_FLAG =',LOAD_MODEL_FLAG)
+print('LOAD_INTO_MEM =',LOAD_INTO_MEM)
+print('LOW_MEM_FLAG =',LOW_MEM_FLAG)
+print('MULTI_FLAG =',MULTI_FLAG)
+print()
+print('TENSORBOARD =',TENSORBOARD_FLAG)
 print('#############################################')
 #===============================================================
 # set paths
@@ -541,6 +543,7 @@ epochs = len(history.epoch)
 scores['EPOCHS'] = epochs
 scores['BATCHSIZE'] = batch_size
 scores['LR'] = LR
+scores['REG_FLAG'] = REGULARIZE_FLAG
 scores['TRAINABLE_PARAMS'] = trainable_ps
 scores['NONTRAINABLE_PARAMS'] = nontrainable_ps
 scores['TOTAL_PARAMS'] = trainable_ps + nontrainable_ps
