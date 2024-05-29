@@ -343,9 +343,11 @@ else:
 #train_dataset = train_dataset.cache()
 #test_dataset = test_dataset.cache()
 # shuffle and batch the datasets
+print('>>> Shuffling and batching datasets')
 train_dataset = train_dataset.shuffle(buffer_size=1024).batch(batch_size)
 test_dataset = test_dataset.batch(batch_size)
 # prefetch the datasets
+print('>>> Prefetching datasets')
 train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 test_dataset = test_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 #===============================================================
@@ -374,26 +376,40 @@ DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 # Save hyperparameters to txt file
 #===============================================================
 hp_dict = {}
+hp_dict['DATE_CREATED'] = DATE
+hp_dict['MODEL_NAME'] = MODEL_NAME
 hp_dict['notes'] = f'trained on multi-class mask, threshold={th}, sigma={sig}, L={L}, Nm={GRID}'
+hp_dict['KERNEL'] = KERNEL
 if SIM == 'TNG':
   hp_dict['Simulation trained on:'] = 'TNG300-3-Dark'
 elif SIM == 'BOL':
   hp_dict['Simulation trained on:'] = 'Bolshoi'
 hp_dict['N_CLASSES'] = N_CLASSES
-hp_dict['MODEL_NAME'] = MODEL_NAME
-hp_dict['FILTERS'] = FILTERS
-hp_dict['KERNEL'] = KERNEL
-hp_dict['LR'] = LR
 hp_dict['DEPTH'] = DEPTH
+hp_dict['FILTERS'] = FILTERS
+hp_dict['LR'] = LR
 hp_dict['LOSS'] = LOSS
 if LOSS == 'FOCAL_CCE':
   hp_dict['focal_alpha'] = alpha
   hp_dict['focal_gamma'] = gamma
 hp_dict['BATCHNORM'] = str(BATCHNORM)
 hp_dict['DROPOUT'] = str(DROPOUT)
-hp_dict['DATE_CREATED'] = DATE
+hp_dict['REGULARIZE_FLAG'] = str(REGULARIZE_FLAG)
+hp_dict['BATCH_SIZE'] = batch_size
+hp_dict['MAX_EPOCHS'] = epochs
+hp_dict['PATIENCE'] = patience
+hp_dict['LR_PATIENCE'] = lr_patience
 hp_dict['FILE_DEN'] = FILE_DEN
 hp_dict['FILE_MASK'] = FILE_MASK
+hp_dict['FILE_X_TRAIN'] = FILE_X_TRAIN
+hp_dict['FILE_Y_TRAIN'] = FILE_Y_TRAIN
+hp_dict['FILE_X_TEST'] = FILE_X_TEST
+hp_dict['FILE_Y_TEST'] = FILE_Y_TEST
+hp_dict['GRID'] = GRID
+hp_dict['SUBGRID'] = SUBGRID
+hp_dict['OFF'] = OFF
+hp_dict['UNIFORM_FLAG'] = UNIFORM_FLAG
+print('>>> Model Hyperparameters:')
 for key in hp_dict.keys():
   print(key,hp_dict[str(key)])
 #===============================================================
@@ -498,6 +514,7 @@ history = model.fit(train_dataset, epochs=epochs, validation_data=test_dataset, 
 #===============================================================
 # Check if figs directory exists, if not, create it:
 #===============================================================
+print('>>> Plotting training metrics')
 FIG_DIR = FILE_FIG + MODEL_NAME + '/'
 if not os.path.exists(FIG_DIR):
   os.makedirs(FIG_DIR)
@@ -538,9 +555,11 @@ if LOSS == 'FOCAL_CCE':
 # Predict, record metrics, and plot metrics on TEST DATA
 #===============================================================
 if LOAD_INTO_MEM:
+  print('>>> Predicting on test data')
   Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False)
   # since output argmax = False, Y_pred shape = [N_samples,SUBGRID,SUBGRID,SUBGRID,N_CLASSES]
 else:
+  print('>>> Predicting on test data, loading in batches')
   Y_pred_list = []; Y_test_list = []
   for X_batch, Y_batch in test_dataset:
     Y_pred_batch = model.predict(X_batch,verbose=0)
@@ -553,12 +572,17 @@ if LOSS != 'SCCE':
   # undo one-hot encoding for input into save_scores_from_fvol
   Y_test = np.argmax(Y_test,axis=-1)
   Y_test = np.expand_dims(Y_test,axis=-1)
+print('Y_pred shape:',Y_pred.shape)
+print('Y_test shape:',Y_test.shape)
+# save scores
+print('>>> Calculating scores')
 nets.save_scores_from_fvol(Y_test,Y_pred,
                            FILE_OUT+MODEL_NAME,FIG_DIR,
                            scores,
                            VAL_FLAG=VAL_FLAG)
 # save score_dict by appending to the end of the csv.
 # csv will be at ROOT_DIR/model_scores.csv
+print('>>> Saving scores to ROOT_DIR/model_scores.csv')
 nets.save_scores_to_csv(scores,ROOT_DIR+'model_scores.csv')
 #========================================================================
 # Predict and plot and record metrics on TRAINING DATA
@@ -566,6 +590,7 @@ nets.save_scores_to_csv(scores,ROOT_DIR+'model_scores.csv')
 # data cube and save slices of the predicted mask 
 # for slice plotting:
 #========================================================================
+print('>>> Predicting on training data and plotting slices')
 if SIM == 'TNG':
   nets.save_scores_from_model(FILE_DEN, FILE_MASK, FILE_OUT+MODEL_NAME, FIG_DIR, FILE_PRED,
                               GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,TRAIN_SCORE=False)
@@ -581,8 +606,8 @@ print('Interparticle spacing model trained on:',L)
 print(f'Model parameters: Depth={DEPTH}, Filters={FILTERS}, Uniform={UNIFORM_FLAG}, BatchNorm={BATCHNORM}, Dropout={DROPOUT}')
 print(f'Loss function: {LOSS}')
 print('Date created:',DATE)
-print('Total trainable parameters:',trainable_ps)
-print('Total nontrainable parameters:',nontrainable_ps)
-print('Total parameters:',trainable_ps+nontrainable_ps)
+#print('Total trainable parameters:',trainable_ps)
+#print('Total nontrainable parameters:',nontrainable_ps)
+#print('Total parameters:',trainable_ps+nontrainable_ps)
 print('>>> Finished training!!!')
 #===============================================================
