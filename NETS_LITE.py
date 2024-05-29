@@ -983,7 +983,7 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
   MODEL_NAME = FILE_MODEL.split('/')[-1]
   DELTA_NAME = FILE_DEN.split('/')[-1]
   FILE_HPTXT = FILE_MODEL + '_hps.txt'
-  BATCH_SIZE = 8 # NOTE can fiddle w this
+  BATCH_SIZE = 4 # NOTE can fiddle w this
   ### load model:
   if COMPILE:
     try: 

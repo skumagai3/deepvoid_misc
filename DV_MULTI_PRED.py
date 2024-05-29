@@ -178,7 +178,7 @@ else:
 # predict
 # remember that Y_pred will have shape (N_samples, SUBGRID, SUBGRID, SUBGRID, 4)
 #===============================================================================
-batch_size = 8
+batch_size = 4
 Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False)
 #===============================================================================
 # set up score_dict. 
@@ -202,13 +202,17 @@ nets.save_scores_from_fvol(Y_test,Y_pred,FILE_OUT+MODEL_NAME,
                            scores,
                            VAL_FLAG)
 nets.save_scores_to_csv(scores,ROOT_DIR+'model_scores.csv')
+print('>>> Saved scores!')
+del X_test, Y_test, Y_pred
+del scores
 #===============================================================================
 # plot slices from training data:
 #===============================================================================
+print('>>> Plotting slices from training data...')
 nets.save_scores_from_model(FILE_DEN, FILE_MSK, FILE_OUT+MODEL_NAME, FIG_OUT,
                             FILE_PRED, GRID=GRID, SUBGRID=SUBGRID, OFF=OFF,
                             BOXSIZE=BoxSize, BOLSHOI_FLAG=BOLSHOI_FLAG, 
-                            TRAIN_SCORE=False)
+                            TRAIN_SCORE=False, COMPILE=False)
 #===============================================================================
 # rotate training data (delta, mask) by 45 degrees and score again. 
 # ORTHO_FLAG = False.... VAL_FLAG = False
