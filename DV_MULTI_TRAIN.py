@@ -524,6 +524,7 @@ epochs = len(history.epoch)
 scores['EPOCHS'] = epochs
 scores['BATCHSIZE'] = batch_size
 scores['LR'] = LR
+scores['REG_FLAG'] = REGULARIZE_FLAG
 scores['TRAINABLE_PARAMS'] = trainable_ps
 scores['NONTRAINABLE_PARAMS'] = nontrainable_ps
 scores['TOTAL_PARAMS'] = trainable_ps + nontrainable_ps
