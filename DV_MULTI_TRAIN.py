@@ -460,6 +460,7 @@ elif LOSS == 'DICE_VOID':
 ONE_HOT_FLAG = True # for compute metrics callback
 if LOSS == 'SCCE':
   ONE_HOT_FLAG = False
+print('>>> One-hot flag:',ONE_HOT_FLAG)
 # add more metrics here, may slow down training?
 more_metrics = [nets.MCC_keras(int_labels=~ONE_HOT_FLAG),nets.balanced_accuracy_keras(int_labels=~ONE_HOT_FLAG)]
 if not LOW_MEM_FLAG:

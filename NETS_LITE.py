@@ -543,8 +543,8 @@ def PR_F1_keras(int_labels=True):
     Returns: tuple of precision, recall, F1 score. (macro-avg)
     '''
     if not int_labels:
-      y_true = K.one_hot(K.argmax(y_true, axis=-1), 4)
-    y_pred = K.one_hot(K.argmax(y_pred, axis=-1), 4)
+      y_true = K.argmax(y_true, axis=-1)
+    y_pred = K.argmax(y_pred, axis=-1)
     TP = K.sum(K.cast(y_true * y_pred, 'float'), axis=0)
     FP = K.sum(K.cast((1-y_true) * y_pred, 'float'), axis=0)
     FN = K.sum(K.cast(y_true * (1-y_pred), 'float'), axis=0)
@@ -565,8 +565,8 @@ def PR_F1_micro_keras(int_labels=True):
     Returns: tuple of precision, recall, F1 score. (micro-avg)
     '''
     if not int_labels:
-      y_true = K.one_hot(K.argmax(y_true, axis=-1), 4)
-    y_pred = K.one_hot(K.argmax(y_pred, axis=-1), 4)
+      y_true = K.argmax(y_true, axis=-1)
+    y_pred = K.argmax(y_pred, axis=-1)
     TP = K.sum(K.cast(y_true * y_pred, 'float'))
     FP = K.sum(K.cast((1-y_true) * y_pred, 'float'))
     FN = K.sum(K.cast(y_true * (1-y_pred), 'float'))
@@ -586,8 +586,8 @@ def precision_keras(num_classes=4, int_labels=True):
     Returns: precision. tf.Tensor.
     '''
     if not int_labels:
-      y_true = K.one_hot(K.argmax(y_true, axis=-1), num_classes)
-    y_pred = K.one_hot(K.argmax(y_pred, axis=-1), num_classes)
+      y_true = K.argmax(y_true, axis=-1)
+    y_pred = K.argmax(y_pred, axis=-1)
     TP = K.sum(y_true * y_pred, axis=0)
     FP = K.sum((1-y_true) * y_pred, axis=0)
     precision = K.mean(TP / (TP + FP + K.epsilon()))
@@ -604,8 +604,8 @@ def recall_keras(num_classes=4, int_labels=True):
     Returns: recall. tf.Tensor.
     '''
     if not int_labels:
-      y_true = K.one_hot(K.argmax(y_true, axis=-1), num_classes)
-    y_pred = K.one_hot(K.argmax(y_pred, axis=-1), num_classes)
+      y_true = K.argmax(y_true, axis=-1)
+    y_pred = K.argmax(y_pred, axis=-1)
     TP = K.sum(y_true * y_pred, axis=0)
     FN = K.sum(y_true * (1-y_pred), axis=0)
     recall = K.mean(TP / (TP + FN + K.epsilon()))
@@ -637,8 +637,8 @@ def precision_micro_keras(num_classes=4, int_labels=True):
     Returns: micro precision. tf.Tensor.
     '''
     if not int_labels:
-      y_true = K.one_hot(K.argmax(y_true, axis=-1), num_classes)
-    y_pred = K.one_hot(K.argmax(y_pred, axis=-1), num_classes)
+      y_true = K.argmax(y_true, axis=-1)
+    y_pred = K.argmax(y_pred, axis=-1)
     TP = K.sum(y_true * y_pred)
     FP = K.sum((1-y_true) * y_pred)
     precision = TP / (TP + FP + K.epsilon())
@@ -655,8 +655,8 @@ def recall_micro_keras(num_classes=4, int_labels=True):
     Returns: micro recall. tf.Tensor.
     '''
     if not int_labels:
-      y_true = K.one_hot(K.argmax(y_true, axis=-1), num_classes)
-    y_pred = K.one_hot(K.argmax(y_pred, axis=-1), num_classes)
+      y_true = K.argmax(y_true, axis=-1)
+    y_pred = K.argmax(y_pred, axis=-1)
     TP = K.sum(y_true * y_pred)
     FN = K.sum(y_true * (1-y_pred))
     recall = TP / (TP + FN + K.epsilon())
@@ -688,8 +688,8 @@ def MCC_keras(num_classes=4, int_labels=True):
     Returns: Matthews correlation coefficient.
     '''
     if not int_labels:
-      y_true = K.one_hot(K.argmax(y_true, axis=-1), num_classes)
-    y_pred = K.one_hot(K.argmax(y_pred, axis=-1), num_classes)
+      y_true = K.argmax(y_true, axis=-1)
+    y_pred = K.argmax(y_pred, axis=-1)
     TP = K.sum(K.cast(y_true * y_pred, 'float'), axis=0)
     TN = K.sum(K.cast((1-y_true) * (1-y_pred), 'float'), axis=0)
     FP = K.sum(K.cast((1-y_true) * y_pred, 'float'), axis=0)
@@ -697,7 +697,7 @@ def MCC_keras(num_classes=4, int_labels=True):
     numerator = TP * TN - FP * FN
     denominator = K.sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN) + K.epsilon())
     mcc = numerator / denominator
-    #mcc = K.switch(tf.math.is_nan(mcc), K.zeros_like(mcc), mcc)  # Handle NaN
+    mcc = K.switch(tf.math.is_nan(mcc), K.zeros_like(mcc), mcc)  # Handle NaN
     return mcc
   return MCC
 def balanced_accuracy_keras(num_classes=4, int_labels=True):
@@ -711,8 +711,8 @@ def balanced_accuracy_keras(num_classes=4, int_labels=True):
     Returns: balanced accuracy.
     '''
     if not int_labels:
-      y_true = K.one_hot(K.argmax(y_true, axis=-1), num_classes)
-    y_pred = K.one_hot(K.argmax(y_pred, axis=-1), num_classes)
+      y_true = K.argmax(y_true, axis=-1)
+    y_pred = K.argmax(y_pred, axis=-1)
     TP = K.sum(K.cast(y_true * y_pred, 'float'), axis=0)
     FN = K.sum(K.cast(y_true * (1-y_pred), 'float'), axis=0)
     recall_per_class = TP / (TP + FN + K.epsilon())
@@ -731,8 +731,8 @@ def void_PR_F1_keras(num_classes=4, int_labels=True):
     Returns: tuple of precision, recall, F1 score for the void class.
     '''
     if not int_labels:
-      y_true = K.one_hot(K.argmax(y_true, axis=-1), num_classes)
-    y_pred = K.one_hot(K.argmax(y_pred, axis=-1), num_classes)
+      y_true = K.argmax(y_true, axis=-1)
+    y_pred = K.argmax(y_pred, axis=-1)
     void_true = K.cast(K.equal(y_true, 0), 'float')
     void_pred = K.cast(K.equal(y_pred, 0), 'float')
     TP = K.sum(void_true * void_pred)
@@ -754,8 +754,8 @@ def void_F1_keras(num_classes=4, int_labels=True):
     Returns: F1 score for the void class.
     '''
     if not int_labels:
-      y_true = K.one_hot(K.argmax(y_true, axis=-1), num_classes)
-    y_pred = K.one_hot(K.argmax(y_pred, axis=-1), num_classes)
+      y_true = K.argmax(y_true, axis=-1)
+    y_pred = K.argmax(y_pred, axis=-1)
     void_true = K.cast(K.equal(y_true, 0), 'float')
     void_pred = K.cast(K.equal(y_pred, 0), 'float')
     TP = K.sum(void_true * void_pred)
@@ -778,8 +778,8 @@ def true_wall_pred_as_void_keras(num_classes=4, int_labels=True):
     Returns: true wall predicted as void.
     '''
     if not int_labels:
-      y_true = K.one_hot(K.argmax(y_true, axis=-1), num_classes)
-    y_pred = K.one_hot(K.argmax(y_pred, axis=-1), num_classes)
+      y_true = K.argmax(y_true, axis=-1)
+    y_pred = K.argmax(y_pred, axis=-1)
     wall_true = K.cast(K.equal(y_true, 1), 'float')
     void_pred = K.cast(K.equal(y_pred, 0), 'float')
     true_wall_pred_as_void = K.sum(wall_true * (1-void_pred) * void_pred) / (K.sum(wall_true) + K.epsilon())
