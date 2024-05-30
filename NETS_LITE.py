@@ -546,6 +546,39 @@ def PR_F1_keras(y_true, y_pred):
   recall = TP / (TP + FN + K.epsilon())
   f1 = 2 * precision * recall / (precision + recall + K.epsilon())
   return precision, recall, f1
+def recall_keras(y_true, y_pred):
+  '''
+  Recall metric using keras.backend functions.
+  y_true: true labels
+  y_pred: predicted labels
+  Returns: recall.
+  '''
+  TP = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)), axis=0)
+  TOTAL_P = K.sum(K.round(K.clip(y_true, 0, 1)), axis=0)
+  recall = TP / (TOTAL_P + K.epsilon())
+  return recall
+def precision_keras(y_true, y_pred):
+  '''
+  Precision metric using keras.backend functions.
+  y_true: true labels
+  y_pred: predicted labels
+  Returns: precision.
+  '''
+  TP = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)), axis=0)
+  PRED_P = K.sum(K.round(K.clip(y_pred, 0, 1)), axis=0)
+  precision = TP / (PRED_P + K.epsilon())
+  return precision
+def F1_keras(y_true, y_pred):
+  '''
+  F1 score metric using keras.backend functions.
+  y_true: true labels
+  y_pred: predicted labels
+  Returns: F1 score.
+  '''
+  prec = precision_keras(y_true, y_pred)
+  rec = recall_keras(y_true, y_pred)
+  f1 = 2 * (prec * rec) / (prec + rec + K.epsilon())
+  return f1
 def MCC_keras(y_true, y_pred):
   '''
   Matthews correlation coefficient using keras.backend functions.
