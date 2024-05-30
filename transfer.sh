@@ -41,7 +41,6 @@ echo "Output file: $output_fn";
 echo "Error file: $error_fn";
 nvidia-smi --query-gpu=timestamp,name,memory.used,memory.free,memory.total,temperature.gpu,pstate --format=csv -l 30 > ${mem_report_fn} &
 NVIDIA_SMI_PID=$!;
-
 #######################################################################
 ### Select SIM: TNG/Bolshoi
 SIM="BOL"; 

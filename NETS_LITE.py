@@ -30,6 +30,7 @@ from keras.losses import CategoricalCrossentropy, SparseCategoricalCrossentropy
 from keras.callbacks import Callback, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, TensorBoard, CSVLogger
 #from keras.saving import register_keras_serializable
 from keras import regularizers
+from tensorflow.keras import metrics
 
 from sklearn.preprocessing import label_binarize
 from sklearn.metrics import precision_recall_fscore_support, balanced_accuracy_score, roc_auc_score, matthews_corrcoef
@@ -524,6 +525,122 @@ def save_dict_to_text(dictionary, file_path):
   with open(file_path, 'w') as file:
     for key, value in dictionary.items():
       file.write(f'{key}: {value}\n')
+#---------------------------------------------------------
+# Better, faster, tf native metric calculations:
+# Functions for F1, precision, recall, MCC, etc. written
+# using keras.backend functions.
+#---------------------------------------------------------
+all_TF_metrics = ['f1','precision','recall','balanced_accuracy','matt_corrcoef','void_f1','void_precision','void_recall','true_wall_pred_as_void']
+required_TF_metrics = ['f1','precision','recall','matt_corrcoef']
+def PR_F1_keras(y_true, y_pred):
+  '''
+  Precision, Recall, F1 score metrics using keras.backend functions.
+  y_true: true labels
+  y_pred: predicted labels
+  Returns: tuple of precision, recall, F1 score.
+  '''
+  TP = K.sum(K.cast(y_true * y_pred, 'float'), axis=0)
+  FP = K.sum(K.cast((1-y_true) * y_pred, 'float'), axis=0)
+  FN = K.sum(K.cast(y_true * (1-y_pred), 'float'), axis=0)
+  precision = TP / (TP + FP + K.epsilon())
+  recall = TP / (TP + FN + K.epsilon())
+  f1 = 2 * precision * recall / (precision + recall + K.epsilon())
+  return precision, recall, f1
+def MCC_keras(y_true, y_pred):
+  '''
+  Matthews correlation coefficient using keras.backend functions.
+  y_true: true labels
+  y_pred: predicted labels
+  Returns: Matthews correlation coefficient.
+  '''
+  TP = K.sum(K.cast(y_true * y_pred, 'float'), axis=0)
+  TN = K.sum(K.cast((1-y_true) * (1-y_pred), 'float'), axis=0)
+  FP = K.sum(K.cast((1-y_true) * y_pred, 'float'), axis=0)
+  FN = K.sum(K.cast(y_true * (1-y_pred), 'float'), axis=0)
+  numerator = TP * TN - FP * FN
+  denominator = K.sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN) + K.epsilon())
+  mcc = numerator / denominator
+  return mcc
+def balanced_accuracy_keras(y_true, y_pred):
+  '''
+  Balanced accuracy using keras.backend functions.
+  y_true: true labels
+  y_pred: predicted labels
+  Returns: balanced accuracy.
+  '''
+  TP = K.sum(K.cast(y_true * y_pred, 'float'), axis=0)
+  TN = K.sum(K.cast((1-y_true) * (1-y_pred), 'float'), axis=0)
+  FP = K.sum(K.cast((1-y_true) * y_pred, 'float'), axis=0)
+  FN = K.sum(K.cast(y_true * (1-y_pred), 'float'), axis=0)
+  sensitivity = TP / (TP + FN + K.epsilon())
+  specificity = TN / (TN + FP + K.epsilon())
+  balanced_accuracy = (sensitivity + specificity) / 2
+  return balanced_accuracy
+def void_PR_F1_keras(y_true, y_pred):
+  '''
+  Precision, Recall, F1 score for the void class [0] using keras
+  backend functions.
+  y_true: true labels
+  y_pred: predicted labels
+  Returns: tuple of precision, recall, F1 score for the void class.
+  '''
+  void_true = y_true[:,0]
+  void_pred = y_pred[:,0]
+  TP = K.sum(K.cast(void_true * void_pred, 'float'))
+  FP = K.sum(K.cast((1-void_true) * void_pred, 'float'))
+  FN = K.sum(K.cast(void_true * (1-void_pred), 'float'))
+  precision = TP / (TP + FP + K.epsilon())
+  recall = TP / (TP + FN + K.epsilon())
+  f1 = 2 * precision * recall / (precision + recall + K.epsilon())
+  return precision, recall, f1
+def true_wall_pred_as_void_keras(y_true, y_pred):
+  '''
+  Calculates the number of true wall voxels predicted as void normalized by
+  the total number of wall voxels using keras.backend functions.
+  y_true: true labels
+  y_pred: predicted labels
+  Returns: true wall predicted as void.
+  '''
+  wall_true = y_true[:,1]
+  wall_pred = y_pred[:,1]
+  void_pred = y_pred[:,0]
+  true_wall_pred_as_void = K.sum(K.cast(wall_true * (1-wall_pred) * void_pred, 'float')) / (K.sum(wall_true) + K.epsilon())
+  return true_wall_pred_as_void
+#---------------------------------------------------------
+# Custom metric class for computing metrics using keras
+# backend functions.
+#---------------------------------------------------------
+class keras_ComputeMetrics(metrics.Metric):
+  '''
+  Class containing way to compute metrics using TensorFlow native functions.
+  Hopefully this is faster than the old ComputeMetrics class which relied
+  on sklearn functions. 
+  NOTE that this is a metric, and as such only computes stats that can 
+  be calculated a batch at a time. Note that the old ComputeMetrics callback
+  calculated metrics across the whole dataset, like ROC AUC.
+
+  This metric will calculate (some optionally, can specify which to calc):
+  - F1 score (req)
+  - Precision (req)
+  - Recall (req)
+  - Matthews correlation coefficient (req)
+  - Balanced accuracy
+  - Void F1
+  - Void Precision
+  - Void Recall
+  - True Wall predicted as Void, normalized by total Wall (as in CM figure).
+  '''
+  def __init__(self, num_classes=4, name='ComputeMetrics', metrics=required_TF_metrics, **kwargs):
+    super(keras_ComputeMetrics, self).__init__(name=name, **kwargs)
+    self.num_classes = num_classes
+    self.metrics = metrics
+    self.tp = self.add_weight(name='true_positives', initializer='zeros')
+    self.fp = self.add_weight(name='false_positives', initializer='zeros')
+    self.tn = self.add_weight(name='true_negatives', initializer='zeros')
+    self.fn = self.add_weight(name='false_negatives', initializer='zeros')
+  def update_state(self, y_true, y_pred, sample_weight=None):
+    pass
+
 #---------------------------------------------------------
 # Callback to calculate more classification metrics:
 #---------------------------------------------------------

@@ -51,7 +51,9 @@ Usage: python3 DV_MULTI_TRAIN.py <ROOT_DIR> <SIM> <L> <DEPTH> <FILTERS> <LOSS> <
 Arguments:
   ROOT_DIR: Root directory where models, predictions, and figures will be saved.
   SIM: Simulation type. Either 'TNG' or 'BOL'.
-  L: Interparticle separation in Mpc/h. For TNG full DM use '0.33', for BOL full DM use '0.122'. Other valid values are '3', '5', '7', '10'.
+  L: Interparticle separation in Mpc/h. 
+    For TNG full DM use '0.33', for BOL full DM use '0.122'. 
+    Other valid values are '1', '3', '5', '7', '10'.
   DEPTH: Depth of the U-Net. Default is 3.
   FILTERS: Number of filters in the first layer. Default is 32.
   LOSS: Loss function to use. Options are 'CCE', 'SCCE', 'FOCAL_CCE'. Default is 'CCE'.
@@ -67,12 +69,16 @@ Optional Flags:
   --FOCAL_GAMMA: Focal loss gamma parameter. Default is 2.0.
   --LOAD_MODEL_FLAG: If set, load model from FILE_OUT if it exists. Default is False.
   --LOAD_INTO_MEM: If set, load training and test data into memory. 
-  If not set, load data from X_train, Y_train, X_test, Y_test .npy files into a tf.data.Dataset object 
-  that will load the data in batches instead of all at once. Default is False.
+    If not set, load data from X_train, Y_train, X_test, Y_test .npy files into a tf.data.Dataset 
+    object that will load the data in batches instead of all at once. Default is False.
   --BATCH_SIZE: Batch size. Default is 4.
   --EPOCHS: Number of epochs to train for. Default is 500.
   --LEARNING_RATE: Initial learning rate. Default is 0.001.
+  --LEARNING_RATE_PATIENCE: Number of epochs to wait before reducing learning rate. Default is 10.
   --REGULARIZE_FLAG: If set, use L2 regularization. Default is False.
+  --PICOTTE_FLAG: If set, set up for sbatch run on Picotte. Default is False. 
+    So far all this flag will do is disable the extra metrics since Picotte is on
+    an older version of TensorFlow/Keras (2.10.1, while Colab is on 2.15.0).
   --TENSORBOARD_FLAG: If set, use tensorboard. Default is False.
 '''
 parser = argparse.ArgumentParser(
@@ -102,7 +108,9 @@ opt_group.add_argument('--LOAD_INTO_MEM', action='store_true', help='If set, loa
 opt_group.add_argument('--BATCH_SIZE', type=int, default=8, help='Batch size. Default is 4.')
 opt_group.add_argument('--EPOCHS', type=int, default=500, help='Number of epochs to train for. Default is 500.')
 opt_group.add_argument('--LEARNING_RATE', type=float, default=0.001, help='Initial learning rate. Default is 3e-3.')
+opt_group.add_argument('--LEARNING_RATE_PATIENCE', type=int, default=10, help='Number of epochs to wait before reducing learning rate. Default is 10.')
 opt_group.add_argument('--REGULARIZE_FLAG', action='store_true', help='If set, use L2 regularization.')
+opt_group.add_argument('--PICOTTE_FLAG', action='store_true', help='If set, set up for sbatch run on Picotte.')
 opt_group.add_argument('--TENSORBOARD_FLAG', action='store_true', help='If set, use tensorboard.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
@@ -124,7 +132,9 @@ LOAD_INTO_MEM = args.LOAD_INTO_MEM
 batch_size = args.BATCH_SIZE
 epochs = args.EPOCHS
 LR = args.LEARNING_RATE
+LR_PATIENCE = args.LEARNING_RATE_PATIENCE
 REGULARIZE_FLAG = args.REGULARIZE_FLAG
+PICOTTE_FLAG = args.PICOTTE_FLAG
 TENSORBOARD_FLAG = args.TENSORBOARD_FLAG
 print('#############################################')
 print('>>> Running DV_MULTI_TRAIN.py')
@@ -138,6 +148,7 @@ print('BATCHNORM =',BATCHNORM)
 print('DROPOUT =',DROPOUT)
 print('L2_REGULARIZATION =',REGULARIZE_FLAG)
 print('LEARNING_RATE =',LR)
+print('LR_PATIENCE =',LR_PATIENCE)
 print('LOSS =',LOSS)
 if LOSS == 'FOCAL_CCE':
   print('FOCAL_ALPHA =',alpha)
@@ -410,9 +421,11 @@ hp_dict['GRID'] = GRID
 hp_dict['SUBGRID'] = SUBGRID
 hp_dict['OFF'] = OFF
 hp_dict['UNIFORM_FLAG'] = UNIFORM_FLAG
+print('#############################################')
 print('>>> Model Hyperparameters:')
 for key in hp_dict.keys():
   print(key,hp_dict[str(key)])
+print('#############################################')
 #===============================================================
 # Set loss function and metrics
 #===============================================================
@@ -431,9 +444,8 @@ elif LOSS == 'DICE_VOID':
   # implement dice loss with void class
   pass
 # add more metrics here, may slow down training?
-if not LOW_MEM_FLAG:
-  #metrics += ['f1_score','precision','recall'] # not on tf 2.10.1
-  pass
+if not LOW_MEM_FLAG and not PICOTTE_FLAG:
+  metrics += ['f1_score','precision','recall'] # not on tf 2.10.1
 #===============================================================
 # Multiprocessing
 #===============================================================
@@ -479,6 +491,7 @@ hp_dict['nontrainable_params'] = nontrainable_ps
 hp_dict['total_params'] = trainable_ps + nontrainable_ps
 # save hyperparameters to file:
 FILE_HPS = FILE_OUT+MODEL_NAME+'_hps.txt'
+print('>>> Saving hyperparameters to:',FILE_HPS)
 nets.save_dict_to_text(hp_dict,FILE_HPS)
 #===============================================================
 # Train
@@ -496,7 +509,7 @@ model_chkpt = nets.ModelCheckpoint(FILE_OUT + MODEL_NAME + '.keras', monitor='va
 log_dir = ROOT_DIR + 'logs/fit/' + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") 
 tb_call = nets.TensorBoard(log_dir=log_dir) # do we even need this if we CSV log?
 csv_logger = nets.CSVLogger(FILE_OUT+MODEL_NAME+'_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") + '_train_log.csv')
-reduce_lr = nets.ReduceLROnPlateau(monitor='val_loss',factor=0.25,patience=lr_patience, 
+reduce_lr = nets.ReduceLROnPlateau(monitor='val_loss',factor=0.25,patience=LR_PATIENCE, 
                                    verbose=1,min_lr=1e-6)
 early_stop = nets.EarlyStopping(monitor='val_loss',patience=patience,restore_best_weights=True)
 if LOW_MEM_FLAG:
@@ -507,9 +520,6 @@ else:
   callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger]
 if TENSORBOARD_FLAG:
   callbacks.append(tb_call)
-#history = model.fit(X_train, Y_train, batch_size = batch_size, epochs = epochs, 
-#                    validation_data=(X_test,Y_test), verbose = 2, shuffle = True,
-#                    callbacks = callbacks)
 history = model.fit(train_dataset, epochs=epochs, validation_data=test_dataset, verbose=2,
                     callbacks=callbacks)
 #===============================================================

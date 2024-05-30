@@ -27,7 +27,9 @@ Optional Flags:
   --BATCH_SIZE: Batch size for training. Default is 4.
   --EPOCHS: Number of epochs to train. Default is 500.
   --LEARNING_RATE: Learning rate for the optimizer. Default is 0.001.
+  --LEARNING_RATE_PATIENCE: Patience for the learning rate scheduler. Default is 10.
   --REG_FLAG: If set to 1, use L2 regularization. Default is 0.
+  --PICOTTE_FLAG: If set to 1, use Picotte. Default is 0.
   --TENSORBOARD: If set, use TensorBoard. Default is to not.
 END_COMMENT
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
@@ -69,7 +71,9 @@ LOAD_INTO_MEM=0; echo "Load into memory: $LOAD_INTO_MEM";
 BATCH_SIZE=4; echo "Batch Size: $BATCH_SIZE";
 EPOCHS=500; echo "Epochs: $EPOCHS";
 LEARNING_RATE=0.001; echo "Learning Rate: $LEARNING_RATE";
+LEARNING_RATE_PATIENCE=10; echo "Learning Rate Patience: $LEARNING_RATE_PATIENCE";
 REG_FLAG=1; echo "Regularization: $REG_FLAG";
+PICOTTE_FLAG=0; echo "Picotte: $PICOTTE_FLAG";
 TENSORBOARD=0; echo "TensorBoard: $TENSORBOARD";
 
 # Constructing command line arguments dynamically
@@ -85,7 +89,9 @@ CMD_ARGS="$ROOT_DIR $SIM $L $D $F $LOSS $GRID"
 CMD_ARGS+=" --BATCH_SIZE $BATCH_SIZE"
 CMD_ARGS+=" --EPOCHS $EPOCHS"
 CMD_ARGS+=" --LEARNING_RATE $LEARNING_RATE"
+CMD_ARGS+=" --LEARNING_RATE_PATIENCE $LEARNING_RATE_PATIENCE"
 [ "$REG_FLAG" -eq 1 ] && CMD_ARGS+=" --REGULARIZE_FLAG"
+[ "$PICOTTE_FLAG" -eq 1 ] && CMD_ARGS+=" --PICOTTE_FLAG"
 [ "$TENSORBOARD" -eq 1 ] && CMD_ARGS+=" --TENSORBOARD"
 echo "Command line arguments: $CMD_ARGS";
 
