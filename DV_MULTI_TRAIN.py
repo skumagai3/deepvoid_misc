@@ -470,6 +470,10 @@ if not LOW_MEM_FLAG:
                    nets.void_F1_keras(int_labels=~ONE_HOT_FLAG),
                    nets.true_wall_pred_as_void_keras(int_labels=~ONE_HOT_FLAG)]
 metrics += more_metrics
+# print metrics:
+print('>>> Metrics:')
+for metric in metrics:
+  print(str(metric))
 #===============================================================
 # Multiprocessing
 #===============================================================

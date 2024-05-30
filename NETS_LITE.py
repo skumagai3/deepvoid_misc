@@ -690,6 +690,8 @@ def MCC_keras(num_classes=4, int_labels=True):
     if not int_labels:
       y_true = K.argmax(y_true, axis=-1)
     y_pred = K.argmax(y_pred, axis=-1)
+    y_true = K.cast(y_true, 'float32')
+    y_pred = K.cast(y_pred, 'float32')
     TP = K.sum(K.cast(y_true * y_pred, 'float'), axis=0)
     TN = K.sum(K.cast((1-y_true) * (1-y_pred), 'float'), axis=0)
     FP = K.sum(K.cast((1-y_true) * y_pred, 'float'), axis=0)
