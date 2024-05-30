@@ -353,8 +353,8 @@ else:
     )
   )
   # set cardinality of datasets
-  cardinality_train = n_samples_train // batch_size
-  cardinality_test = n_samples_test // batch_size
+  cardinality_train = (n_samples_train+batch_size-1) // batch_size
+  cardinality_test = (n_samples_test+batch_size-1) // batch_size
   print('>>> Cardinality of train dataset:',cardinality_train)
   print('>>> Cardinality of test dataset:',cardinality_test)
   train_dataset = train_dataset.apply(tf.data.experimental.assert_cardinality(cardinality_train))
