@@ -62,7 +62,7 @@ fi
 BATCHNORM_ENABLED=0; echo "Batch Norm: $BATCHNORM_ENABLED";
 DROPOUT_RATE=0.0; echo "Dropout: $DROPOUT_RATE";
 MULTIPROCESSING_ENABLED=0; echo "Multiprocessing: $MULTIPROCESSING_ENABLED";
-HIGH_MEM_ENABLED=0; echo "High memory usage: $HIGH_MEM_ENABLED";
+HIGH_MEM_ENABLED=1; echo "High memory usage: $HIGH_MEM_ENABLED";
 FOCAL_ALPHA=(0.5 0.5 0.2 0.2); echo "Focal Alpha: ${FOCAL_ALPHA[@]}";
 FOCAL_GAMMA=2.0; echo "Focal Gamma: $FOCAL_GAMMA";
 UNIFORM_FLAG=0; echo "Uniform Flag: $UNIFORM_FLAG";

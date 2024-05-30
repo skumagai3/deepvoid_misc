@@ -532,7 +532,7 @@ def save_dict_to_text(dictionary, file_path):
 # using keras.backend functions.
 #---------------------------------------------------------
 def PR_F1_keras(int_labels=True):
-  def PR_F1_keras_inner(y_true, y_pred):
+  def PR_F1_macro(y_true, y_pred):
     '''
     Precision, Recall, F1 score metrics using keras.backend functions.
     NOTE that this is faster than individually calcing prec, recall,
@@ -552,9 +552,9 @@ def PR_F1_keras(int_labels=True):
     recall = TP / (TP + FN + K.epsilon())
     f1 = 2 * precision * recall / (precision + recall + K.epsilon())
     return precision, recall, f1
-  return PR_F1_keras_inner
+  return PR_F1_macro
 def PR_F1_micro_keras(int_labels=True):
-  def PR_F1_micro_keras_inner(y_true, y_pred):
+  def PR_F1_micro(y_true, y_pred):
     '''
     Precision, Recall, F1 score metrics using keras.backend functions.
     NOTE that this is faster than individually calcing prec, recall,
@@ -574,9 +574,9 @@ def PR_F1_micro_keras(int_labels=True):
     recall = TP / (TP + FN + K.epsilon())
     f1 = 2 * precision * recall / (precision + recall + K.epsilon())
     return precision, recall, f1
-  return PR_F1_micro_keras_inner
+  return PR_F1_micro
 def precision_keras(num_classes=4, int_labels=True):
-  def precision_keras_inner(y_true, y_pred):
+  def precision_macro(y_true, y_pred):
     '''
     Compute macro precision using keras.backend functions.
     y_true: true labels.
@@ -592,9 +592,9 @@ def precision_keras(num_classes=4, int_labels=True):
     FP = K.sum((1-y_true) * y_pred, axis=0)
     precision = K.mean(TP / (TP + FP + K.epsilon()))
     return precision
-  return precision_keras_inner
+  return precision_macro
 def recall_keras(num_classes=4, int_labels=True):
-  def recall_keras_inner(y_true, y_pred):
+  def recall_macro(y_true, y_pred):
     '''
     Compute macro recall using keras.backend functions.
     y_true: true labels.
@@ -610,9 +610,9 @@ def recall_keras(num_classes=4, int_labels=True):
     FN = K.sum(y_true * (1-y_pred), axis=0)
     recall = K.mean(TP / (TP + FN + K.epsilon()))
     return recall
-  return recall_keras_inner
+  return recall_macro
 def F1_keras(num_classes=4, int_labels=True):
-  def F1_keras_inner(y_true, y_pred):
+  def F1_macro(y_true, y_pred):
     '''
     Compute macro F1 score using keras.backend functions.
     y_true: true labels.
@@ -625,9 +625,9 @@ def F1_keras(num_classes=4, int_labels=True):
     recall = recall_keras(num_classes, int_labels)(y_true, y_pred)
     f1 = 2 * precision * recall / (precision + recall + K.epsilon())
     return f1
-  return F1_keras_inner
+  return F1_macro
 def precision_micro_keras(num_classes=4, int_labels=True):
-  def precision_micro_keras_inner(y_true, y_pred):
+  def precision_micro(y_true, y_pred):
     '''
     Compute micro precision using keras.backend functions.
     y_true: true labels.
@@ -643,9 +643,9 @@ def precision_micro_keras(num_classes=4, int_labels=True):
     FP = K.sum((1-y_true) * y_pred)
     precision = TP / (TP + FP + K.epsilon())
     return precision
-  return precision_micro_keras_inner
+  return precision_micro
 def recall_micro_keras(num_classes=4, int_labels=True):
-  def recall_micro_keras_inner(y_true, y_pred):
+  def recall_micro(y_true, y_pred):
     '''
     Compute micro recall using keras.backend functions.
     y_true: true labels.
@@ -661,9 +661,9 @@ def recall_micro_keras(num_classes=4, int_labels=True):
     FN = K.sum(y_true * (1-y_pred))
     recall = TP / (TP + FN + K.epsilon())
     return recall
-  return recall_micro_keras_inner
+  return recall_micro
 def F1_micro_keras(num_classes=4, int_labels=True):
-  def F1_micro_keras_inner(y_true, y_pred):
+  def F1_micro(y_true, y_pred):
     '''
     Compute micro F1 score using keras.backend functions.
     y_true: true labels.
@@ -676,9 +676,9 @@ def F1_micro_keras(num_classes=4, int_labels=True):
     recall = recall_micro_keras(num_classes, int_labels)(y_true, y_pred)
     f1 = 2 * precision * recall / (precision + recall + K.epsilon())
     return f1
-  return F1_micro_keras_inner
+  return F1_micro
 def MCC_keras(num_classes=4, int_labels=True):
-  def MCC_keras_inner(y_true, y_pred):
+  def MCC(y_true, y_pred):
     '''
     Matthews correlation coefficient using keras.backend functions.
     y_true: true labels
@@ -697,11 +697,11 @@ def MCC_keras(num_classes=4, int_labels=True):
     numerator = TP * TN - FP * FN
     denominator = K.sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN) + K.epsilon())
     mcc = numerator / denominator
-    mcc = K.switch(tf.math.is_nan(mcc), K.zeros_like(mcc), mcc)  # Handle NaN
+    #mcc = K.switch(tf.math.is_nan(mcc), K.zeros_like(mcc), mcc)  # Handle NaN
     return mcc
-  return MCC_keras_inner
+  return MCC
 def balanced_accuracy_keras(num_classes=4, int_labels=True):
-  def balanced_accuracy_keras_inner(y_true, y_pred):
+  def balanced_accuracy(y_true, y_pred):
     '''
     Balanced accuracy using keras.backend functions.
     y_true: true labels
@@ -718,9 +718,9 @@ def balanced_accuracy_keras(num_classes=4, int_labels=True):
     recall_per_class = TP / (TP + FN + K.epsilon())
     balanced_accuracy = K.mean(recall_per_class)
     return balanced_accuracy
-  return balanced_accuracy_keras_inner
+  return balanced_accuracy
 def void_PR_F1_keras(num_classes=4, int_labels=True):
-  def void_PR_F1_keras_inner(y_true, y_pred):
+  def void_PR_F1(y_true, y_pred):
     '''
     Precision, Recall, F1 score for the void class [0] using keras
     backend functions.
@@ -742,9 +742,32 @@ def void_PR_F1_keras(num_classes=4, int_labels=True):
     recall = TP / (TP + FN + K.epsilon())
     f1 = 2 * precision * recall / (precision + recall + K.epsilon())
     return precision, recall, f1
-  return void_PR_F1_keras_inner
+  return void_PR_F1
+def void_F1_keras(num_classes=4, int_labels=True):
+  def void_F1(y_true, y_pred):
+    '''
+    F1 score for the void class [0] using keras backend functions.
+    y_true: true labels
+    y_pred: predicted labels
+    num_classes: int number of classes. def 4.
+    int_labels: bool whether or not labels are integer or one-hot. def True.
+    Returns: F1 score for the void class.
+    '''
+    if not int_labels:
+      y_true = K.one_hot(K.argmax(y_true, axis=-1), num_classes)
+    y_pred = K.one_hot(K.argmax(y_pred, axis=-1), num_classes)
+    void_true = K.cast(K.equal(y_true, 0), 'float')
+    void_pred = K.cast(K.equal(y_pred, 0), 'float')
+    TP = K.sum(void_true * void_pred)
+    FP = K.sum((1-void_true) * void_pred)
+    FN = K.sum(void_true * (1-void_pred))
+    precision = TP / (TP + FP + K.epsilon())
+    recall = TP / (TP + FN + K.epsilon())
+    f1 = 2 * precision * recall / (precision + recall + K.epsilon())
+    return f1
+  return void_F1
 def true_wall_pred_as_void_keras(num_classes=4, int_labels=True):
-  def true_wall_pred_as_void_keras_inner(y_true, y_pred):
+  def true_wall_pred_as_void(y_true, y_pred):
     '''
     Calculates the number of true wall voxels predicted as void normalized by
     the total number of wall voxels using keras.backend functions.
@@ -761,7 +784,7 @@ def true_wall_pred_as_void_keras(num_classes=4, int_labels=True):
     void_pred = K.cast(K.equal(y_pred, 0), 'float')
     true_wall_pred_as_void = K.sum(wall_true * (1-void_pred) * void_pred) / (K.sum(wall_true) + K.epsilon())
     return true_wall_pred_as_void
-  return true_wall_pred_as_void_keras_inner
+  return true_wall_pred_as_void
 #---------------------------------------------------------
 # Custom metric class for computing metrics using keras
 # backend functions.
