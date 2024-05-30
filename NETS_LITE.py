@@ -621,8 +621,8 @@ def F1_keras(num_classes=4, int_labels=True):
     int_labels: bool whether or not labels are integer or one-hot. def True.
     Returns: F1 score. tf.Tensor.
     '''
-    precision = precision_keras(num_classes, int_labels)
-    recall = recall_keras(num_classes, int_labels)
+    precision = precision_keras(num_classes, int_labels)(y_true, y_pred)
+    recall = recall_keras(num_classes, int_labels)(y_true, y_pred)
     f1 = 2 * precision * recall / (precision + recall + K.epsilon())
     return f1
   return F1_keras_inner
@@ -672,8 +672,8 @@ def F1_micro_keras(num_classes=4, int_labels=True):
     int_labels: bool whether or not labels are integer or one-hot. def True.
     Returns: micro F1 score. tf.Tensor.
     '''
-    precision = precision_micro_keras(num_classes, int_labels)
-    recall = recall_micro_keras(num_classes, int_labels)
+    precision = precision_micro_keras(num_classes, int_labels)(y_true, y_pred)
+    recall = recall_micro_keras(num_classes, int_labels)(y_true, y_pred)
     f1 = 2 * precision * recall / (precision + recall + K.epsilon())
     return f1
   return F1_micro_keras_inner
