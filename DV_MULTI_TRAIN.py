@@ -352,13 +352,6 @@ else:
       tf.TensorSpec(shape=(SUBGRID,SUBGRID,SUBGRID,last_dim),dtype=tf.int8)
     )
   )
-  # set cardinality of datasets
-  cardinality_train = np.ceil(n_samples_train / batch_size)
-  cardinality_test = np.ceil(n_samples_test / batch_size)
-  print('>>> Cardinality of train dataset:',cardinality_train)
-  print('>>> Cardinality of test dataset:',cardinality_test)
-  train_dataset = train_dataset.apply(tf.data.experimental.assert_cardinality(cardinality_train))
-  test_dataset = test_dataset.apply(tf.data.experimental.assert_cardinality(cardinality_test))
 # 5/28 try caching to see if it speeds up training
 # NOTE: results in OOM on colab
 #train_dataset = train_dataset.cache()
@@ -371,6 +364,17 @@ test_dataset = test_dataset.batch(batch_size, drop_remainder=True)
 print('>>> Prefetching datasets')
 train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 test_dataset = test_dataset.prefetch(tf.data.experimental.AUTOTUNE)
+# manually set cardinality of datasets
+if LOAD_INTO_MEM:
+  # do i even need to do this? won't cardinality be 
+  pass
+else:
+  cardinality_train = np.ceil(n_samples_train / batch_size)
+  cardinality_test = np.ceil(n_samples_test / batch_size)
+  train_dataset = train_dataset.apply(tf.data.experimental.assert_cardinality(cardinality_train))
+  test_dataset = test_dataset.apply(tf.data.experimental.assert_cardinality(cardinality_test))
+  print('>>> Cardinality of train dataset:',cardinality_train)
+  print('>>> Cardinality of test dataset:',cardinality_test)
 #===============================================================
 # Set model hyperparameters
 #===============================================================
