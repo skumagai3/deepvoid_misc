@@ -335,21 +335,30 @@ else:
   print('>>> NOTE: X_train, Y_train, X_test, Y_test will not be loaded into memory!')
   print('>>> X_train:',FILE_X_TRAIN); print('>>> Y_train:',FILE_Y_TRAIN)
   print('>>> X_test:',FILE_X_TEST); print('>>> Y_test:',FILE_Y_TEST)
+  n_samples_train = np.load(FILE_X_TRAIN,mmap_mode='r').shape[0]
+  n_samples_test = np.load(FILE_X_TEST,mmap_mode='r').shape[0]
   last_dim = 1 if LOSS == 'SCCE' else N_CLASSES
   train_dataset = tf.data.Dataset.from_generator(
     lambda: nets.data_gen_mmap(FILE_X_TRAIN,FILE_Y_TRAIN),
     output_signature=(
       tf.TensorSpec(shape=(SUBGRID,SUBGRID,SUBGRID,1),dtype=tf.float32),
-      tf.TensorSpec(shape=(SUBGRID,SUBGRID,SUBGRID,last_dim),dtype=tf.float32)
+      tf.TensorSpec(shape=(SUBGRID,SUBGRID,SUBGRID,last_dim),dtype=tf.int8)
     )
   )
   test_dataset = tf.data.Dataset.from_generator(
     lambda: nets.data_gen_mmap(FILE_X_TEST,FILE_Y_TEST),
     output_signature=(
       tf.TensorSpec(shape=(SUBGRID,SUBGRID,SUBGRID,1),dtype=tf.float32),
-      tf.TensorSpec(shape=(SUBGRID,SUBGRID,SUBGRID,last_dim),dtype=tf.float32)
+      tf.TensorSpec(shape=(SUBGRID,SUBGRID,SUBGRID,last_dim),dtype=tf.int8)
     )
   )
+  # set cardinality of datasets
+  cardinality_train = n_samples_train // batch_size
+  cardinality_test = n_samples_test // batch_size
+  print('>>> Cardinality of train dataset:',cardinality_train)
+  print('>>> Cardinality of test dataset:',cardinality_test)
+  train_dataset = train_dataset.apply(tf.data.experimental.assert_cardinality(cardinality_train))
+  test_dataset = test_dataset.apply(tf.data.experimental.assert_cardinality(cardinality_test))
 # 5/28 try caching to see if it speeds up training
 # NOTE: results in OOM on colab
 #train_dataset = train_dataset.cache()

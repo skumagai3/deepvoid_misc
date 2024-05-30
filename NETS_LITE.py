@@ -13,6 +13,7 @@ import csv
 import volumes
 import plotter
 import pandas as pd
+import tensorflow as tf
 from collections import Counter
 import matplotlib.pyplot as plt
 class_labels = ['Void','Wall','Filament','Halo']
@@ -530,15 +531,23 @@ def save_dict_to_text(dictionary, file_path):
 # Functions for F1, precision, recall, MCC, etc. written
 # using keras.backend functions.
 #---------------------------------------------------------
-all_TF_metrics = ['f1','precision','recall','balanced_accuracy','matt_corrcoef','void_f1','void_precision','void_recall','true_wall_pred_as_void']
-required_TF_metrics = ['f1','precision','recall','matt_corrcoef']
-def PR_F1_keras(y_true, y_pred):
+all_TF_metrics = ['macro_F1','macro_precision','macro_recall','micro_F1','micro_precision',
+                  'micro_recall','balanced_accuracy','matt_corrcoef','void_F1','void_precision',
+                  'void_recall','true_wall_pred_as_void']
+required_TF_metrics = ['macro_F1','macro_precision','macro_recall','matt_corrcoef']
+def PR_F1_keras(y_true, y_pred, int_labels=True):
   '''
   Precision, Recall, F1 score metrics using keras.backend functions.
+  NOTE that this is faster than individually calcing prec, recall,
+  F1 score.
   y_true: true labels
   y_pred: predicted labels
-  Returns: tuple of precision, recall, F1 score.
+  int_labels: bool whether or not labels are integer or one-hot. def True.
+  Returns: tuple of precision, recall, F1 score. (macro-avg)
   '''
+  if not int_labels:
+    y_true = K.one_hot(K.argmax(y_true, axis=-1), 4)
+  y_pred = K.one_hot(K.argmax(y_pred, axis=-1), 4)
   TP = K.sum(K.cast(y_true * y_pred, 'float'), axis=0)
   FP = K.sum(K.cast((1-y_true) * y_pred, 'float'), axis=0)
   FN = K.sum(K.cast(y_true * (1-y_pred), 'float'), axis=0)
@@ -546,46 +555,128 @@ def PR_F1_keras(y_true, y_pred):
   recall = TP / (TP + FN + K.epsilon())
   f1 = 2 * precision * recall / (precision + recall + K.epsilon())
   return precision, recall, f1
-def recall_keras(y_true, y_pred):
+def PR_F1_micro_keras(y_true, y_pred, int_labels=True):
   '''
-  Recall metric using keras.backend functions.
+  Precision, Recall, F1 score metrics using keras.backend functions.
+  NOTE that this is faster than individually calcing prec, recall,
+  F1 score.
   y_true: true labels
   y_pred: predicted labels
-  Returns: recall.
+  int_labels: bool whether or not labels are integer or one-hot. def True.
+  Returns: tuple of precision, recall, F1 score. (micro-avg)
   '''
-  TP = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)), axis=0)
-  TOTAL_P = K.sum(K.round(K.clip(y_true, 0, 1)), axis=0)
-  recall = TP / (TOTAL_P + K.epsilon())
-  return recall
-def precision_keras(y_true, y_pred):
+  if not int_labels:
+    y_true = K.one_hot(K.argmax(y_true, axis=-1), 4)
+  y_pred = K.one_hot(K.argmax(y_pred, axis=-1), 4)
+  TP = K.sum(K.cast(y_true * y_pred, 'float'))
+  FP = K.sum(K.cast((1-y_true) * y_pred, 'float'))
+  FN = K.sum(K.cast(y_true * (1-y_pred), 'float'))
+  precision = TP / (TP + FP + K.epsilon())
+  recall = TP / (TP + FN + K.epsilon())
+  f1 = 2 * precision * recall / (precision + recall + K.epsilon())
+  return precision, recall, f1
+def precision_keras(y_true, y_pred, num_classes=4, int_labels=True):
   '''
-  Precision metric using keras.backend functions.
-  y_true: true labels
-  y_pred: predicted labels
-  Returns: precision.
+  Compute macro precision using keras.backend functions.
+  y_true: true labels.
+  y_pred: predicted labels.
+  num_classes: int number of classes. def 4.
+  int_labels: bool whether or not labels are integer or one-hot. def True.
+  Returns: precision. tf.Tensor.
   '''
-  TP = K.sum(K.round(K.clip(y_true * y_pred, 0, 1)), axis=0)
-  PRED_P = K.sum(K.round(K.clip(y_pred, 0, 1)), axis=0)
-  precision = TP / (PRED_P + K.epsilon())
+  if not int_labels:
+    y_true = K.one_hot(K.argmax(y_true, axis=-1), num_classes)
+  y_pred = K.one_hot(K.argmax(y_pred, axis=-1), num_classes)
+  TP = K.sum(y_true * y_pred, axis=0)
+  FP = K.sum((1-y_true) * y_pred, axis=0)
+  precision = K.mean(TP / (TP + FP + K.epsilon()))
   return precision
-def F1_keras(y_true, y_pred):
+def recall_keras(y_true, y_pred, num_classes=4, int_labels=True):
   '''
-  F1 score metric using keras.backend functions.
-  y_true: true labels
-  y_pred: predicted labels
-  Returns: F1 score.
+  Compute macro recall using keras.backend functions.
+  y_true: true labels.
+  y_pred: predicted labels.
+  num_classes: int number of classes. def 4.
+  int_labels: bool whether or not labels are integer or one-hot. def True.
+  Returns: recall. tf.Tensor.
   '''
-  prec = precision_keras(y_true, y_pred)
-  rec = recall_keras(y_true, y_pred)
-  f1 = 2 * (prec * rec) / (prec + rec + K.epsilon())
+  if not int_labels:
+    y_true = K.one_hot(K.argmax(y_true, axis=-1), num_classes)
+  y_pred = K.one_hot(K.argmax(y_pred, axis=-1), num_classes)
+  TP = K.sum(y_true * y_pred, axis=0)
+  FN = K.sum(y_true * (1-y_pred), axis=0)
+  recall = K.mean(TP / (TP + FN + K.epsilon()))
+  return recall
+def F1_keras(y_true, y_pred, num_classes=4, int_labels=True):
+  '''
+  Compute macro F1 score using keras.backend functions.
+  y_true: true labels.
+  y_pred: predicted labels.
+  num_classes: int number of classes. def 4.
+  int_labels: bool whether or not labels are integer or one-hot. def True.
+  Returns: F1 score. tf.Tensor.
+  '''
+  precision = precision_keras(y_true, y_pred, num_classes, int_labels)
+  recall = recall_keras(y_true, y_pred, num_classes, int_labels)
+  f1 = 2 * precision * recall / (precision + recall + K.epsilon())
   return f1
-def MCC_keras(y_true, y_pred):
+def precision_micro_keras(y_true, y_pred, num_classes=4, int_labels=True):
+  '''
+  Compute micro precision using keras.backend functions.
+  y_true: true labels.
+  y_pred: predicted labels.
+  num_classes: int number of classes. def 4.
+  int_labels: bool whether or not labels are integer or one-hot. def True.
+  Returns: micro precision. tf.Tensor.
+  '''
+  if not int_labels:
+    y_true = K.one_hot(K.argmax(y_true, axis=-1), num_classes)
+  y_pred = K.one_hot(K.argmax(y_pred, axis=-1), num_classes)
+  TP = K.sum(y_true * y_pred)
+  FP = K.sum((1-y_true) * y_pred)
+  precision = TP / (TP + FP + K.epsilon())
+  return precision
+def recall_micro_keras(y_true, y_pred, num_classes=4, int_labels=True):
+  '''
+  Compute micro recall using keras.backend functions.
+  y_true: true labels.
+  y_pred: predicted labels.
+  num_classes: int number of classes. def 4.
+  int_labels: bool whether or not labels are integer or one-hot. def True.
+  Returns: micro recall. tf.Tensor.
+  '''
+  if not int_labels:
+    y_true = K.one_hot(K.argmax(y_true, axis=-1), num_classes)
+  y_pred = K.one_hot(K.argmax(y_pred, axis=-1), num_classes)
+  TP = K.sum(y_true * y_pred)
+  FN = K.sum(y_true * (1-y_pred))
+  recall = TP / (TP + FN + K.epsilon())
+  return recall
+def F1_micro_keras(y_true, y_pred, num_classes=4, int_labels=True):
+  '''
+  Compute micro F1 score using keras.backend functions.
+  y_true: true labels.
+  y_pred: predicted labels.
+  num_classes: int number of classes. def 4.
+  int_labels: bool whether or not labels are integer or one-hot. def True.
+  Returns: micro F1 score. tf.Tensor.
+  '''
+  precision = precision_micro_keras(y_true, y_pred, num_classes, int_labels)
+  recall = recall_micro_keras(y_true, y_pred, num_classes, int_labels)
+  f1 = 2 * precision * recall / (precision + recall + K.epsilon())
+  return f1
+def MCC_keras(y_true, y_pred, num_classes=4, int_labels=True):
   '''
   Matthews correlation coefficient using keras.backend functions.
   y_true: true labels
   y_pred: predicted labels
+  num_classes: int number of classes. def 4.
+  int_labels: bool whether or not labels are integer or one-hot. def True.
   Returns: Matthews correlation coefficient.
   '''
+  if not int_labels:
+    y_true = K.one_hot(K.argmax(y_true, axis=-1), num_classes)
+  y_pred = K.one_hot(K.argmax(y_pred, axis=-1), num_classes)
   TP = K.sum(K.cast(y_true * y_pred, 'float'), axis=0)
   TN = K.sum(K.cast((1-y_true) * (1-y_pred), 'float'), axis=0)
   FP = K.sum(K.cast((1-y_true) * y_pred, 'float'), axis=0)
@@ -593,51 +684,63 @@ def MCC_keras(y_true, y_pred):
   numerator = TP * TN - FP * FN
   denominator = K.sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN) + K.epsilon())
   mcc = numerator / denominator
+  mcc = K.switch(tf.math.is_nan(mcc), K.zeros_like(mcc), mcc)  # Handle NaN
   return mcc
-def balanced_accuracy_keras(y_true, y_pred):
+def balanced_accuracy_keras(y_true, y_pred, num_classes=4, int_labels=True):
   '''
   Balanced accuracy using keras.backend functions.
   y_true: true labels
   y_pred: predicted labels
+  num_classes: int number of classes. def 4.
+  int_labels: bool whether or not labels are integer or one-hot. def True.
   Returns: balanced accuracy.
   '''
+  if not int_labels:
+    y_true = K.one_hot(K.argmax(y_true, axis=-1), num_classes)
+  y_pred = K.one_hot(K.argmax(y_pred, axis=-1), num_classes)
   TP = K.sum(K.cast(y_true * y_pred, 'float'), axis=0)
-  TN = K.sum(K.cast((1-y_true) * (1-y_pred), 'float'), axis=0)
-  FP = K.sum(K.cast((1-y_true) * y_pred, 'float'), axis=0)
   FN = K.sum(K.cast(y_true * (1-y_pred), 'float'), axis=0)
-  sensitivity = TP / (TP + FN + K.epsilon())
-  specificity = TN / (TN + FP + K.epsilon())
-  balanced_accuracy = (sensitivity + specificity) / 2
+  recall_per_class = TP / (TP + FN + K.epsilon())
+  balanced_accuracy = K.mean(recall_per_class)
   return balanced_accuracy
-def void_PR_F1_keras(y_true, y_pred):
+def void_PR_F1_keras(y_true, y_pred, num_classes=4, int_labels=True):
   '''
   Precision, Recall, F1 score for the void class [0] using keras
   backend functions.
   y_true: true labels
   y_pred: predicted labels
+  num_classes: int number of classes. def 4.
+  int_labels: bool whether or not labels are integer or one-hot. def True.
   Returns: tuple of precision, recall, F1 score for the void class.
   '''
-  void_true = y_true[:,0]
-  void_pred = y_pred[:,0]
-  TP = K.sum(K.cast(void_true * void_pred, 'float'))
-  FP = K.sum(K.cast((1-void_true) * void_pred, 'float'))
-  FN = K.sum(K.cast(void_true * (1-void_pred), 'float'))
+  if not int_labels:
+    y_true = K.one_hot(K.argmax(y_true, axis=-1), num_classes)
+  y_pred = K.one_hot(K.argmax(y_pred, axis=-1), num_classes)
+  void_true = K.cast(K.equal(y_true, 0), 'float')
+  void_pred = K.cast(K.equal(y_pred, 0), 'float')
+  TP = K.sum(void_true * void_pred)
+  FP = K.sum((1-void_true) * void_pred)
+  FN = K.sum(void_true * (1-void_pred))
   precision = TP / (TP + FP + K.epsilon())
   recall = TP / (TP + FN + K.epsilon())
   f1 = 2 * precision * recall / (precision + recall + K.epsilon())
   return precision, recall, f1
-def true_wall_pred_as_void_keras(y_true, y_pred):
+def true_wall_pred_as_void_keras(y_true, y_pred, num_classes=4, int_labels=True):
   '''
   Calculates the number of true wall voxels predicted as void normalized by
   the total number of wall voxels using keras.backend functions.
   y_true: true labels
   y_pred: predicted labels
+  num_classes: int number of classes. def 4.
+  int_labels: bool whether or not labels are integer or one-hot. def True.
   Returns: true wall predicted as void.
   '''
-  wall_true = y_true[:,1]
-  wall_pred = y_pred[:,1]
-  void_pred = y_pred[:,0]
-  true_wall_pred_as_void = K.sum(K.cast(wall_true * (1-wall_pred) * void_pred, 'float')) / (K.sum(wall_true) + K.epsilon())
+  if not int_labels:
+    y_true = K.one_hot(K.argmax(y_true, axis=-1), num_classes)
+  y_pred = K.one_hot(K.argmax(y_pred, axis=-1), num_classes)
+  wall_true = K.cast(K.equal(y_true, 1), 'float')
+  void_pred = K.cast(K.equal(y_pred, 0), 'float')
+  true_wall_pred_as_void = K.sum(wall_true * (1-void_pred) * void_pred) / (K.sum(wall_true) + K.epsilon())
   return true_wall_pred_as_void
 #---------------------------------------------------------
 # Custom metric class for computing metrics using keras
@@ -1449,3 +1552,19 @@ def data_gen_mmap(FILE_X,FILE_Y):
   Y = np.load(FILE_Y,mmap_mode='r')
   for features, labels in zip(X,Y):
     yield (features, labels)
+# creating better generator function for tf.data.Dataset
+def data_gen_mmap_batch(FILE_X,FILE_Y,batch_size):
+  '''
+  NOTE THIS DOESN'T WORK: adds another None dim???
+  Generator function to feed data in batches to the model.
+  Helps with OOM errors when training on a large volume.
+  Assumes that FILE_X_TRAIN and FILE_Y_TRAIN are .npy files.
+  FILE_X: str, filepath to X_(train/test) data
+  FILE_Y: str, filepath to Y_(train/test) data
+  '''
+  X = np.memmap(FILE_X, dtype='float32', mode='r')
+  Y = np.memmap(FILE_Y, dtype='int8', mode='r')
+  num_samples = X.shape[0]
+  for start_idx in range(0,num_samples,batch_size):
+    end_idx = min(start_idx+batch_size,num_samples)
+    yield (X[start_idx:end_idx], Y[start_idx:end_idx])
