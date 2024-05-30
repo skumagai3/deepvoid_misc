@@ -365,8 +365,8 @@ else:
 #test_dataset = test_dataset.cache()
 # shuffle and batch the datasets
 print('>>> Shuffling and batching datasets')
-train_dataset = train_dataset.shuffle(buffer_size=1024).batch(batch_size)
-test_dataset = test_dataset.batch(batch_size)
+train_dataset = train_dataset.shuffle(buffer_size=1024).batch(batch_size, drop_remainder=True)
+test_dataset = test_dataset.batch(batch_size, drop_remainder=True)
 # prefetch the datasets
 print('>>> Prefetching datasets')
 train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
