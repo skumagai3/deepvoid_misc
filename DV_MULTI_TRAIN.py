@@ -452,9 +452,17 @@ elif LOSS == 'DICE_AVG':
 elif LOSS == 'DICE_VOID':
   # implement dice loss with void class
   pass
+# set one-hot flag:
+ONE_HOT_FLAG = True # for compute metrics callback
+if LOSS == 'SCCE':
+  ONE_HOT_FLAG = False
 # add more metrics here, may slow down training?
-if not LOW_MEM_FLAG and not PICOTTE_FLAG:
-  metrics += ['f1_score','precision','recall'] # not on tf 2.10.1
+if not LOW_MEM_FLAG:
+  metrics.append(nets.F1_micro_keras(int_labels=~ONE_HOT_FLAG), 
+                 nets.MCC_keras(int_labels=~ONE_HOT_FLAG),
+                 nets.balanced_accuracy_keras(int_labels=~ONE_HOT_FLAG),
+                 nets.void_PR_F1_keras(int_labels=~ONE_HOT_FLAG),
+                 nets.true_wall_pred_as_void_keras(int_labels=~ONE_HOT_FLAG))
 #===============================================================
 # Multiprocessing
 #===============================================================
@@ -509,9 +517,6 @@ nets.save_dict_to_text(hp_dict,FILE_HPS)
 #===============================================================
 print('>>> Training')
 # set up callbacks
-ONE_HOT_FLAG = True # for compute metrics callback
-if LOSS == 'SCCE':
-  ONE_HOT_FLAG = False
 #metrics = nets.ComputeMetrics((X_test,Y_test), N_epochs = N_epochs_metric, avg='micro', one_hot=ONE_HOT_FLAG)
 model_chkpt = nets.ModelCheckpoint(FILE_OUT + MODEL_NAME + '.keras', monitor='val_loss',
                                    save_best_only=True,verbose=2)

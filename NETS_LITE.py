@@ -531,10 +531,6 @@ def save_dict_to_text(dictionary, file_path):
 # Functions for F1, precision, recall, MCC, etc. written
 # using keras.backend functions.
 #---------------------------------------------------------
-all_TF_metrics = ['macro_F1','macro_precision','macro_recall','micro_F1','micro_precision',
-                  'micro_recall','balanced_accuracy','matt_corrcoef','void_F1','void_precision',
-                  'void_recall','true_wall_pred_as_void']
-required_TF_metrics = ['macro_F1','macro_precision','macro_recall','matt_corrcoef']
 def PR_F1_keras(y_true, y_pred, int_labels=True):
   '''
   Precision, Recall, F1 score metrics using keras.backend functions.
@@ -746,6 +742,10 @@ def true_wall_pred_as_void_keras(y_true, y_pred, num_classes=4, int_labels=True)
 # Custom metric class for computing metrics using keras
 # backend functions.
 #---------------------------------------------------------
+all_TF_metrics = ['macro_F1','macro_precision','macro_recall','micro_F1','micro_precision',
+                  'micro_recall','balanced_accuracy','matt_corrcoef','void_F1','void_precision',
+                  'void_recall','true_wall_pred_as_void']
+required_TF_metrics = ['macro_F1','macro_precision','macro_recall','matt_corrcoef']
 class keras_ComputeMetrics(metrics.Metric):
   '''
   Class containing way to compute metrics using TensorFlow native functions.
