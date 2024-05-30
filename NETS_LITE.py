@@ -544,7 +544,11 @@ def PR_F1_keras(int_labels=True):
     '''
     if not int_labels:
       y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.expand_dims(y_true, axis=-1)
     y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.expand_dims(y_pred, axis=-1)
+    y_true = K.cast(y_true, 'float32')
+    y_pred = K.cast(y_pred, 'float32')
     TP = K.sum(K.cast(y_true * y_pred, 'float'), axis=0)
     FP = K.sum(K.cast((1-y_true) * y_pred, 'float'), axis=0)
     FN = K.sum(K.cast(y_true * (1-y_pred), 'float'), axis=0)
@@ -566,7 +570,11 @@ def PR_F1_micro_keras(int_labels=True):
     '''
     if not int_labels:
       y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.expand_dims(y_true, axis=-1)
     y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.expand_dims(y_pred, axis=-1)
+    y_true = K.cast(y_true, 'float32')
+    y_pred = K.cast(y_pred, 'float32')
     TP = K.sum(K.cast(y_true * y_pred, 'float'))
     FP = K.sum(K.cast((1-y_true) * y_pred, 'float'))
     FN = K.sum(K.cast(y_true * (1-y_pred), 'float'))
@@ -587,7 +595,11 @@ def precision_keras(num_classes=4, int_labels=True):
     '''
     if not int_labels:
       y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.expand_dims(y_true, axis=-1)
     y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.expand_dims(y_pred, axis=-1)
+    y_true = K.cast(y_true, 'float32')
+    y_pred = K.cast(y_pred, 'float32')
     TP = K.sum(y_true * y_pred, axis=0)
     FP = K.sum((1-y_true) * y_pred, axis=0)
     precision = K.mean(TP / (TP + FP + K.epsilon()))
@@ -605,7 +617,11 @@ def recall_keras(num_classes=4, int_labels=True):
     '''
     if not int_labels:
       y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.expand_dims(y_true, axis=-1)
     y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.expand_dims(y_pred, axis=-1)
+    y_true = K.cast(y_true, 'float32')
+    y_pred = K.cast(y_pred, 'float32')
     TP = K.sum(y_true * y_pred, axis=0)
     FN = K.sum(y_true * (1-y_pred), axis=0)
     recall = K.mean(TP / (TP + FN + K.epsilon()))
@@ -638,7 +654,11 @@ def precision_micro_keras(num_classes=4, int_labels=True):
     '''
     if not int_labels:
       y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.expand_dims(y_true, axis=-1)
     y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.expand_dims(y_pred, axis=-1)
+    y_true = K.cast(y_true, 'float32')
+    y_pred = K.cast(y_pred, 'float32')
     TP = K.sum(y_true * y_pred)
     FP = K.sum((1-y_true) * y_pred)
     precision = TP / (TP + FP + K.epsilon())
@@ -656,7 +676,11 @@ def recall_micro_keras(num_classes=4, int_labels=True):
     '''
     if not int_labels:
       y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.expand_dims(y_true, axis=-1)
     y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.expand_dims(y_pred, axis=-1)
+    y_true = K.cast(y_true, 'float32')
+    y_pred = K.cast(y_pred, 'float32')
     TP = K.sum(y_true * y_pred)
     FN = K.sum(y_true * (1-y_pred))
     recall = TP / (TP + FN + K.epsilon())
@@ -689,7 +713,9 @@ def MCC_keras(num_classes=4, int_labels=True):
     '''
     if not int_labels:
       y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.expand_dims(y_true, axis=-1)
     y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.expand_dims(y_pred, axis=-1)
     y_true = K.cast(y_true, 'float32')
     y_pred = K.cast(y_pred, 'float32')
     TP = K.sum(K.cast(y_true * y_pred, 'float'), axis=0)
@@ -714,7 +740,11 @@ def balanced_accuracy_keras(num_classes=4, int_labels=True):
     '''
     if not int_labels:
       y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.expand_dims(y_true, axis=-1)
     y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.expand_dims(y_pred, axis=-1)
+    y_true = K.cast(y_true, 'float32')
+    y_pred = K.cast(y_pred, 'float32')
     TP = K.sum(K.cast(y_true * y_pred, 'float'), axis=0)
     FN = K.sum(K.cast(y_true * (1-y_pred), 'float'), axis=0)
     recall_per_class = TP / (TP + FN + K.epsilon())
@@ -734,7 +764,9 @@ def void_PR_F1_keras(num_classes=4, int_labels=True):
     '''
     if not int_labels:
       y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.expand_dims(y_true, axis=-1)
     y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.expand_dims(y_pred, axis=-1)
     void_true = K.cast(K.equal(y_true, 0), 'float')
     void_pred = K.cast(K.equal(y_pred, 0), 'float')
     TP = K.sum(void_true * void_pred)
@@ -757,7 +789,9 @@ def void_F1_keras(num_classes=4, int_labels=True):
     '''
     if not int_labels:
       y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.expand_dims(y_true, axis=-1)
     y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.expand_dims(y_pred, axis=-1)
     void_true = K.cast(K.equal(y_true, 0), 'float')
     void_pred = K.cast(K.equal(y_pred, 0), 'float')
     TP = K.sum(void_true * void_pred)
@@ -781,7 +815,9 @@ def true_wall_pred_as_void_keras(num_classes=4, int_labels=True):
     '''
     if not int_labels:
       y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.expand_dims(y_true, axis=-1)
     y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.expand_dims(y_pred, axis=-1)
     wall_true = K.cast(K.equal(y_true, 1), 'float')
     void_pred = K.cast(K.equal(y_pred, 0), 'float')
     true_wall_pred_as_void = K.sum(wall_true * (1-void_pred) * void_pred) / (K.sum(wall_true) + K.epsilon())
