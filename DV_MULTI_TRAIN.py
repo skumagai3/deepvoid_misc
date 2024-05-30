@@ -458,11 +458,12 @@ if LOSS == 'SCCE':
   ONE_HOT_FLAG = False
 # add more metrics here, may slow down training?
 if not LOW_MEM_FLAG:
-  metrics.append(nets.F1_micro_keras(int_labels=~ONE_HOT_FLAG), 
-                 nets.MCC_keras(int_labels=~ONE_HOT_FLAG),
-                 nets.balanced_accuracy_keras(int_labels=~ONE_HOT_FLAG),
-                 nets.void_PR_F1_keras(int_labels=~ONE_HOT_FLAG),
-                 nets.true_wall_pred_as_void_keras(int_labels=~ONE_HOT_FLAG))
+  more_metrics = [nets.F1_micro_keras(int_labels=~ONE_HOT_FLAG), 
+                  nets.MCC_keras(int_labels=~ONE_HOT_FLAG),
+                  nets.balanced_accuracy_keras(int_labels=~ONE_HOT_FLAG),
+                  nets.void_PR_F1_keras(int_labels=~ONE_HOT_FLAG),
+                  nets.true_wall_pred_as_void_keras(int_labels=~ONE_HOT_FLAG)]
+  metrics += more_metrics
 #===============================================================
 # Multiprocessing
 #===============================================================
