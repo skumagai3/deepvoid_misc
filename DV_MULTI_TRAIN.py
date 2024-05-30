@@ -369,8 +369,8 @@ if LOAD_INTO_MEM:
   # do i even need to do this? won't cardinality be 
   pass
 else:
-  cardinality_train = np.ceil(n_samples_train / batch_size)
-  cardinality_test = np.ceil(n_samples_test / batch_size)
+  cardinality_train = n_samples_train // batch_size
+  cardinality_test = n_samples_test // batch_size
   train_dataset = train_dataset.apply(tf.data.experimental.assert_cardinality(cardinality_train))
   test_dataset = test_dataset.apply(tf.data.experimental.assert_cardinality(cardinality_test))
   print('>>> Cardinality of train dataset:',cardinality_train)
