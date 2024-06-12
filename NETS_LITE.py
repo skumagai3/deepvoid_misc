@@ -31,7 +31,7 @@ from keras.losses import CategoricalCrossentropy, SparseCategoricalCrossentropy
 from keras.callbacks import Callback, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, TensorBoard, CSVLogger
 #from keras.saving import register_keras_serializable
 from keras import regularizers
-from tf.keras import metrics
+from tensorflow.keras import metrics
 
 from sklearn.preprocessing import label_binarize
 from sklearn.metrics import precision_recall_fscore_support, balanced_accuracy_score, roc_auc_score, matthews_corrcoef
@@ -718,14 +718,55 @@ def MCC_keras(num_classes=4, int_labels=True):
     y_pred = tf.expand_dims(y_pred, axis=-1)
     y_true = K.cast(y_true, 'float32')
     y_pred = K.cast(y_pred, 'float32')
-    TP = K.sum(K.cast(y_true * y_pred, 'float'), axis=0)
-    TN = K.sum(K.cast((1-y_true) * (1-y_pred), 'float'), axis=0)
-    FP = K.sum(K.cast((1-y_true) * y_pred, 'float'), axis=0)
-    FN = K.sum(K.cast(y_true * (1-y_pred), 'float'), axis=0)
-    numerator = TP * TN - FP * FN
-    denominator = K.sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN) + K.epsilon())
-    mcc = numerator / denominator
-    mcc = K.switch(tf.math.is_nan(mcc), K.zeros_like(mcc), mcc)  # Handle NaN
+    mcc_per_class = []
+    for i in range(num_classes):
+      y_true_i = K.cast(K.equal(y_true, i), 'float32')
+      y_pred_i = K.cast(K.equal(y_pred, i), 'float32')
+      TP = K.sum(y_true_i * y_pred_i)
+      TN = K.sum((1-y_true_i) * (1-y_pred_i))
+      FP = K.sum((1-y_true_i) * y_pred_i)
+      FN = K.sum(y_true_i * (1-y_pred_i))
+      numerator = TP * TN - FP * FN
+      denominator = K.sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN) + K.epsilon())
+      mcc = numerator / denominator
+      mcc = K.switch(tf.math.is_nan(mcc), K.zeros_like(mcc), mcc)  # Handle NaN
+      mcc_per_class.append(mcc)
+    mcc = K.mean(K.stack(mcc_per_class))
+    return mcc
+  return MCC
+def MCC_alt_keras(num_classes=4, int_labels=True):
+  def MCC(y_true,y_pred):
+    '''
+    Alternate way of calcing MCC. Might be faster?
+    fill in details here if faster and delete other one.
+    '''
+    # handle non one-hot encoded labels
+    if not int_labels:
+      y_pred = K.argmax(y_pred, axis=-1)
+      y_pred = tf.expand_dims(y_pred, axis=-1)
+    # cast to int32
+    y_true = tf.squeeze(tf.cast(y_true, tf.int32), axis=-1)
+    y_pred = tf.cast(y_pred, tf.int32)
+    # total # of samples:
+    s = tf.size(y_true, out_type=tf.int32)
+    # total # of correctly predicted labels
+    c = s - tf.math.count_nonzero(y_true - y_pred)
+    # # of times each class was truely predicted:
+    t = []
+    # # of times each class was predicted:
+    p = []
+    for i in range(num_classes):
+      i = tf.cast(i, tf.int32)
+      t.append(tf.reduce_sum(tf.cast(tf.equal(y_true, i), tf.int32)))
+      p.append(tf.reduce_sum(tf.cast(tf.equal(y_pred, i), tf.int32)))
+    t = tf.expand_dims(tf.stack(t), 0)
+    p = tf.expand_dims(tf.stack(p), 0)
+    s = tf.cast(s, tf.int32)
+    c = tf.cast(c, tf.int32)
+    num = tf.cast(c*s - tf.matmul(t, tf.transpose(p)), tf.float32)
+    den = tf.math.sqrt(tf.cast(s**2 - tf.matmul(p, tf.transpose(p))) \
+                       * tf.math.sqrt(tf.cast(s**2 - tf.matmul(t, tf.transpose(t)), tf.float32)))
+    mcc = tf.divide(num, den + K.epsilon())
     return mcc
   return MCC
 def balanced_accuracy_keras(num_classes=4, int_labels=True):
