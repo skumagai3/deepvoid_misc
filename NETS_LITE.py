@@ -745,7 +745,8 @@ def MCC_alt_keras(num_classes=4, int_labels=True):
       y_pred = K.argmax(y_pred, axis=-1)
       y_pred = tf.expand_dims(y_pred, axis=-1)
     # cast to int32
-    y_true = tf.squeeze(tf.cast(y_true, tf.int32), axis=-1)
+    #y_true = tf.squeeze(tf.cast(y_true, tf.int32), axis=-1)
+    y_true = tf.cast(y_true, tf.int32)
     y_pred = tf.cast(y_pred, tf.int32)
     # total # of samples:
     s = tf.size(y_true, out_type=tf.int32)
