@@ -751,7 +751,7 @@ def MCC_alt_keras(num_classes=4, int_labels=True):
     # total # of samples:
     s = tf.size(y_true, out_type=tf.int32)
     # total # of correctly predicted labels
-    c = s - tf.math.count_nonzero(y_true - y_pred)
+    c = tf.cast(s, tf.int32) - tf.math.count_nonzero(tf.cast(y_true, tf.int32) - tf.cast(y_pred, tf.int32))
     # # of times each class was truely predicted:
     t = []
     # # of times each class was predicted:
