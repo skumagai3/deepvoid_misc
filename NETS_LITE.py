@@ -751,7 +751,8 @@ def MCC_alt_keras(num_classes=4, int_labels=True):
     # total # of samples:
     s = tf.size(y_true, out_type=tf.int32)
     # total # of correctly predicted labels
-    c = tf.cast(s, tf.int32) - tf.math.count_nonzero(tf.cast(y_true, tf.int32) - tf.cast(y_pred, tf.int32))
+    #c = tf.cast(s, tf.int32) - tf.math.count_nonzero(tf.cast(y_true, tf.int32) - tf.cast(y_pred, tf.int32))
+    c = s - tf.math.count_nonzero(y_true - y_pred, dtype=tf.int32)
     # # of times each class was truely predicted:
     t = []
     # # of times each class was predicted:
@@ -767,8 +768,8 @@ def MCC_alt_keras(num_classes=4, int_labels=True):
     num = tf.cast(c*s - tf.matmul(t, tf.transpose(p)), tf.float32)
     den = tf.math.sqrt(tf.cast(s**2 - tf.matmul(p, tf.transpose(p))) \
                        * tf.math.sqrt(tf.cast(s**2 - tf.matmul(t, tf.transpose(t)), tf.float32)))
-    mcc = tf.divide(num, den + K.epsilon())
-    return mcc
+    mcc_value = tf.divide(num, den + K.epsilon())
+    return mcc_value
   return MCC
 def balanced_accuracy_keras(num_classes=4, int_labels=True):
   def balanced_accuracy(y_true, y_pred):
