@@ -31,7 +31,7 @@ from keras.losses import CategoricalCrossentropy, SparseCategoricalCrossentropy
 from keras.callbacks import Callback, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, TensorBoard, CSVLogger
 #from keras.saving import register_keras_serializable
 from keras import regularizers
-from tensorflow.keras import metrics
+from tf.keras import metrics
 
 from sklearn.preprocessing import label_binarize
 from sklearn.metrics import precision_recall_fscore_support, balanced_accuracy_score, roc_auc_score, matthews_corrcoef
