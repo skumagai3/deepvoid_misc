@@ -766,7 +766,7 @@ def MCC_alt_keras(num_classes=4, int_labels=True):
     s = tf.cast(s, tf.int32)
     c = tf.cast(c, tf.int32)
     num = tf.cast(c*s - tf.matmul(t, tf.transpose(p)), tf.float32)
-    den = tf.math.sqrt(tf.cast(s**2 - tf.matmul(p, tf.transpose(p))) \
+    den = tf.math.sqrt(tf.cast(s**2 - tf.matmul(p, tf.transpose(p)), tf.float32) \
                        * tf.math.sqrt(tf.cast(s**2 - tf.matmul(t, tf.transpose(t)), tf.float32)))
     mcc_value = tf.divide(num, den + K.epsilon())
     return mcc_value
