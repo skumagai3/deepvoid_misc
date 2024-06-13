@@ -705,70 +705,42 @@ def MCC_keras(num_classes=4, int_labels=True):
   def MCC(y_true, y_pred):
     '''
     Matthews correlation coefficient using keras.backend functions.
-    y_true: true labels
-    y_pred: predicted labels
+    y_true: true labels (shape: [N_samples, SUBGRID, SUBGRID, SUBGRID, 1])
+    y_pred: predicted labels (if int_labels=True, shape: [N_samples, SUBGRID, SUBGRID, SUBGRID, 1])
+    (if int_labels=False, shape: [N_samples, SUBGRID, SUBGRID, SUBGRID, num_classes])
     num_classes: int number of classes. def 4.
     int_labels: bool whether or not labels are integer or one-hot. def True.
     Returns: Matthews correlation coefficient.
     '''
+    # squeeze the last dimension of y_true.
+    y_true = K.cast(K.squeeze(y_true, axis=-1), 'int32')
     if not int_labels:
-      y_true = K.argmax(y_true, axis=-1)
-      y_true = tf.expand_dims(y_true, axis=-1)
-    y_pred = K.argmax(y_pred, axis=-1)
-    y_pred = tf.expand_dims(y_pred, axis=-1)
-    y_true = K.cast(y_true, 'float32')
-    y_pred = K.cast(y_pred, 'float32')
-    mcc_per_class = []
-    for i in range(num_classes):
-      y_true_i = K.cast(K.equal(y_true, i), 'float32')
-      y_pred_i = K.cast(K.equal(y_pred, i), 'float32')
-      TP = K.sum(y_true_i * y_pred_i)
-      TN = K.sum((1-y_true_i) * (1-y_pred_i))
-      FP = K.sum((1-y_true_i) * y_pred_i)
-      FN = K.sum(y_true_i * (1-y_pred_i))
-      numerator = TP * TN - FP * FN
-      denominator = K.sqrt((TP + FP) * (TP + FN) * (TN + FP) * (TN + FN) + K.epsilon())
-      mcc = numerator / denominator
-      mcc = K.switch(tf.math.is_nan(mcc), K.zeros_like(mcc), mcc)  # Handle NaN
-      mcc_per_class.append(mcc)
-    mcc = K.mean(K.stack(mcc_per_class))
-    return mcc
-  return MCC
-def MCC_alt_keras(num_classes=4, int_labels=True):
-  def MCC(y_true,y_pred):
-    '''
-    Alternate way of calcing MCC. Might be faster?
-    fill in details here if faster and delete other one.
-    '''
-    # handle non one-hot encoded labels
-    if not int_labels:
-      y_pred = K.argmax(y_pred, axis=-1)
-      y_pred = tf.expand_dims(y_pred, axis=-1)
-    # cast to int32
-    #y_true = tf.squeeze(tf.cast(y_true, tf.int32), axis=-1)
-    y_true = tf.cast(y_true, tf.int32)
-    y_pred = tf.cast(y_pred, tf.int32)
-    # total # of samples:
-    s = tf.size(y_true, out_type=tf.int32)
-    # total # of correctly predicted labels
-    #c = tf.cast(s, tf.int32) - tf.math.count_nonzero(tf.cast(y_true, tf.int32) - tf.cast(y_pred, tf.int32))
-    c = s - tf.math.count_nonzero(y_true - y_pred, dtype=tf.int32)
-    # # of times each class was truely predicted:
-    t = []
-    # # of times each class was predicted:
-    p = []
-    for i in range(num_classes):
-      i = tf.cast(i, tf.int32)
-      t.append(tf.reduce_sum(tf.cast(tf.equal(y_true, i), tf.int32)))
-      p.append(tf.reduce_sum(tf.cast(tf.equal(y_pred, i), tf.int32)))
-    t = tf.expand_dims(tf.stack(t), 0)
-    p = tf.expand_dims(tf.stack(p), 0)
-    s = tf.cast(s, tf.int32)
-    c = tf.cast(c, tf.int32)
-    num = tf.cast(c*s - tf.matmul(t, tf.transpose(p)), tf.float32)
-    den = tf.math.sqrt(tf.cast(s**2 - tf.matmul(p, tf.transpose(p)), tf.float32) \
-                       * tf.math.sqrt(tf.cast(s**2 - tf.matmul(t, tf.transpose(t)), tf.float32)))
-    mcc_value = tf.divide(num, den + K.epsilon())
+      y_pred = K.cast(K.argmax(y_pred, axis=-1), 'int32')
+    else:
+      y_pred = K.cast(K.squeeze(y_pred, axis=-1), 'int32')
+    # reshape y_true and y_pred to 1D tensors.
+    y_true = K.flatten(y_true)
+    y_pred = K.flatten(y_pred)
+    # calculate confusion matrix.
+    C = tf.math.confusion_matrix(
+      labels=y_true,
+      predictions=y_pred,
+      num_classes=num_classes,
+      dtype=tf.int32,
+      weights=None,
+    )
+    # cast confusion matrix to float32.
+    t_sum = K.cast(tf.reduce_sum(C,axis=1), 'float32')
+    p_sum = K.cast(tf.reduce_sum(C,axis=0), 'float32')
+    n_correct = K.cast(tf.linalg.trace(C), 'float32')
+    n_samples = K.cast(tf.reduce_sum(p_sum), 'float32')
+    # calculate MCC.
+    cov_ytyp = n_correct * n_samples - tf.tensordot(t_sum, p_sum, axes=1)
+    cov_ypyp = n_samples**2 - tf.tensordot(p_sum, p_sum, axes=1)
+    cov_ytyt = n_samples**2 - tf.tensordot(t_sum, t_sum, axes=1)
+    mcc_value = cov_ytyp / K.sqrt(cov_ytyt * cov_ypyp + K.epsilon())
+    # handle NaN:
+    mcc_value = K.switch(tf.math.is_nan(mcc_value), K.zeros_like(mcc_value), mcc_value)
     return mcc_value
   return MCC
 def balanced_accuracy_keras(num_classes=4, int_labels=True):
