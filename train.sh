@@ -67,14 +67,14 @@ FOCAL_ALPHA=(0.5 0.5 0.2 0.2); echo "Focal Alpha: ${FOCAL_ALPHA[@]}";
 FOCAL_GAMMA=2.0; echo "Focal Gamma: $FOCAL_GAMMA";
 UNIFORM_FLAG=0; echo "Uniform Flag: $UNIFORM_FLAG";
 LOAD_MODEL=0; echo "Load Model: $LOAD_MODEL";
-LOAD_INTO_MEM=0; echo "Load into memory: $LOAD_INTO_MEM";
+LOAD_INTO_MEM=1; echo "Load into memory: $LOAD_INTO_MEM";
 BATCH_SIZE=4; echo "Batch Size: $BATCH_SIZE";
 EPOCHS=500; echo "Epochs: $EPOCHS";
-LEARNING_RATE=0.001; echo "Learning Rate: $LEARNING_RATE";
+LEARNING_RATE=0.0001; echo "Learning Rate: $LEARNING_RATE";
 LEARNING_RATE_PATIENCE=10; echo "Learning Rate Patience: $LEARNING_RATE_PATIENCE";
-REG_FLAG=1; echo "Regularization: $REG_FLAG";
+REG_FLAG=0; echo "Regularization: $REG_FLAG";
 PICOTTE_FLAG=0; echo "Picotte: $PICOTTE_FLAG";
-TENSORBOARD=0; echo "TensorBoard: $TENSORBOARD";
+TENSORBOARD=1; echo "TensorBoard: $TENSORBOARD";
 
 # Constructing command line arguments dynamically
 CMD_ARGS="$ROOT_DIR $SIM $L $D $F $LOSS $GRID"
