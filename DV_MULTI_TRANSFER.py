@@ -162,6 +162,15 @@ metrics += more_metrics
 print('>>> Metrics:')
 for metric in metrics:
   print(str(metric))
+# set up custom objects for loading model
+custom_objects = {}
+custom_objects['MCC'] = nets.MCC_keras(int_labels=~ONE_HOT_FLAG)
+custom_objects['balanced_accuracy'] = nets.balanced_accuracy_keras(int_labels=~ONE_HOT_FLAG)
+custom_objects['void_F1'] = nets.void_F1_keras(int_labels=~ONE_HOT_FLAG)
+custom_objects['F1_micro'] = nets.F1_micro_keras(int_labels=~ONE_HOT_FLAG)
+custom_objects['recall_micro'] = nets.recall_micro_keras(int_labels=~ONE_HOT_FLAG)
+custom_objects['precision_micro'] = nets.precision_micro_keras(int_labels=~ONE_HOT_FLAG)
+custom_objects['true_wall_pred_as_void'] = nets.true_wall_pred_as_void_keras(int_labels=~ONE_HOT_FLAG)
 #===============================================================
 # Load data
 #===============================================================
@@ -264,6 +273,8 @@ if not os.path.exists(FILE_MODEL):
     print('>>> Model not found:',FILE_MODEL)
     print('>>> Exiting...')
     sys.exit()
+  else:
+    print('>>> Model found:',FILE_MODEL)
 # rename transfer learned model
 CLONE_NAME = MODEL_NAME + '_TL_' + TL_TYPE + '_'
 CLONE_NAME += 'tran_L'+str(tran_L)
@@ -271,7 +282,7 @@ if MULTI_FLAG:
     strategy = tf.distribute.MirroredStrategy()
     print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
     with strategy.scope():
-        model = nets.load_model(FILE_MODEL)
+        model = nets.load_model(FILE_MODEL,custom_objects=custom_objects)
         clone = nets.clone_model(model)
         clone.set_weights(model.get_weights())
         clone._name = CLONE_NAME
@@ -312,7 +323,7 @@ if MULTI_FLAG:
         clone.compile(optimizer=nets.Adam(learning_rate=LR),loss=loss,
                       metrics=metrics)
 else:
-    model = nets.load_model(FILE_MODEL)
+    model = nets.load_model(FILE_MODEL,custom_objects=custom_objects)
     clone = nets.clone_model(model)
     clone.set_weights(model.get_weights())
     clone._name = CLONE_NAME
