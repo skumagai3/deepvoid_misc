@@ -256,6 +256,14 @@ print('Mask field:',FILE_MASK)
 #================================================================
 # load and clone model
 #================================================================
+# check if FILE_MODEL exists, if not try with .keras extension
+if not os.path.exists(FILE_MODEL):
+  print('>>> Model not found:',FILE_MODEL)
+  FILE_MODEL += '.keras'
+  if not os.path.exists(FILE_MODEL):
+    print('>>> Model not found:',FILE_MODEL)
+    print('>>> Exiting...')
+    sys.exit()
 # rename transfer learned model
 CLONE_NAME = MODEL_NAME + '_TL_' + TL_TYPE + '_'
 CLONE_NAME += 'tran_L'+str(tran_L)
