@@ -712,12 +712,11 @@ def MCC_keras(num_classes=4, int_labels=True):
     int_labels: bool whether or not labels are integer or one-hot. def True.
     Returns: Matthews correlation coefficient.
     '''
-    # squeeze the last dimension of y_true.
-    y_true = K.cast(K.squeeze(y_true, axis=-1), 'int32')
+    y_pred = K.cast(K.argmax(y_pred, axis=-1), 'int32')
     if not int_labels:
-      y_pred = K.cast(K.argmax(y_pred, axis=-1), 'int32')
+      y_true = K.cast(K.argmax(y_true, axis=-1), 'int32')
     else:
-      y_pred = K.cast(K.squeeze(y_pred, axis=-1), 'int32')
+      y_true = K.cast(K.squeeze(y_true, axis=-1), 'int32')
     # reshape y_true and y_pred to 1D tensors.
     y_true = K.flatten(y_true)
     y_pred = K.flatten(y_pred)
