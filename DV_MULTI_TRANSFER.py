@@ -396,14 +396,7 @@ csv_logger = nets.CSVLogger(MODEL_PATH+CLONE_NAME+'_' + datetime.datetime.now().
 reduce_lr = nets.ReduceLROnPlateau(monitor='val_loss',factor=0.25,patience=lr_patience, 
                                    verbose=1,min_lr=1e-6)
 early_stop = nets.EarlyStopping(monitor='val_loss',patience=patience,restore_best_weights=True)
-if LOW_MEM_FLAG:
-  # dont calc metrics, too memory intensive
-  callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger]
-else:
-  if LOAD_INTO_MEM: # metrics doesnt work with tf.data.Dataset right now
-    callbacks = [metrics,model_chkpt,reduce_lr,early_stop,csv_logger]
-  else:
-    callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger]
+callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger,tb_call]
 if TENSORBOARD_FLAG:
   callbacks.append(tb_call)
 #===============================================================
