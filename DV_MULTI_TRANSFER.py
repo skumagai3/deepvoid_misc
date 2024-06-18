@@ -139,19 +139,38 @@ hp_dict_model['MODEL_NAME_ATTRIBUTES'] = hp_dict
 hp_dict_path = MODEL_PATH + MODEL_NAME + '_hps.txt'
 hp_dict = nets.load_dict_from_text(hp_dict_path)
 hp_dict_model['BASE_MODEL_ATTRIBUTES'] = hp_dict
+ONE_HOT_FLAG = True # for compute metrics callback
 metrics = ['accuracy']
 if LOSS == 'CCE':
-    loss = nets.CategoricalCrossentropy()
+  loss = nets.CategoricalCrossentropy()
 elif LOSS == 'SCCE':
-    loss = nets.SparseCategoricalCrossentropy()
+  loss = nets.SparseCategoricalCrossentropy()
+  ONE_HOT_FLAG = False
 elif LOSS == 'FOCAL_CCE':
-    alpha = hp_dict_model['focal_alpha']
-    gamma = hp_dict_model['focal_gamma']
-    #loss = [nets.categorical_focal_loss(alpha=0.25,gamma=2.0)] 
-    loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma)
+  alpha = hp_dict_model['focal_alpha']
+  gamma = hp_dict_model['focal_gamma']
+  #loss = [nets.categorical_focal_loss(alpha=0.25,gamma=2.0)] 
+  loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma)
+more_metrics = [nets.MCC_keras(int_labels=~ONE_HOT_FLAG),nets.balanced_accuracy_keras(int_labels=~ONE_HOT_FLAG),
+                nets.void_F1_keras(int_labels=~ONE_HOT_FLAG),nets.F1_micro_keras(int_labels=~ONE_HOT_FLAG)]
 if not LOW_MEM_FLAG:
-  metrics += ['f1_score','precision','recall']
-  pass
+  more_metrics += [nets.recall_micro_keras(int_labels=~ONE_HOT_FLAG),
+                   nets.precision_micro_keras(int_labels=~ONE_HOT_FLAG),
+                   nets.true_wall_pred_as_void_keras(int_labels=~ONE_HOT_FLAG)]
+metrics += more_metrics
+# print metrics:
+print('>>> Metrics:')
+for metric in metrics:
+  print(str(metric))
+# set up custom objects for loading model
+custom_objects = {}
+custom_objects['MCC'] = nets.MCC_keras(int_labels=~ONE_HOT_FLAG)
+custom_objects['balanced_accuracy'] = nets.balanced_accuracy_keras(int_labels=~ONE_HOT_FLAG)
+custom_objects['void_F1'] = nets.void_F1_keras(int_labels=~ONE_HOT_FLAG)
+custom_objects['F1_micro'] = nets.F1_micro_keras(int_labels=~ONE_HOT_FLAG)
+custom_objects['recall_micro'] = nets.recall_micro_keras(int_labels=~ONE_HOT_FLAG)
+custom_objects['precision_micro'] = nets.precision_micro_keras(int_labels=~ONE_HOT_FLAG)
+custom_objects['true_wall_pred_as_void'] = nets.true_wall_pred_as_void_keras(int_labels=~ONE_HOT_FLAG)
 #===============================================================
 # Load data
 #===============================================================
@@ -251,6 +270,16 @@ print('Mask field:',FILE_MASK)
 #================================================================
 # load and clone model
 #================================================================
+# check if FILE_MODEL exists, if not try with .keras extension
+if not os.path.exists(FILE_MODEL):
+  print('>>> Model not found:',FILE_MODEL)
+  FILE_MODEL += '.keras'
+  if not os.path.exists(FILE_MODEL):
+    print('>>> Model not found:',FILE_MODEL)
+    print('>>> Exiting...')
+    sys.exit()
+  else:
+    print('>>> Model found:',FILE_MODEL)
 # rename transfer learned model
 CLONE_NAME = MODEL_NAME + '_TL_' + TL_TYPE + '_'
 CLONE_NAME += 'tran_L'+str(tran_L)
@@ -258,7 +287,7 @@ if MULTI_FLAG:
     strategy = tf.distribute.MirroredStrategy()
     print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
     with strategy.scope():
-        model = nets.load_model(FILE_MODEL)
+        model = nets.load_model(FILE_MODEL,custom_objects=custom_objects)
         clone = nets.clone_model(model)
         clone.set_weights(model.get_weights())
         clone._name = CLONE_NAME
@@ -299,7 +328,7 @@ if MULTI_FLAG:
         clone.compile(optimizer=nets.Adam(learning_rate=LR),loss=loss,
                       metrics=metrics)
 else:
-    model = nets.load_model(FILE_MODEL)
+    model = nets.load_model(FILE_MODEL,custom_objects=custom_objects)
     clone = nets.clone_model(model)
     clone.set_weights(model.get_weights())
     clone._name = CLONE_NAME
@@ -359,13 +388,6 @@ nets.save_dict_to_text(hp_dict_model,FILE_HPS_CLONE)
 #================================================================
 print('>>> Training')
 # set up callbacks
-ONE_HOT_FLAG = True # for compute metrics callback
-if LOSS == 'SCCE':
-  ONE_HOT_FLAG = False
-if LOAD_INTO_MEM:
-  metrics = nets.ComputeMetrics((X_test,Y_test), N_epochs = N_epochs_metric, avg='micro', one_hot=ONE_HOT_FLAG)
-else:
-  metrics = None
 model_chkpt = nets.ModelCheckpoint(MODEL_PATH+CLONE_NAME+'.keras',monitor='val_loss',
                                    save_best_only=True,verbose=2)
 log_dir = ROOT_DIR + 'logs/fit/' + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") 

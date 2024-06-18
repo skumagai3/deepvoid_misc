@@ -462,12 +462,11 @@ if LOSS == 'SCCE':
   ONE_HOT_FLAG = False
 print('>>> One-hot flag:',ONE_HOT_FLAG)
 # add more metrics here, may slow down training?
-more_metrics = [nets.MCC_keras(int_labels=~ONE_HOT_FLAG),nets.balanced_accuracy_keras(int_labels=~ONE_HOT_FLAG)]
+more_metrics = [nets.MCC_keras(int_labels=~ONE_HOT_FLAG),nets.balanced_accuracy_keras(int_labels=~ONE_HOT_FLAG),
+                nets.void_F1_keras(int_labels=~ONE_HOT_FLAG),nets.F1_micro_keras(int_labels=~ONE_HOT_FLAG)]
 if not LOW_MEM_FLAG:
-  more_metrics += [nets.F1_micro_keras(int_labels=~ONE_HOT_FLAG),
-                   nets.recall_micro_keras(int_labels=~ONE_HOT_FLAG),
+  more_metrics += [nets.recall_micro_keras(int_labels=~ONE_HOT_FLAG),
                    nets.precision_micro_keras(int_labels=~ONE_HOT_FLAG),
-                   nets.void_F1_keras(int_labels=~ONE_HOT_FLAG),
                    nets.true_wall_pred_as_void_keras(int_labels=~ONE_HOT_FLAG)]
 metrics += more_metrics
 # print metrics:
