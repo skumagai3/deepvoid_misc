@@ -373,8 +373,8 @@ hp_dict_model['BASE_MODEL'] = MODEL_NAME
 hp_dict_model['MODEL_NAME'] = CLONE_NAME
 hp_dict_model['TL_TYPE'] = TL_TYPE
 if LOSS == 'FOCAL_CCE':
-    hp_dict_model['focal_alpha'] = alpha
-    hp_dict_model['focal_gamma'] = gamma
+  hp_dict_model['focal_alpha'] = alpha
+  hp_dict_model['focal_gamma'] = gamma
 FILE_HPS_CLONE = FILE_MODEL+CLONE_NAME+'_hps.txt'
 # get # of trainable params to ensure it's working:
 trainable_ps = nets.layer_utils.count_params(clone.trainable_weights)
@@ -483,7 +483,6 @@ print('Total nontrainable parameters:',nontrainable_ps)
 print('Total parameters:',trainable_ps+nontrainable_ps)
 print('>>> Finished training!!!')
 #===============================================================
-
 # steps:
 # score on test set
 # save results to model_scores.csv 
