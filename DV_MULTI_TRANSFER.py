@@ -212,6 +212,9 @@ if LOAD_INTO_MEM:
     print('Y_train shape: ',Y_train.shape)
     print('Y_test shape: ',Y_test.shape)
   print('>>> Data loaded!')
+  # Make tf.data.Dataset
+  train_dataset = tf.data.Dataset.from_tensor_slices((X_train,Y_train))
+  test_dataset = tf.data.Dataset.from_tensor_slices((X_test,Y_test))
 else:
   # load data from saved files into tf.data.Dataset
   print('>>> Loading train, val data into tf.data.Dataset from memmapped .npy files')
@@ -232,13 +235,15 @@ else:
       tf.TensorSpec(shape=(SUBGRID,SUBGRID,SUBGRID,last_dim),dtype=tf.float32)
     )
   )
-  # shuffle
-  train_dataset = train_dataset.shuffle(buffer_size=1024).batch(batch_size)
-  test_dataset = test_dataset.batch(batch_size)
-  # batch and prefetch
-  train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
-  test_dataset = test_dataset.prefetch(tf.data.experimental.AUTOTUNE)
-  print('>>> Data loaded!')
+# shuffle
+print('>>> Shuffling and batching datasets')
+train_dataset = train_dataset.shuffle(buffer_size=1024).batch(batch_size)
+test_dataset = test_dataset.batch(batch_size)
+# batch and prefetch
+print('>>> Prefetching datasets')
+train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
+test_dataset = test_dataset.prefetch(tf.data.experimental.AUTOTUNE)
+print('>>> Data loaded!')
 print(f'Transfer learning on delta with L={tran_L}')
 print('Density field:',FILE_DEN)
 print('Mask field:',FILE_MASK)
@@ -379,13 +384,11 @@ else:
     callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger]
 if TENSORBOARD_FLAG:
   callbacks.append(tb_call)
-if LOAD_INTO_MEM:
-  history = clone.fit(X_train, Y_train, batch_size = batch_size, epochs = epochs,
-                      validation_data=(X_test,Y_test), verbose = 2, shuffle = True,
-                      callbacks = callbacks)
-else:
-  history = clone.fit(train_dataset,epochs=epochs,validation_data=test_dataset,verbose=2,
-                      callbacks=callbacks)
+#===============================================================
+# Train model
+#===============================================================
+history = clone.fit(train_dataset,epochs=epochs,validation_data=test_dataset,verbose=2,
+                    callbacks=callbacks)
 #================================================================
 # plot performance metrics:
 #================================================================

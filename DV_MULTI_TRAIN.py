@@ -366,7 +366,7 @@ train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 test_dataset = test_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 # manually set cardinality of datasets
 if LOAD_INTO_MEM:
-  # do i even need to do this? won't cardinality be 
+  # do i even need to do this? won't cardinality be set?
   pass
 else:
   cardinality_train = n_samples_train // batch_size
@@ -545,6 +545,9 @@ else:
   callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger]
 if TENSORBOARD_FLAG:
   callbacks.append(tb_call)
+#===============================================================
+# Train model
+#===============================================================
 history = model.fit(train_dataset, epochs=epochs, validation_data=test_dataset, verbose=2,
                     callbacks=callbacks)
 #===============================================================
