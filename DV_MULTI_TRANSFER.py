@@ -123,9 +123,9 @@ if GRID == 640:
 path_to_TNG = ROOT_DIR + 'data/TNG/'
 path_to_BOL = ROOT_DIR + 'data/Bolshoi/'
 if SIM == 'TNG':
-    DATA_PATH = path_to_TNG
+  DATA_PATH = path_to_TNG
 elif SIM == 'Bolshoi' or SIM == 'BOL':
-    DATA_PATH = path_to_BOL
+  DATA_PATH = path_to_BOL
 FIG_DIR_PATH = ROOT_DIR + 'figs/'
 MODEL_PATH = ROOT_DIR + 'models/'
 PRED_PATH = ROOT_DIR + 'preds/'
@@ -138,6 +138,7 @@ hp_dict_model = {}
 hp_dict_model['MODEL_NAME_ATTRIBUTES'] = hp_dict
 hp_dict_path = MODEL_PATH + MODEL_NAME + '_hps.txt'
 hp_dict = nets.load_dict_from_text(hp_dict_path)
+REGULARIZE_FLAG = hp_dict['REGULARIZE_FLAG']
 hp_dict_model['BASE_MODEL_ATTRIBUTES'] = hp_dict
 ONE_HOT_FLAG = True # for compute metrics callback
 metrics = ['accuracy']
@@ -426,11 +427,24 @@ scores['SIM'] = SIM; scores['DEPTH'] = DEPTH; scores['FILTERS'] = FILTERS
 scores['L_TRAIN'] = base_L; scores['L_PRED'] = tran_L
 scores['UNIFORM_FLAG'] = UNIFORM_FLAG; scores['BATCHNORM'] = BATCHNORM
 scores['DROPOUT'] = DROP; scores['LOSS'] = LOSS
-scores['GRID'] = GRID; scores['DATE'] = DATE; scores['MODEL_NAME'] = MODEL_NAME
+scores['GRID'] = GRID; scores['DATE'] = DATE; scores['MODEL_NAME'] = CLONE_NAME
 scores['VAL_FLAG'] = VAL_FLAG
 scores['ORTHO_FLAG'] = ORTHO_FLAG
 epochs = len(history.epoch)
 scores['EPOCHS'] = epochs
+scores['BATCHSIZE'] = batch_size
+scores['LR'] = LR
+scores['REG_FLAG'] = REGULARIZE_FLAG
+scores['TRAINABLE_PARAMS'] = trainable_ps
+scores['NONTRAINABLE_PARAMS'] = nontrainable_ps
+scores['TOTAL_PARAMS'] = trainable_ps + nontrainable_ps
+scores['TRAIN_LOSS'] = history.history['loss'][-1]
+scores['VAL_LOSS'] = history.history['val_loss'][-1]
+scores['TRAIN_ACC'] = history.history['accuracy'][-1]
+scores['VAL_ACC'] = history.history['val_accuracy'][-1]
+if LOSS == 'FOCAL_CCE':
+  scores['FOCAL_ALPHA'] = alpha
+  scores['FOCAL_GAMMA'] = gamma
 #===============================================================
 # Predict, record metrics, and plot metrics on TEST DATA
 #===============================================================

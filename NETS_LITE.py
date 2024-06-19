@@ -1576,6 +1576,10 @@ def parse_model_name(MODEL_NAME):
   LAMBDA_TH = float(MODEL_NAME.split('-th')[1].split('-')[0])
   SIGMA = float(MODEL_NAME.split('-sig')[1].split('-')[0])
   base_L = float(MODEL_NAME.split('base_L')[1][0])
+  if base_L == 0.0 and SIM == 'TNG':
+    base_L = 0.33
+  if base_L == 0.0 and SIM == 'Bolshoi':
+    base_L = 0.122
   BN_FLAG = 'BN' in MODEL_NAME
   UNIFORM_FLAG = 'uniform' in MODEL_NAME
   if 'DROP' in MODEL_NAME:

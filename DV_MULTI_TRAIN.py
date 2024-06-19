@@ -406,9 +406,9 @@ hp_dict['MODEL_NAME'] = MODEL_NAME
 hp_dict['notes'] = f'trained on multi-class mask, threshold={th}, sigma={sig}, L={L}, Nm={GRID}'
 hp_dict['KERNEL'] = KERNEL
 if SIM == 'TNG':
-  hp_dict['Simulation trained on:'] = 'TNG300-3-Dark'
+  hp_dict['Simulation trained on'] = 'TNG300-3-Dark'
 elif SIM == 'BOL':
-  hp_dict['Simulation trained on:'] = 'Bolshoi'
+  hp_dict['Simulation trained on'] = 'Bolshoi'
 hp_dict['N_CLASSES'] = N_CLASSES
 hp_dict['DEPTH'] = DEPTH
 hp_dict['FILTERS'] = FILTERS
