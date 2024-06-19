@@ -179,8 +179,9 @@ else:
 # remember that Y_pred will have shape (N_samples, SUBGRID, SUBGRID, SUBGRID, 4)
 #===============================================================================
 batch_size = 4
+print('>>> Predicting...')
 Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False)
-print('>>> Finished predicting on validation data')
+print('>>> Finished predicting...')
 #===============================================================================
 # set up score_dict. 
 # VAL_FLAG is True if scores are based on val set
