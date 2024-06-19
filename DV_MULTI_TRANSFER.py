@@ -390,7 +390,7 @@ print('>>> Training')
 # set up callbacks
 model_chkpt = nets.ModelCheckpoint(MODEL_PATH+CLONE_NAME+'.keras',monitor='val_loss',
                                    save_best_only=True,verbose=2)
-log_dir = ROOT_DIR + 'logs/fit/' + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") 
+log_dir = ROOT_DIR + 'logs/fit/' + CLONE_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") 
 tb_call = nets.TensorBoard(log_dir=log_dir) # do we even need this if we CSV log?
 csv_logger = nets.CSVLogger(MODEL_PATH+CLONE_NAME+'_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") + '_train_log.csv')
 reduce_lr = nets.ReduceLROnPlateau(monitor='val_loss',factor=0.25,patience=lr_patience, 
