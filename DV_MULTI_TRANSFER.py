@@ -451,7 +451,7 @@ if LOSS != 'SCCE':
   Y_test = np.argmax(Y_test,axis=-1)
   Y_test = np.expand_dims(Y_test,axis=-1)
 nets.save_scores_from_fvol(Y_test,Y_pred,
-                           FILE_MODEL+CLONE_NAME,CLONE_FIG_DIR,
+                           MODEL_PATH+CLONE_NAME,CLONE_FIG_DIR,
                            scores,
                            VAL_FLAG=VAL_FLAG)
 # save score_dict by appending to the end of the csv.
@@ -464,10 +464,10 @@ nets.save_scores_to_csv(scores,ROOT_DIR+'model_scores.csv')
 # for slice plotting:
 #========================================================================
 if SIM == 'TNG':
-  nets.save_scores_from_model(FILE_DEN, FILE_MASK, MODEL_PATH+MODEL_NAME, CLONE_FIG_DIR, PRED_PATH,
+  nets.save_scores_from_model(FILE_DEN, FILE_MASK, MODEL_PATH+CLONE_NAME, CLONE_FIG_DIR, PRED_PATH,
                               GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,TRAIN_SCORE=False)
 elif SIM == 'BOL':
-  nets.save_scores_from_model(FILE_DEN, FILE_MASK, MODEL_PATH+MODEL_NAME, CLONE_FIG_DIR, PRED_PATH,
+  nets.save_scores_from_model(FILE_DEN, FILE_MASK, MODEL_PATH+CLONE_NAME, CLONE_FIG_DIR, PRED_PATH,
                               GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,BOXSIZE=256,BOLSHOI_FLAG=True,
                               TRAIN_SCORE=False)
 print('>>> Finished predicting on training data')
