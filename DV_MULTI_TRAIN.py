@@ -25,9 +25,9 @@ nets.K.set_image_data_format('channels_last')
 #===============================================================
 # Set training parameters:
 #===============================================================
-epochs = 500; print('epochs:',epochs)
-patience = 25; print('patience:',patience)
-lr_patience = 10; print('learning rate patience:',lr_patience)
+#epochs = 500; print('epochs:',epochs)
+#patience = 25; print('patience:',patience)
+#lr_patience = 10; print('learning rate patience:',lr_patience)
 N_epochs_metric = 10
 print(f'classification metrics calculated every {N_epochs_metric} epochs')
 KERNEL = (3,3,3)
@@ -109,6 +109,7 @@ opt_group.add_argument('--BATCH_SIZE', type=int, default=8, help='Batch size. De
 opt_group.add_argument('--EPOCHS', type=int, default=500, help='Number of epochs to train for. Default is 500.')
 opt_group.add_argument('--LEARNING_RATE', type=float, default=0.001, help='Initial learning rate. Default is 3e-3.')
 opt_group.add_argument('--LEARNING_RATE_PATIENCE', type=int, default=10, help='Number of epochs to wait before reducing learning rate. Default is 10.')
+opt_group.add_argument('--PATIENCE', type=int, default=25, help='Number of epochs to wait before early stopping. Default is 25.')
 opt_group.add_argument('--REGULARIZE_FLAG', action='store_true', help='If set, use L2 regularization.')
 opt_group.add_argument('--PICOTTE_FLAG', action='store_true', help='If set, set up for sbatch run on Picotte.')
 opt_group.add_argument('--TENSORBOARD_FLAG', action='store_true', help='If set, use tensorboard.')
@@ -133,6 +134,7 @@ batch_size = args.BATCH_SIZE
 epochs = args.EPOCHS
 LR = args.LEARNING_RATE
 LR_PATIENCE = args.LEARNING_RATE_PATIENCE
+PATIENCE = args.PATIENCE
 REGULARIZE_FLAG = args.REGULARIZE_FLAG
 PICOTTE_FLAG = args.PICOTTE_FLAG
 TENSORBOARD_FLAG = args.TENSORBOARD_FLAG
@@ -422,8 +424,8 @@ hp_dict['DROPOUT'] = str(DROPOUT)
 hp_dict['REGULARIZE_FLAG'] = str(REGULARIZE_FLAG)
 hp_dict['BATCH_SIZE'] = batch_size
 hp_dict['MAX_EPOCHS'] = epochs
-hp_dict['PATIENCE'] = patience
-hp_dict['LR_PATIENCE'] = lr_patience
+hp_dict['PATIENCE'] = PATIENCE
+hp_dict['LR_PATIENCE'] = LR_PATIENCE
 hp_dict['FILE_DEN'] = FILE_DEN
 hp_dict['FILE_MASK'] = FILE_MASK
 hp_dict['FILE_X_TRAIN'] = FILE_X_TRAIN
@@ -535,7 +537,7 @@ tb_call = nets.TensorBoard(log_dir=log_dir) # do we even need this if we CSV log
 csv_logger = nets.CSVLogger(FILE_OUT+MODEL_NAME+'_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") + '_train_log.csv')
 reduce_lr = nets.ReduceLROnPlateau(monitor='val_loss',factor=0.25,patience=LR_PATIENCE, 
                                    verbose=1,min_lr=1e-7)
-early_stop = nets.EarlyStopping(monitor='val_loss',patience=patience,restore_best_weights=True)
+early_stop = nets.EarlyStopping(monitor='val_loss',patience=PATIENCE,restore_best_weights=True)
 if LOW_MEM_FLAG:
   # dont calc metrics, too memory intensive
   callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger]

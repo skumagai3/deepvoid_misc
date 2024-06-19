@@ -22,10 +22,10 @@ nets.K.set_image_data_format('channels_last')
 #===============================================================
 # Set training parameters:
 #===============================================================
-patience = 25; print('patience: ',patience)
-lr_patience = 10; print('learning rate patience: ',lr_patience)
-N_epochs_metric = 10
-print(f'classification metrics calculated every {N_epochs_metric} epochs')
+#patience = 25; print('patience: ',patience)
+#lr_patience = 10; print('learning rate patience: ',lr_patience)
+#N_epochs_metric = 10
+#print(f'classification metrics calculated every {N_epochs_metric} epochs')
 KERNEL = (3,3,3)
 LR = 3e-3 # increased to 3e-3 since we have LRreduceonplateau anyway
 #===============================================================
@@ -58,6 +58,9 @@ Optional Flags:
   --TENSORBOARD_FLAG: If set, will use TensorBoard. Default is False.
   --EPOCHS: Number of epochs for training. Default is 500.
   --BATCH_SIZE: Batch size for training. Default is 8.
+  --LEARNING_RATE: Initial learning rate. Default is 0.001.
+  --LEARNING_RATE_PATIENCE: Number of epochs to wait before reducing learning rate. Default is 10.
+  --PATIENCE: Number of epochs to wait before early stopping. Default is 25.
 
 Notes:
 MODEL_NAME (SIM, base_L will be pulled from that)
@@ -85,8 +88,11 @@ opt_group.add_argument('--MULTI_FLAG',action='store_true',help='If set, use mult
 opt_group.add_argument('--LOW_MEM_FLAG', action='store_false', help='If not set, will load less training data and report less metrics.')
 opt_group.add_argument('--LOAD_INTO_MEM',action='store_true',help='If set, will load entire dataset into memory.')
 opt_group.add_argument('--TENSORBOARD_FLAG',action='store_true',help='If set, will use TensorBoard.')
-opt_group.add_argument('--EPOCHS',type=int, help='Number of epochs for training. Default is 500.')
-opt_group.add_argument('--BATCH_SIZE',type=int, help='Batch size for training. Default is 8.')
+opt_group.add_argument('--EPOCHS',type=int, default=500, help='Number of epochs for training. Default is 500.')
+opt_group.add_argument('--BATCH_SIZE',type=int, default=8, help='Batch size for training. Default is 8.')
+opt_group.add_argument('--LEARNING_RATE',type=float, default=3e-3, help='Learning rate for training. Default is 3e-3.')
+opt_group.add_argument('--LEARNING_RATE_PATIENCE',type=int, default=10, help='Patience for learning rate reduction. Default is 10.')
+opt_group.add_argument('--PATIENCE',type=int, default=25, help='Patience for early stopping. Default is 25.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 MODEL_NAME = args.MODEL_NAME
@@ -98,6 +104,9 @@ LOAD_INTO_MEM = args.LOAD_INTO_MEM
 TENSORBOARD_FLAG = args.TENSORBOARD_FLAG
 epochs = args.EPOCHS
 batch_size = args.BATCH_SIZE
+LR = args.LEARNING_RATE
+lr_patience = args.LEARNING_RATE_PATIENCE
+patience = args.PATIENCE
 #===============================================================
 # hp dict is the old model, hp_dict_model is the new model
 #===============================================================

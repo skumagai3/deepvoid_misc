@@ -60,31 +60,38 @@ TL_TYPE="ENC_EO"; echo "Transfer type: $TL_TYPE";
 #######################################################################
 if [ $SIM = "TNG" ]
 then
-    GRID=256; echo "GRID: $GRID"; ###### NOTE adjust grid here ########
+    GRID=512; echo "GRID: $GRID"; ###### NOTE adjust grid here ########
     [ $GRID -eq 512 ] && SIGMA=2.4 || [ $GRID -eq 128 ] && SIGMA=0.6 || [ $GRID -eq 256 ] && SIGMA=1.2
+    SIGMA=2.4; # 512 grid
     FN_DEN="subs1_mass_Nm${GRID}_L${tran_L}_d_None_smooth.fvol";
+    SIM_PREFIX=$SIM;
 elif [ $SIM = "Bolshoi" ] || [ $SIM = "BOL" ]
 then
     SIGMA=0.916; # 640 grid
     GRID=640; echo "GRID: $GRID";
     FN_DEN="Bolshoi_halo_CIC_${GRID}_L=${tran_L}.0.fvol";
+    SIM_PREFIX="Bolshoi";
 fi
 # other options (just type out model name manually):
+BN=0; echo "Batch Norm: $BN";
 #UNIFORM_FLAG=0; echo "Uniform Flag: $UNIFORM_FLAG";
-#BN=0; echo "Batch Norm: $BN";
 #DROP=0.0; echo "Dropout: $DROP";
 
 # assuming L_th for every model is 0.65 (so far it is):
 if [ $LOSS = "CCE" ]
 then
-    MODEL_NAME="${SIM}_D${D}-F${F}-Nm${GRID}-th0.65-sig${SIGMA}-base_L${base_L}";
+    if [ $BN -eq 1 ]
+    then
+        MODEL_NAME="${SIM_PREFIX}_D${D}-F${F}-Nm${GRID}-th0.65-sig${SIGMA}-base_L${base_L}_BN";
+    else
+        MODEL_NAME="${SIM_PREFIX}_D${D}-F${F}-Nm${GRID}-th0.65-sig${SIGMA}-base_L${base_L}";
+    fi
 else
-    if [ $SIM = "TNG" ]
+    if [ $BN -eq 1 ]
     then
-        MODEL_NAME="${SIM}_D${D}-F${F}-Nm${GRID}-th0.65-sig${SIGMA}-base_L${base_L}_${LOSS}";
-    elif [ $SIM = "BOL" ]
-    then
-        MODEL_NAME="Bolshoi_D${D}-F${F}-Nm${GRID}-th0.65-sig${SIGMA}-base_L${base_L}_${LOSS}";
+        MODEL_NAME="${SIM_PREFIX}_D${D}-F${F}-Nm${GRID}-th0.65-sig${SIGMA}-base_L${base_L}_BN_${LOSS}";
+    else
+        MODEL_NAME="${SIM_PREFIX}_D${D}-F${F}-Nm${GRID}-th0.65-sig${SIGMA}-base_L${base_L}_${LOSS}";
     fi
 fi
 #######################################################################
@@ -95,6 +102,9 @@ LOAD_INTO_MEM=0; echo "Load into memory: $LOAD_INTO_MEM"; # 0 for no, 1 for yes
 TENSORBOARD_FLAG=0; echo "TensorBoard: $TENSORBOARD_FLAG"; # 0 for no, 1 for yes
 EPOCHS=500; echo "Epochs: $EPOCHS";
 BATCH_SIZE=8; echo "Batch Size: $BATCH_SIZE";
+LEARNING_RATE=0.0003; echo "Learning Rate: $LEARNING_RATE";
+LEARNING_RATE_PATIENCE=10; echo "Learning Rate Patience: $LEARNING_RATE_PATIENCE";
+PATIENCE=25; echo "Patience: $PATIENCE";
 
 # Constructing command line arguments dynamically
 CMD_ARGS="$ROOT_DIR $MODEL_NAME $FN_DEN $TL_TYPE"
@@ -104,6 +114,9 @@ CMD_ARGS="$ROOT_DIR $MODEL_NAME $FN_DEN $TL_TYPE"
 [ "$TENSORBOARD_FLAG" -eq 1 ] && CMD_ARGS+=" --TENSORBOARD_FLAG"
 CMD_ARGS+=" --EPOCHS $EPOCHS"
 CMD_ARGS+=" --BATCH_SIZE $BATCH_SIZE"
+CMD_ARGS+=" --LEARNING_RATE $LEARNING_RATE"
+CMD_ARGS+=" --LEARNING_RATE_PATIENCE $LEARNING_RATE_PATIENCE"
+CMD_ARGS+=" --PATIENCE $PATIENCE"
 echo "Command line arguments: $CMD_ARGS";
 
 # Running the Python script with dynamically constructed arguments
