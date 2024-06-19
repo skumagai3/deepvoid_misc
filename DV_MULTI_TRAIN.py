@@ -534,7 +534,7 @@ log_dir = ROOT_DIR + 'logs/fit/' + MODEL_NAME + '_' + datetime.datetime.now().st
 tb_call = nets.TensorBoard(log_dir=log_dir) # do we even need this if we CSV log?
 csv_logger = nets.CSVLogger(FILE_OUT+MODEL_NAME+'_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") + '_train_log.csv')
 reduce_lr = nets.ReduceLROnPlateau(monitor='val_loss',factor=0.25,patience=LR_PATIENCE, 
-                                   verbose=1,min_lr=1e-6)
+                                   verbose=1,min_lr=1e-7)
 early_stop = nets.EarlyStopping(monitor='val_loss',patience=patience,restore_best_weights=True)
 if LOW_MEM_FLAG:
   # dont calc metrics, too memory intensive
