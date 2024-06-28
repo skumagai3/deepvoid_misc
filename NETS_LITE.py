@@ -6,6 +6,7 @@ Importing less random stuff and making it more lightweight and readable.
 This is meant to be used for multi-class classification.
 The old nets.py is fine for binary.
 '''
+import re
 import gc
 import os
 import sys
@@ -1275,6 +1276,26 @@ also I want to have fields for:
 - L the model was predicted on
 (for training runs these are the same value.)
 '''
+def normalize_column_names(df):
+  '''
+  Normalize and strip whitespace from column names.
+  Returns 
+  '''
+  regex = re.compile(r'(\.\d+\s*)+$')
+  # Trim whitespace and remove sequences of .number with optional whitespace in between
+  new_columns = [regex.sub('', col).strip() for col in df.columns]
+  return new_columns
+def consolidate_columns(df):
+  '''
+  Consolidate duplicated columns by keeping the first occurrence.
+  '''
+  # Normalize column names
+  df.columns = normalize_column_names(df)
+  # Consolidate duplicated columns by keeping the first occurrence
+  df = df.loc[:, ~df.columns.duplicated(keep='first')]
+  # Drop rows with all NaN values
+  df = df.dropna(how='all')
+  return df
 def save_scores_to_csv(score_dict, file_path):
   '''
   score_dict: dict of scores. 
@@ -1284,11 +1305,37 @@ def save_scores_to_csv(score_dict, file_path):
   new cols will be added if they don't exist. 
   '''
   if os.path.isfile(file_path):
+    print(f'>>> Loading model scores from {file_path}')
     df = pd.read_csv(file_path)
   else:
+    print(f'>>> Creating new model scores file at {file_path}')
     df = pd.DataFrame()
   new_row = pd.DataFrame([score_dict])
   updated_df = pd.concat([df,new_row],ignore_index=True, sort=False)
+  updated_df = consolidate_columns(updated_df)
+  print(f'Removed duplicate columns and NaN rows.')
+  updated_df.to_csv(file_path, index=False)
+  print(f'>>> Appended scores to {file_path}')
+col_names = [
+  'SIM','L_TRAIN','L_PRED','DEPTH','FILTERS','BN','matt_corrcoef','balanced_accuracy',
+  'micro_f1','weighted_f1','class_Void_f1','class_Wall_f1'
+  ]
+def save_scores_to_csv_small(score_dict, file_path, col_names=col_names):
+  '''
+  score_dict: dict of scores. 
+  filepath: str of where to save scores.csv
+  col_names: list of column names to save to csv. def col_names
+  '''
+  if os.path.isfile(file_path):
+    print(f'>>> Loading model scores from {file_path}')
+    df = pd.read_csv(file_path)
+  else:
+    print(f'>>> Creating new model scores file at {file_path}')
+    df = pd.DataFrame(columns=col_names)
+  new_row = pd.DataFrame([score_dict])
+  updated_df = pd.concat([df,new_row],ignore_index=True, sort=False)
+  updated_df = consolidate_columns(updated_df)
+  print(f'Removed duplicate columns and NaN rows.')
   updated_df.to_csv(file_path, index=False)
   print(f'>>> Appended scores to {file_path}')
 #---------------------------------------------------------
@@ -1544,7 +1591,49 @@ def save_slices_from_fvol(X_test,Y_test,Y_pred,FILE_MODEL,FILE_FIG,lamb,BOXSIZE=
     plotter.set_window(b=0,t=BOXSIZE,Nm=GRID,ax=axis,boxsize=BOXSIZE,Latex=LATEX)
   plt.savefig(FILE_FIG+MODEL_NAME+'-pred-comp-3x3.png',facecolor='white',bbox_inches='tight')
   print(f'Saved 3x3 comparison plot to {FILE_FIG+MODEL_NAME}-pred-comp-3x3.png')
-
+# adding function that creates a MODEL_NAME from some parameters:
+def create_model_name(SIM, DEPTH, FILTERS, GRID, LAMBDA_TH, SIGMA, base_L, UNIFORM_FLAG, BN_FLAG, DROP, LOSS, TL_TYPE=None, tran_L=None, suffix=None):
+  '''
+  Create a model name from the parameters of the model:
+  SIM: str, simulation model was trained on
+  DEPTH: int, depth of U-net
+  FILTERS: int, number of filters in first layer
+  GRID: int, size of full cube on a side
+  LAMBDA_TH: float, threshold value for eigenvalue definition. normally 0.65
+  SIGMA: float, sigma value for Gaussian smoothing. normally 2.4 for TNG and 0.916 for Bolshoi
+  base_L: float, interparticle spacing model was trained on originally
+  UNIFORM_FLAG: bool, whether model uses uniform random sampling. def False
+  BN_FLAG: bool, whether model uses batch normalization. def False
+  DROP: float, dropout rate. 0.0 means no dropout.
+  LOSS: str, loss function model was trained with
+  TL_TYPE: str, type of transfer learning model was trained with, if any. def None,
+  possible values: 'ENC', 'LL', 'ENC_EO'
+  tran_L: float, interparticle spacing model was transfer learned to, if it was transfer learned, def None
+  suffix: str, any additional suffix to add to model name. def None
+  '''
+  if SIM == 'BOL':
+    SIM = 'Bolshoi'
+  # root name:
+  mn = f'{SIM}_D{DEPTH}-F{FILTERS}-Nm{GRID}-th{LAMBDA_TH}-sig{SIGMA}-base_L{base_L}'
+  # add flags:
+  if UNIFORM_FLAG:
+    mn += '_uniform'
+  if BN_FLAG:
+    mn += '_BN'
+  if DROP != 0.0:
+    mn += f'_DROP{DROP}'
+  if LOSS == 'SCCE':
+    mn += '_SCCE'
+  if LOSS == 'FOCAL_CCE':
+    mn += '_FOCAL'
+  if LOSS == 'CCE':
+    pass
+  if suffix is not None:
+    mn += f'_{suffix}'
+  if TL_TYPE is not None:
+    print('Model was transfer learned. Adjusting name...')
+    mn += f'_TL{TL_TYPE}-tran_L{tran_L}'
+  return mn
 # adding function to spit out all possible parameters from a model name
 def parse_model_name(MODEL_NAME):
   '''
@@ -1655,6 +1744,7 @@ def data_gen_mmap(FILE_X,FILE_Y):
   Y = np.load(FILE_Y,mmap_mode='r')
   for features, labels in zip(X,Y):
     yield (features, labels)
+
 # creating better generator function for tf.data.Dataset
 def data_gen_mmap_batch(FILE_X,FILE_Y,batch_size):
   '''

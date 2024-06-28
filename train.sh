@@ -22,6 +22,7 @@ Optional Flags:
   --LOW_MEM_FLAG: If set to 1, will load less training data and report fewer metrics. Default is 1.
   --FOCAL_ALPHA: Alpha value for focal loss. Default is 0.25. can be a sequence of 4 values.
   --FOCAL_GAMMA: Gamma value for focal loss. Default is 2.0.
+  --MODEL_NAME_SUFFIX: Suffix to append to the model name. Default is empty.
   --LOAD_MODEL: If set to 1, load a previously trained model. Default is 0.
   --LOAD_INTO_MEM: If set to 1, load the entire dataset into memory. Default is 0.
   --BATCH_SIZE: Batch size for training. Default is 4.
@@ -66,6 +67,7 @@ MULTIPROCESSING_ENABLED=0; echo "Multiprocessing: $MULTIPROCESSING_ENABLED";
 HIGH_MEM_ENABLED=1; echo "High memory usage: $HIGH_MEM_ENABLED";
 FOCAL_ALPHA=(0.5 0.5 0.2 0.2); echo "Focal Alpha: ${FOCAL_ALPHA[@]}";
 FOCAL_GAMMA=2.0; echo "Focal Gamma: $FOCAL_GAMMA";
+MODEL_NAME_SUFFIX=""; echo "Model Name Suffix: $MODEL_NAME_SUFFIX";
 UNIFORM_FLAG=0; echo "Uniform Flag: $UNIFORM_FLAG";
 LOAD_MODEL=0; echo "Load Model: $LOAD_MODEL";
 LOAD_INTO_MEM=1; echo "Load into memory: $LOAD_INTO_MEM";
@@ -88,6 +90,7 @@ CMD_ARGS="$ROOT_DIR $SIM $L $D $F $LOSS $GRID"
 [ "$LOSS" = "FOCAL_CCE" ] && CMD_ARGS+=" --FOCAL_ALPHA ${FOCAL_ALPHA[@]} --FOCAL_GAMMA $FOCAL_GAMMA"
 [ "$LOAD_MODEL" -eq 1 ] && CMD_ARGS+=" --LOAD_MODEL"
 [ "$LOAD_INTO_MEM" -eq 1 ] && CMD_ARGS+=" --LOAD_INTO_MEM"
+CMD_ARGS+=" --MODEL_NAME_SUFFIX $MODEL_NAME_SUFFIX"
 CMD_ARGS+=" --BATCH_SIZE $BATCH_SIZE"
 CMD_ARGS+=" --EPOCHS $EPOCHS"
 CMD_ARGS+=" --LEARNING_RATE $LEARNING_RATE"

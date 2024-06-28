@@ -203,7 +203,10 @@ nets.save_scores_from_fvol(Y_test,Y_pred,FILE_OUT+MODEL_NAME,
                            FIG_OUT,
                            scores,
                            VAL_FLAG)
+print(f'>>> Saving all scores to {ROOT_DIR}/model_scores.csv')
 nets.save_scores_to_csv(scores,ROOT_DIR+'model_scores.csv')
+print(f'>>> Saving score summary to {ROOT_DIR}/model_scores_summary.csv')
+nets.save_scores_to_csv_small(scores,ROOT_DIR+'model_scores_summary.csv')
 print('>>> Saved scores!')
 del X_test, Y_test, Y_pred
 del scores

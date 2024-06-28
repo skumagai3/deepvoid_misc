@@ -67,6 +67,7 @@ Optional Flags:
   --LOW_MEM_FLAG: If set, will load less training data and do not report metrics. Default is True.
   --FOCAL_ALPHA: Focal loss alpha parameter. Default is 0.25. can be a list of 4 values.
   --FOCAL_GAMMA: Focal loss gamma parameter. Default is 2.0.
+  --MODEL_NAME_SUFFIX: Suffix to add to model name. Default is empty.
   --LOAD_MODEL_FLAG: If set, load model from FILE_OUT if it exists. Default is False.
   --LOAD_INTO_MEM: If set, load training and test data into memory. 
     If not set, load data from X_train, Y_train, X_test, Y_test .npy files into a tf.data.Dataset 
@@ -103,6 +104,7 @@ opt_group.add_argument('--MULTI_FLAG', action='store_true', help='If set, use mu
 opt_group.add_argument('--LOW_MEM_FLAG', action='store_false', help='If not set, will load less training data and report less metrics.')
 opt_group.add_argument('--FOCAL_ALPHA', type=float, nargs='+', default=[0.25,0.25,0.25,0.25], help='Focal loss alpha parameter. Default is 0.25.')
 opt_group.add_argument('--FOCAL_GAMMA', type=float, default=2.0, help='Focal loss gamma parameter. Default is 2.0.')
+opt_group.add_argument('--MODEL_NAME_SUFFIX', type=str, default='', help='Suffix to add to model name. Default is empty.')
 opt_group.add_argument('--LOAD_MODEL_FLAG', action='store_true', help='If set, load model from FILE_OUT if it exists.')
 opt_group.add_argument('--LOAD_INTO_MEM', action='store_true', help='If set, load all training and test data into memory. Default is False, aka to load from train, test .npy files into a tf.data.Dataset object.')
 opt_group.add_argument('--BATCH_SIZE', type=int, default=8, help='Batch size. Default is 4.')
@@ -128,6 +130,7 @@ MULTI_FLAG = args.MULTI_FLAG
 LOW_MEM_FLAG = args.LOW_MEM_FLAG
 alpha = args.FOCAL_ALPHA
 gamma = args.FOCAL_GAMMA
+MODEL_NAME_SUFFIX = args.MODEL_NAME_SUFFIX
 LOAD_MODEL_FLAG = args.LOAD_MODEL_FLAG
 LOAD_INTO_MEM = args.LOAD_INTO_MEM
 batch_size = args.BATCH_SIZE
@@ -155,6 +158,7 @@ print('LOSS =',LOSS)
 if LOSS == 'FOCAL_CCE':
   print('FOCAL_ALPHA =',alpha)
   print('FOCAL_GAMMA =',gamma)
+print('MODEL_NAME_SUFFIX =',MODEL_NAME_SUFFIX)
 print('BATCH_SIZE =',batch_size)
 print('EPOCHS =',epochs)
 print('UNIFORM_FLAG =',UNIFORM_FLAG)
@@ -383,24 +387,12 @@ else:
 #===============================================================
 # Set model hyperparameters
 #===============================================================
-if SIM == 'TNG':
-  MODEL_NAME = f'TNG_D{DEPTH}-F{FILTERS}-Nm{GRID}-th{th}-sig{sig}-base_L{L}'
-elif SIM == 'BOL':
-  MODEL_NAME = f'Bolshoi_D{DEPTH}-F{FILTERS}-Nm{GRID}-th{th}-sig{sig}-base_L{L}'
-if UNIFORM_FLAG:
-  MODEL_NAME += '_uniform'
-if BATCHNORM:
-  MODEL_NAME += '_BN'
-if DROPOUT != 0.0:
-  MODEL_NAME += f'_DROP{DROPOUT}'
-if LOSS == 'CCE':
-  pass
-elif LOSS == 'FOCAL_CCE':
-  MODEL_NAME += '_FOCAL'
-elif LOSS == 'SCCE':
-  MODEL_NAME += '_SCCE'
-  print('Loss function SCCE requires integer labels, NOT one-hots')
-### NOTE: add support for more loss functions here NOTE ###
+MODEL_NAME = nets.create_model_name(
+  SIM,DEPTH,FILTERS,GRID,th,sig,L,
+  UNIFORM_FLAG,BATCHNORM,DROPOUT,LOSS,
+  MODEL_NAME_SUFFIX
+  )
+print('>>> Model name:',MODEL_NAME)
 DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 #===============================================================
 # Save hyperparameters to txt file
@@ -626,8 +618,10 @@ nets.save_scores_from_fvol(Y_test,Y_pred,
                            VAL_FLAG=VAL_FLAG)
 # save score_dict by appending to the end of the csv.
 # csv will be at ROOT_DIR/model_scores.csv
-print('>>> Saving scores to ROOT_DIR/model_scores.csv')
+print(f'>>> Saving all scores to {ROOT_DIR}/model_scores.csv')
 nets.save_scores_to_csv(scores,ROOT_DIR+'model_scores.csv')
+print(f'>>> Saving score summary to {ROOT_DIR}/model_scores_summary.csv')
+nets.save_scores_to_csv_small(scores,ROOT_DIR+'model_scores_summary.csv')
 #========================================================================
 # Predict and plot and record metrics on TRAINING DATA
 # with TRAIN_SCORE = False, all this does is predict on the entire 

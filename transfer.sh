@@ -74,6 +74,7 @@ then
 fi
 # other options (just type out model name manually):
 BN=0; echo "Batch Norm: $BN";
+MN_SUFFIX=""; echo "Model Name Suffix: $MN_SUFFIX";
 #UNIFORM_FLAG=0; echo "Uniform Flag: $UNIFORM_FLAG";
 #DROP=0.0; echo "Dropout: $DROP";
 
@@ -93,6 +94,11 @@ else
     else
         MODEL_NAME="${SIM_PREFIX}_D${D}-F${F}-Nm${GRID}-th0.65-sig${SIGMA}-base_L${base_L}_${LOSS}";
     fi
+fi
+# add model name suffix if not empty
+if [ ! -z "$MN_SUFFIX" ]
+then
+    MODEL_NAME="${MODEL_NAME}_${MN_SUFFIX}";
 fi
 #######################################################################
 # optional flags:

@@ -479,7 +479,10 @@ nets.save_scores_from_fvol(Y_test,Y_pred,
                            VAL_FLAG=VAL_FLAG)
 # save score_dict by appending to the end of the csv.
 # csv will be at ROOT_DIR/model_scores.csv
+print(f'>>> Saving all scores to {ROOT_DIR}/model_scores.csv')
 nets.save_scores_to_csv(scores,ROOT_DIR+'model_scores.csv')
+print(f'>>> Saving score summary to {ROOT_DIR}/model_scores_summary.csv')
+nets.save_scores_to_csv_small(scores,ROOT_DIR+'model_scores_summary.csv')
 #========================================================================
 # Predict and plot and record metrics on TRAINING DATA
 # with TRAIN_SCORE = False, all this does is predict on the entire 
