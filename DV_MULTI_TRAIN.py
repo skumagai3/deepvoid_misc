@@ -390,7 +390,7 @@ else:
 MODEL_NAME = nets.create_model_name(
   SIM,DEPTH,FILTERS,GRID,th,sig,L,
   UNIFORM_FLAG,BATCHNORM,DROPOUT,LOSS,
-  MODEL_NAME_SUFFIX
+  suffix=MODEL_NAME_SUFFIX if MODEL_NAME_SUFFIX else None
   )
 print('>>> Model name:',MODEL_NAME)
 DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
