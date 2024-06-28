@@ -196,6 +196,9 @@ if not os.path.exists(FILE_PRED):
 # Bolshoi Lambdas: 2, 3, 5, 7, 10, 15
 #===============================================================
 th = 0.65 # eigenvalue threshold NOTE SET THRESHOLD HERE
+# fix SIM prefix name for Bolshoi if provided as 'Bolshoi'
+if SIM == 'Bolshoi':
+  SIM = 'BOL'
 # set up .npy filepaths for saving/loading data
 X_PREFIX = f'{SIM}_L{L}_Nm={GRID}'
 Y_PREFIX = f'{SIM}_Nm={GRID}'

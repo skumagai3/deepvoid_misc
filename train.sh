@@ -54,7 +54,7 @@ F=32;  echo "Filters: $F";
 LOSS="SCCE"; echo "Loss: $LOSS";
 if [ "$SIM" = "TNG" ]; then
   GRID=512
-elif [ "$SIM" = "BOL" ]; then
+elif [ "$SIM" = "BOL" ] || [ "$SIM" = "Bolshoi"]; then
   GRID=640
 fi
 #GRID=256; echo "GRID: $GRID";
