@@ -17,7 +17,8 @@ Parameters:
         ROOT_DIR: Root directory where data, models, figures, etc. are stored.
         MODEL_NAME: Name of the model.
         FN_DEN: Filename of the density field.
-        TL_TYPE: Transfer learning type. Example: 'ENC', 'LL', 'ENC_EO'.
+        TL_TYPE: Transfer learning type. Example: 'ENC', 'LL', 'ENC_EO', 'ENC_D1',
+        'ENC_D2'.
 
 Optional Flags:
   --MULTI_FLAG: If set to 1, use multiprocessing. Default is 0.

@@ -68,8 +68,8 @@ TL_TYPEs:
 - ENC: freeze entire encoding side (and bottleneck)
 - LL: freeze entire model except last conv block and output
 - ENC_EO: freeze every other encoding conv block
-(not implemented):
-- ENC_D{freeze_depth}: freeze encoding side down to some depth?
+- ENC_D1: freeze encoding side down to the second level
+- ENC_D2: freeze encoding side down to the third level
 
 Double transfer learning:
 Transfer learning a model that has already been transfer learned
@@ -334,6 +334,26 @@ if MULTI_FLAG:
           for i in range(len(freeze_blocks)):
             layer = clone.layers[freeze_blocks[i]]
             layer.trainable = False
+        elif TL_TYPE == 'ENC_D1':
+          # freeze encoding side down to depth 2 (really 1 since it is zero indexed)
+          # blocks are named: enocder_block_D{i}
+          # freeze down to encoder_block_D1_maxpool
+          print('Freezing encoding side down to depth 1 (really 2 since it is zero indexed)')
+          block_name = 'encoder_block_D1_maxpool'
+          block_idx = nets.get_layer_index(clone,block_name)
+          print('Freezing all layers down to', clone.layers[block_idx].name)
+          for layer in clone.layers[:block_idx]:
+            layer.trainable = False
+        elif TL_TYPE == 'ENC_D2':
+          # freeze encoding side down to depth 3 (really 2 since it is zero indexed)
+          # blocks are named: enocder_block_D{i}
+          # freeze down to encoder_block_D2_maxpool
+          print('Freezing encoding side down to depth 2 (really 3 since it is zero indexed)')
+          block_name = 'encoder_block_D2_maxpool'
+          block_idx = nets.get_layer_index(clone,block_name)
+          print('Freezing all layers down to', clone.layers[block_idx].name)
+          for layer in clone.layers[:block_idx]:
+            layer.trainable = False
         # compile model:
         clone.compile(optimizer=nets.Adam(learning_rate=LR),loss=loss,
                       metrics=metrics)
@@ -373,6 +393,26 @@ else:
       freeze_blocks.append(bottle_idx)
       for i in range(len(freeze_blocks)):
         layer = clone.layers[freeze_blocks[i]]
+        layer.trainable = False
+    elif TL_TYPE == 'ENC_D1':
+      # freeze encoding side down to depth 2 (really 1 since it is zero indexed)
+      # blocks are named: enocder_block_D{i}
+      # freeze down to encoder_block_D1_maxpool
+      print('Freezing encoding side down to depth 1 (really 2 since it is zero indexed)')
+      block_name = 'encoder_block_D1_maxpool'
+      block_idx = nets.get_layer_index(clone,block_name)
+      print('Freezing all layers down to', clone.layers[block_idx].name)
+      for layer in clone.layers[:block_idx]:
+        layer.trainable = False
+    elif TL_TYPE == 'ENC_D2':
+      # freeze encoding side down to depth 3 (really 2 since it is zero indexed)
+      # blocks are named: enocder_block_D{i}
+      # freeze down to encoder_block_D2_maxpool
+      print('Freezing encoding side down to depth 2 (really 3 since it is zero indexed)')
+      block_name = 'encoder_block_D2_maxpool'
+      block_idx = nets.get_layer_index(clone,block_name)
+      print('Freezing all layers down to', clone.layers[block_idx].name)
+      for layer in clone.layers[:block_idx]:
         layer.trainable = False
     clone.compile(optimizer=nets.Adam(learning_rate=LR),loss=loss,
                   metrics=metrics)
@@ -434,6 +474,7 @@ ORTHO_FLAG = True
 scores = {}
 scores['SIM'] = SIM; scores['DEPTH'] = DEPTH; scores['FILTERS'] = FILTERS
 scores['L_TRAIN'] = base_L; scores['L_PRED'] = tran_L
+scores['TL_TYPE'] = TL_TYPE
 scores['UNIFORM_FLAG'] = UNIFORM_FLAG; scores['BATCHNORM'] = BATCHNORM
 scores['DROPOUT'] = DROP; scores['LOSS'] = LOSS
 scores['GRID'] = GRID; scores['DATE'] = DATE; scores['MODEL_NAME'] = CLONE_NAME
