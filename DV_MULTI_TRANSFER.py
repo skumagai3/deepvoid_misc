@@ -160,6 +160,7 @@ try:
 except:
   print('>>> Model hps not found:',hp_dict_path)
   print('>>> But whatever!!!! IDC :)')
+  REGULARIZE_FLAG = False
   # parse model name for alpha, gamma if loss is focal
   # this is janky but whatever saving the hps is messed up and i dont wanna fix it
   if LOSS == 'FOCAL_CCE':
