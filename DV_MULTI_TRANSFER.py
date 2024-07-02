@@ -147,9 +147,41 @@ FILE_MODEL = MODEL_PATH + MODEL_NAME
 hp_dict_model = {}
 hp_dict_model['MODEL_NAME_ATTRIBUTES'] = hp_dict
 hp_dict_path = MODEL_PATH + MODEL_NAME + '_hps.txt'
-hp_dict = nets.load_dict_from_text(hp_dict_path)
-REGULARIZE_FLAG = hp_dict['REGULARIZE_FLAG']
-hp_dict_model['BASE_MODEL_ATTRIBUTES'] = hp_dict
+try:
+  hp_dict = nets.load_dict_from_text(hp_dict_path)
+  REGULARIZE_FLAG = hp_dict['REGULARIZE_FLAG']
+  hp_dict_model['BASE_MODEL_ATTRIBUTES'] = hp_dict
+  if LOSS == 'FOCAL_CCE':
+    alpha = hp_dict['focal_alpha']
+    gamma = hp_dict['focal_gamma']
+    alpha_list_float = ast.literal_eval(alpha)
+    gamma = float(gamma)
+  print('>>> Model hps found:',hp_dict_path)
+except:
+  print('>>> Model hps not found:',hp_dict_path)
+  print('>>> But whatever!!!! IDC :)')
+  # parse model name for alpha, gamma if loss is focal
+  # this is janky but whatever saving the hps is messed up and i dont wanna fix it
+  if LOSS == 'FOCAL_CCE':
+    if 'BAL' in MODEL_NAME:
+      alpha = [0.25,0.25,0.25,0.25]
+      gamma = 2.0
+    if 'BAL_HG' in MODEL_NAME:
+      alpha = [0.25,0.25,0.25,0.25]
+      gamma = 3.0
+    if 'VOL' in MODEL_NAME:
+      alpha = [0.65,0.25,0.15,0.1]
+      gamma = 2.0
+    if 'VOL_HG' in MODEL_NAME:
+      alpha = [0.65,0.25,0.15,0.1]
+      gamma = 3.0
+    if 'VW' in MODEL_NAME:
+      alpha = [0.6,0.5,0.25,0.25]
+      gamma = 2.0
+    if 'VW_HG' in MODEL_NAME:
+      alpha = [0.6,0.5,0.25,0.25]
+      gamma = 3.0
+    alpha_list_float = alpha
 ONE_HOT_FLAG = True # for compute metrics callback
 metrics = ['accuracy']
 if LOSS == 'CCE':
@@ -158,10 +190,6 @@ elif LOSS == 'SCCE':
   loss = nets.SparseCategoricalCrossentropy()
   ONE_HOT_FLAG = False
 elif LOSS == 'FOCAL_CCE':
-  alpha = hp_dict['focal_alpha']
-  gamma = hp_dict['focal_gamma']
-  alpha_list_float = ast.literal_eval(alpha)
-  gamma = float(gamma)
   loss = [nets.categorical_focal_loss(alpha=alpha_list_float,gamma=gamma)] 
   #loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma)
 more_metrics = [nets.MCC_keras(int_labels=~ONE_HOT_FLAG),nets.balanced_accuracy_keras(int_labels=~ONE_HOT_FLAG),
