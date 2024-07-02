@@ -183,6 +183,8 @@ custom_objects['F1_micro'] = nets.F1_micro_keras(int_labels=~ONE_HOT_FLAG)
 custom_objects['recall_micro'] = nets.recall_micro_keras(int_labels=~ONE_HOT_FLAG)
 custom_objects['precision_micro'] = nets.precision_micro_keras(int_labels=~ONE_HOT_FLAG)
 custom_objects['true_wall_pred_as_void'] = nets.true_wall_pred_as_void_keras(int_labels=~ONE_HOT_FLAG)
+if LOSS == 'FOCAL_CCE':
+  custom_objects['categorical_focal_loss'] = nets.categorical_focal_loss
 #===============================================================
 # Load data
 #===============================================================
