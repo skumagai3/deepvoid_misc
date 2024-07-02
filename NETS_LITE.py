@@ -383,7 +383,9 @@ def categorical_focal_loss(alpha, gamma=2.):
     :param y_pred: A tensor resulting from a softmax
     :return: Output tensor.
     """
-
+    # if the dtype of y_true is uint8, cast it to float32
+    if y_true.dtype == 'uint8':
+      y_true = tf.cast(y_true, 'float32')
     # Clip the prediction value to prevent NaN's and Inf's
     epsilon = K.epsilon()
     y_pred = K.clip(y_pred, epsilon, 1. - epsilon)

@@ -161,6 +161,7 @@ elif LOSS == 'FOCAL_CCE':
   alpha = hp_dict['focal_alpha']
   gamma = hp_dict['focal_gamma']
   alpha_list_float = ast.literal_eval(alpha)
+  gamma = float(gamma)
   loss = [nets.categorical_focal_loss(alpha=alpha_list_float,gamma=gamma)] 
   #loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma)
 more_metrics = [nets.MCC_keras(int_labels=~ONE_HOT_FLAG),nets.balanced_accuracy_keras(int_labels=~ONE_HOT_FLAG),
@@ -184,7 +185,7 @@ custom_objects['recall_micro'] = nets.recall_micro_keras(int_labels=~ONE_HOT_FLA
 custom_objects['precision_micro'] = nets.precision_micro_keras(int_labels=~ONE_HOT_FLAG)
 custom_objects['true_wall_pred_as_void'] = nets.true_wall_pred_as_void_keras(int_labels=~ONE_HOT_FLAG)
 if LOSS == 'FOCAL_CCE':
-  custom_objects['categorical_focal_loss'] = nets.categorical_focal_loss
+  custom_objects['categorical_focal_loss_fixed'] = nets.categorical_focal_loss(alpha=alpha_list_float,gamma=gamma)
 #===============================================================
 # Load data
 #===============================================================
