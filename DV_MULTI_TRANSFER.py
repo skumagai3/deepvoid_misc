@@ -159,8 +159,8 @@ elif LOSS == 'SCCE':
 elif LOSS == 'FOCAL_CCE':
   alpha = hp_dict['focal_alpha']
   gamma = hp_dict['focal_gamma']
-  #loss = [nets.categorical_focal_loss(alpha=0.25,gamma=2.0)] 
-  loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma)
+  loss = [nets.categorical_focal_loss(alpha=alpha,gamma=gamma)] 
+  #loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma)
 more_metrics = [nets.MCC_keras(int_labels=~ONE_HOT_FLAG),nets.balanced_accuracy_keras(int_labels=~ONE_HOT_FLAG),
                 nets.void_F1_keras(int_labels=~ONE_HOT_FLAG),nets.F1_micro_keras(int_labels=~ONE_HOT_FLAG)]
 if not LOW_MEM_FLAG:
