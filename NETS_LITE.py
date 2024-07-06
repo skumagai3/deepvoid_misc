@@ -1218,7 +1218,38 @@ def PR_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, chance_lvl=False
   #    f.write('\n'+f'Class {class_labels[i]} average precision: {avg_prec[i]:.2f}\n')
   #print(f'Wrote average precisions to '+FILE_HPTXT)
 
-# 7/19/23: updated this to use helper functions instead.
+# 7/6/24: Create function to plot void voxels misclassified as wall voxels as 
+# a certain color and vice versa. overlay on top of mask:
+def plot_vw_misses(mask, pred, idx=None, Nm=512, boxsize=205., **kwargs):
+  '''
+  Plot and save a figure of void voxels misclassified as wall voxels and vice versa.
+  mask: np.ndarray true mask
+  pred: np.ndarray predicted mask
+  idx: int index of slice to plot. def None, will just plot the middle slice.
+  Nm: int number of voxels on a side in mask. def 512.
+  boxsize: float size of box in Mpc/h. def 205.
+  kwargs: dict of keyword arguments to pass to plt.imshow
+  Returns: a matplotlib figure object.
+  '''
+  # get void voxels misclassified as wall voxels and vice versa:
+  void_as_wall = (mask==0) & (pred==1)
+  wall_as_void = (mask==1) & (pred==0)
+  # make transparent for plotting on top of mask:
+  void_as_wall = void_as_wall.astype(int); wall_as_void = wall_as_void.astype(int)
+  void_as_wall = plotter.alpha0(void_as_wall); wall_as_void = plotter.alpha0(wall_as_void)
+  # plot:
+  if idx is None:
+    idx = mask.shape[0]//2
+  fig, ax = plt.subplots(1,1,figsize=(10,10))
+  plotter.plot_arr(mask,idx,ax,segmented_cb=True,cmap='gray_r',**kwargs)
+  plotter.plot_arr(void_as_wall,idx,ax,cb=False,cmap='Set1',**kwargs)
+  plotter.plot_arr(wall_as_void,idx,ax,cb=False,cmap='tab10',**kwargs)
+  title = f'Slice {idx} of Mask\nTrue void voxels misclassified as wall (red) \nTrue wall voxels misclassified as void (blue)'
+  ax.set_title(title)
+  # fix axis labels:
+  plotter.set_window(0,boxsize,Nm,ax)
+  return fig
+
 def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, VAL_FLAG=True, downsample=10):
   '''
   Save F1 scores, confusion matrix, population histograms, ROC curves,
@@ -1503,6 +1534,11 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
   plt.savefig(FILE_FIG+MODEL_NAME+'-pred-comp-3x3.png',facecolor='white',bbox_inches='tight')
   print(f'Saved 3x3 comparison plot to {FILE_FIG+MODEL_NAME}-pred-comp-3x3.png')
 
+  # plot vw misclassifications:
+  # pick random slice to plot:
+  i = np.random.randint(0,GRID)
+  fig = plot_vw_misses(m,Y_pred,idx=i,Nm=GRID,boxsize=BOXSIZE)
+  fig.savefig(FILE_FIG+MODEL_NAME+f'-pred-comp-vw-miss-slc={i}.png',facecolor='white',bbox_inches='tight')
   # use save_scores_from_fvol to save scores if we want to run the model on its own training data:
   if TRAIN_SCORE == True:
     save_scores_from_fvol(m,Y_pred,FILE_MODEL,FILE_FIG,FILE_DEN,VAL_FLAG=False)
