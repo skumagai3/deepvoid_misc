@@ -509,10 +509,10 @@ def plot_arr(a,idx,ax=None,logged=False,pct=100,cb=True,segmented_cb=False,cmap=
             **kwargs)
     else:
         if logged == True:
-            im = ax.imshow(np.log10(a),origin='lower',interpolation=None,
+            im = ax.imshow(np.log10(a),origin='lower',interpolation=None,cmap=cmap,
             **kwargs)
         else:
-            im = ax.imshow(a,origin='lower',interpolation=None,
+            im = ax.imshow(a,origin='lower',interpolation=None,cmap=cmap,
             **kwargs)
     if cb:
         if segmented_cb:
