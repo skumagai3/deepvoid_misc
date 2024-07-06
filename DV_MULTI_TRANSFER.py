@@ -478,7 +478,7 @@ log_dir = ROOT_DIR + 'logs/fit/' + CLONE_NAME + '_' + datetime.datetime.now().st
 tb_call = nets.TensorBoard(log_dir=log_dir) # do we even need this if we CSV log?
 csv_logger = nets.CSVLogger(MODEL_PATH+CLONE_NAME+'_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") + '_train_log.csv')
 reduce_lr = nets.ReduceLROnPlateau(monitor='val_loss',factor=0.25,patience=lr_patience, 
-                                   verbose=1,min_lr=1e-7)
+                                   verbose=1,min_lr=1e-9)
 early_stop = nets.EarlyStopping(monitor='val_loss',patience=patience,restore_best_weights=True)
 callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger,tb_call]
 if TENSORBOARD_FLAG:
