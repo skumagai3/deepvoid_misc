@@ -179,8 +179,9 @@ else:
 # remember that Y_pred will have shape (N_samples, SUBGRID, SUBGRID, SUBGRID, 4)
 #===============================================================================
 batch_size = 4
+print('>>> Predicting...')
 Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False)
-print('>>> Finished predicting on validation data')
+print('>>> Finished predicting...')
 #===============================================================================
 # set up score_dict. 
 # VAL_FLAG is True if scores are based on val set
@@ -202,7 +203,10 @@ nets.save_scores_from_fvol(Y_test,Y_pred,FILE_OUT+MODEL_NAME,
                            FIG_OUT,
                            scores,
                            VAL_FLAG)
+print(f'>>> Saving all scores to {ROOT_DIR}/model_scores.csv')
 nets.save_scores_to_csv(scores,ROOT_DIR+'model_scores.csv')
+print(f'>>> Saving score summary to {ROOT_DIR}/model_scores_summary.csv')
+nets.save_scores_to_csv_small(scores,ROOT_DIR+'model_scores_summary.csv')
 print('>>> Saved scores!')
 del X_test, Y_test, Y_pred
 del scores

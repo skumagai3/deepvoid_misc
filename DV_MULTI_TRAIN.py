@@ -25,9 +25,9 @@ nets.K.set_image_data_format('channels_last')
 #===============================================================
 # Set training parameters:
 #===============================================================
-epochs = 500; print('epochs:',epochs)
-patience = 25; print('patience:',patience)
-lr_patience = 10; print('learning rate patience:',lr_patience)
+#epochs = 500; print('epochs:',epochs)
+#patience = 25; print('patience:',patience)
+#lr_patience = 10; print('learning rate patience:',lr_patience)
 N_epochs_metric = 10
 print(f'classification metrics calculated every {N_epochs_metric} epochs')
 KERNEL = (3,3,3)
@@ -67,6 +67,7 @@ Optional Flags:
   --LOW_MEM_FLAG: If set, will load less training data and do not report metrics. Default is True.
   --FOCAL_ALPHA: Focal loss alpha parameter. Default is 0.25. can be a list of 4 values.
   --FOCAL_GAMMA: Focal loss gamma parameter. Default is 2.0.
+  --MODEL_NAME_SUFFIX: Suffix to add to model name. Default is empty.
   --LOAD_MODEL_FLAG: If set, load model from FILE_OUT if it exists. Default is False.
   --LOAD_INTO_MEM: If set, load training and test data into memory. 
     If not set, load data from X_train, Y_train, X_test, Y_test .npy files into a tf.data.Dataset 
@@ -103,12 +104,14 @@ opt_group.add_argument('--MULTI_FLAG', action='store_true', help='If set, use mu
 opt_group.add_argument('--LOW_MEM_FLAG', action='store_false', help='If not set, will load less training data and report less metrics.')
 opt_group.add_argument('--FOCAL_ALPHA', type=float, nargs='+', default=[0.25,0.25,0.25,0.25], help='Focal loss alpha parameter. Default is 0.25.')
 opt_group.add_argument('--FOCAL_GAMMA', type=float, default=2.0, help='Focal loss gamma parameter. Default is 2.0.')
+opt_group.add_argument('--MODEL_NAME_SUFFIX', type=str, default='', help='Suffix to add to model name. Default is empty.')
 opt_group.add_argument('--LOAD_MODEL_FLAG', action='store_true', help='If set, load model from FILE_OUT if it exists.')
 opt_group.add_argument('--LOAD_INTO_MEM', action='store_true', help='If set, load all training and test data into memory. Default is False, aka to load from train, test .npy files into a tf.data.Dataset object.')
 opt_group.add_argument('--BATCH_SIZE', type=int, default=8, help='Batch size. Default is 4.')
 opt_group.add_argument('--EPOCHS', type=int, default=500, help='Number of epochs to train for. Default is 500.')
 opt_group.add_argument('--LEARNING_RATE', type=float, default=0.001, help='Initial learning rate. Default is 3e-3.')
 opt_group.add_argument('--LEARNING_RATE_PATIENCE', type=int, default=10, help='Number of epochs to wait before reducing learning rate. Default is 10.')
+opt_group.add_argument('--PATIENCE', type=int, default=25, help='Number of epochs to wait before early stopping. Default is 25.')
 opt_group.add_argument('--REGULARIZE_FLAG', action='store_true', help='If set, use L2 regularization.')
 opt_group.add_argument('--PICOTTE_FLAG', action='store_true', help='If set, set up for sbatch run on Picotte.')
 opt_group.add_argument('--TENSORBOARD_FLAG', action='store_true', help='If set, use tensorboard.')
@@ -127,12 +130,14 @@ MULTI_FLAG = args.MULTI_FLAG
 LOW_MEM_FLAG = args.LOW_MEM_FLAG
 alpha = args.FOCAL_ALPHA
 gamma = args.FOCAL_GAMMA
+MODEL_NAME_SUFFIX = args.MODEL_NAME_SUFFIX
 LOAD_MODEL_FLAG = args.LOAD_MODEL_FLAG
 LOAD_INTO_MEM = args.LOAD_INTO_MEM
 batch_size = args.BATCH_SIZE
 epochs = args.EPOCHS
 LR = args.LEARNING_RATE
 LR_PATIENCE = args.LEARNING_RATE_PATIENCE
+PATIENCE = args.PATIENCE
 REGULARIZE_FLAG = args.REGULARIZE_FLAG
 PICOTTE_FLAG = args.PICOTTE_FLAG
 TENSORBOARD_FLAG = args.TENSORBOARD_FLAG
@@ -153,6 +158,7 @@ print('LOSS =',LOSS)
 if LOSS == 'FOCAL_CCE':
   print('FOCAL_ALPHA =',alpha)
   print('FOCAL_GAMMA =',gamma)
+print('MODEL_NAME_SUFFIX =',MODEL_NAME_SUFFIX)
 print('BATCH_SIZE =',batch_size)
 print('EPOCHS =',epochs)
 print('UNIFORM_FLAG =',UNIFORM_FLAG)
@@ -194,6 +200,9 @@ if not os.path.exists(FILE_PRED):
 # Bolshoi Lambdas: 2, 3, 5, 7, 10, 15
 #===============================================================
 th = 0.65 # eigenvalue threshold NOTE SET THRESHOLD HERE
+# fix SIM prefix name for Bolshoi if provided as 'Bolshoi'
+if SIM == 'Bolshoi':
+  SIM = 'BOL'
 # set up .npy filepaths for saving/loading data
 X_PREFIX = f'{SIM}_L{L}_Nm={GRID}'
 Y_PREFIX = f'{SIM}_Nm={GRID}'
@@ -366,7 +375,7 @@ train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 test_dataset = test_dataset.prefetch(tf.data.experimental.AUTOTUNE)
 # manually set cardinality of datasets
 if LOAD_INTO_MEM:
-  # do i even need to do this? won't cardinality be 
+  # do i even need to do this? won't cardinality be set?
   pass
 else:
   cardinality_train = n_samples_train // batch_size
@@ -378,24 +387,12 @@ else:
 #===============================================================
 # Set model hyperparameters
 #===============================================================
-if SIM == 'TNG':
-  MODEL_NAME = f'TNG_D{DEPTH}-F{FILTERS}-Nm{GRID}-th{th}-sig{sig}-base_L{L}'
-elif SIM == 'BOL':
-  MODEL_NAME = f'Bolshoi_D{DEPTH}-F{FILTERS}-Nm{GRID}-th{th}-sig{sig}-base_L{L}'
-if UNIFORM_FLAG:
-  MODEL_NAME += '_uniform'
-if BATCHNORM:
-  MODEL_NAME += '_BN'
-if DROPOUT != 0.0:
-  MODEL_NAME += f'_DROP{DROPOUT}'
-if LOSS == 'CCE':
-  pass
-elif LOSS == 'FOCAL_CCE':
-  MODEL_NAME += '_FOCAL'
-elif LOSS == 'SCCE':
-  MODEL_NAME += '_SCCE'
-  print('Loss function SCCE requires integer labels, NOT one-hots')
-### NOTE: add support for more loss functions here NOTE ###
+MODEL_NAME = nets.create_model_name(
+  SIM,DEPTH,FILTERS,GRID,th,sig,L,
+  UNIFORM_FLAG,BATCHNORM,DROPOUT,LOSS,
+  suffix=MODEL_NAME_SUFFIX if MODEL_NAME_SUFFIX else None
+  )
+print('>>> Model name:',MODEL_NAME)
 DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 #===============================================================
 # Save hyperparameters to txt file
@@ -406,9 +403,9 @@ hp_dict['MODEL_NAME'] = MODEL_NAME
 hp_dict['notes'] = f'trained on multi-class mask, threshold={th}, sigma={sig}, L={L}, Nm={GRID}'
 hp_dict['KERNEL'] = KERNEL
 if SIM == 'TNG':
-  hp_dict['Simulation trained on:'] = 'TNG300-3-Dark'
+  hp_dict['Simulation trained on'] = 'TNG300-3-Dark'
 elif SIM == 'BOL':
-  hp_dict['Simulation trained on:'] = 'Bolshoi'
+  hp_dict['Simulation trained on'] = 'Bolshoi'
 hp_dict['N_CLASSES'] = N_CLASSES
 hp_dict['DEPTH'] = DEPTH
 hp_dict['FILTERS'] = FILTERS
@@ -422,8 +419,8 @@ hp_dict['DROPOUT'] = str(DROPOUT)
 hp_dict['REGULARIZE_FLAG'] = str(REGULARIZE_FLAG)
 hp_dict['BATCH_SIZE'] = batch_size
 hp_dict['MAX_EPOCHS'] = epochs
-hp_dict['PATIENCE'] = patience
-hp_dict['LR_PATIENCE'] = lr_patience
+hp_dict['PATIENCE'] = PATIENCE
+hp_dict['LR_PATIENCE'] = LR_PATIENCE
 hp_dict['FILE_DEN'] = FILE_DEN
 hp_dict['FILE_MASK'] = FILE_MASK
 hp_dict['FILE_X_TRAIN'] = FILE_X_TRAIN
@@ -534,8 +531,8 @@ log_dir = ROOT_DIR + 'logs/fit/' + MODEL_NAME + '_' + datetime.datetime.now().st
 tb_call = nets.TensorBoard(log_dir=log_dir) # do we even need this if we CSV log?
 csv_logger = nets.CSVLogger(FILE_OUT+MODEL_NAME+'_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") + '_train_log.csv')
 reduce_lr = nets.ReduceLROnPlateau(monitor='val_loss',factor=0.25,patience=LR_PATIENCE, 
-                                   verbose=1,min_lr=1e-6)
-early_stop = nets.EarlyStopping(monitor='val_loss',patience=patience,restore_best_weights=True)
+                                   verbose=1,min_lr=1e-7)
+early_stop = nets.EarlyStopping(monitor='val_loss',patience=PATIENCE,restore_best_weights=True)
 if LOW_MEM_FLAG:
   # dont calc metrics, too memory intensive
   callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger]
@@ -544,6 +541,9 @@ else:
   callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger]
 if TENSORBOARD_FLAG:
   callbacks.append(tb_call)
+#===============================================================
+# Train model
+#===============================================================
 history = model.fit(train_dataset, epochs=epochs, validation_data=test_dataset, verbose=2,
                     callbacks=callbacks)
 #===============================================================
@@ -618,8 +618,10 @@ nets.save_scores_from_fvol(Y_test,Y_pred,
                            VAL_FLAG=VAL_FLAG)
 # save score_dict by appending to the end of the csv.
 # csv will be at ROOT_DIR/model_scores.csv
-print('>>> Saving scores to ROOT_DIR/model_scores.csv')
+print(f'>>> Saving all scores to {ROOT_DIR}/model_scores.csv')
 nets.save_scores_to_csv(scores,ROOT_DIR+'model_scores.csv')
+print(f'>>> Saving score summary to {ROOT_DIR}/model_scores_summary.csv')
+nets.save_scores_to_csv_small(scores,ROOT_DIR+'model_scores_summary.csv')
 #========================================================================
 # Predict and plot and record metrics on TRAINING DATA
 # with TRAIN_SCORE = False, all this does is predict on the entire 

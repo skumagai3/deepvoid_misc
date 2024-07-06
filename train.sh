@@ -22,12 +22,14 @@ Optional Flags:
   --LOW_MEM_FLAG: If set to 1, will load less training data and report fewer metrics. Default is 1.
   --FOCAL_ALPHA: Alpha value for focal loss. Default is 0.25. can be a sequence of 4 values.
   --FOCAL_GAMMA: Gamma value for focal loss. Default is 2.0.
+  --MODEL_NAME_SUFFIX: Suffix to append to the model name. Default is empty.
   --LOAD_MODEL: If set to 1, load a previously trained model. Default is 0.
   --LOAD_INTO_MEM: If set to 1, load the entire dataset into memory. Default is 0.
   --BATCH_SIZE: Batch size for training. Default is 4.
   --EPOCHS: Number of epochs to train. Default is 500.
   --LEARNING_RATE: Learning rate for the optimizer. Default is 0.001.
   --LEARNING_RATE_PATIENCE: Patience for the learning rate scheduler. Default is 10.
+  --PATIENCE: Patience for early stopping. Default is 25.
   --REG_FLAG: If set to 1, use L2 regularization. Default is 0.
   --PICOTTE_FLAG: If set to 1, use Picotte. Default is 0.
   --TENSORBOARD: If set, use TensorBoard. Default is to not.
@@ -53,7 +55,7 @@ F=32;  echo "Filters: $F";
 LOSS="SCCE"; echo "Loss: $LOSS";
 if [ "$SIM" = "TNG" ]; then
   GRID=512
-elif [ "$SIM" = "BOL" ]; then
+elif [ "$SIM" = "BOL" ] || [ "$SIM" = "Bolshoi"]; then
   GRID=640
 fi
 #GRID=256; echo "GRID: $GRID";
@@ -65,6 +67,7 @@ MULTIPROCESSING_ENABLED=0; echo "Multiprocessing: $MULTIPROCESSING_ENABLED";
 HIGH_MEM_ENABLED=1; echo "High memory usage: $HIGH_MEM_ENABLED";
 FOCAL_ALPHA=(0.5 0.5 0.2 0.2); echo "Focal Alpha: ${FOCAL_ALPHA[@]}";
 FOCAL_GAMMA=2.0; echo "Focal Gamma: $FOCAL_GAMMA";
+MODEL_NAME_SUFFIX=""; echo "Model Name Suffix: $MODEL_NAME_SUFFIX";
 UNIFORM_FLAG=0; echo "Uniform Flag: $UNIFORM_FLAG";
 LOAD_MODEL=0; echo "Load Model: $LOAD_MODEL";
 LOAD_INTO_MEM=1; echo "Load into memory: $LOAD_INTO_MEM";
@@ -72,6 +75,7 @@ BATCH_SIZE=4; echo "Batch Size: $BATCH_SIZE";
 EPOCHS=500; echo "Epochs: $EPOCHS";
 LEARNING_RATE=0.0001; echo "Learning Rate: $LEARNING_RATE";
 LEARNING_RATE_PATIENCE=10; echo "Learning Rate Patience: $LEARNING_RATE_PATIENCE";
+PATIENCE=25; echo "Patience: $PATIENCE";
 REG_FLAG=0; echo "Regularization: $REG_FLAG";
 PICOTTE_FLAG=0; echo "Picotte: $PICOTTE_FLAG";
 TENSORBOARD=1; echo "TensorBoard: $TENSORBOARD";
@@ -86,10 +90,12 @@ CMD_ARGS="$ROOT_DIR $SIM $L $D $F $LOSS $GRID"
 [ "$LOSS" = "FOCAL_CCE" ] && CMD_ARGS+=" --FOCAL_ALPHA ${FOCAL_ALPHA[@]} --FOCAL_GAMMA $FOCAL_GAMMA"
 [ "$LOAD_MODEL" -eq 1 ] && CMD_ARGS+=" --LOAD_MODEL"
 [ "$LOAD_INTO_MEM" -eq 1 ] && CMD_ARGS+=" --LOAD_INTO_MEM"
+[ ! -z "$MODEL_NAME_SUFFIX" ] && CMD_ARGS+=" --MODEL_NAME_SUFFIX $MODEL_NAME_SUFFIX"
 CMD_ARGS+=" --BATCH_SIZE $BATCH_SIZE"
 CMD_ARGS+=" --EPOCHS $EPOCHS"
 CMD_ARGS+=" --LEARNING_RATE $LEARNING_RATE"
 CMD_ARGS+=" --LEARNING_RATE_PATIENCE $LEARNING_RATE_PATIENCE"
+CMD_ARGS+=" --PATIENCE $PATIENCE"
 [ "$REG_FLAG" -eq 1 ] && CMD_ARGS+=" --REGULARIZE_FLAG"
 [ "$PICOTTE_FLAG" -eq 1 ] && CMD_ARGS+=" --PICOTTE_FLAG"
 [ "$TENSORBOARD" -eq 1 ] && CMD_ARGS+=" --TENSORBOARD"

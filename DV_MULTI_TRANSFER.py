@@ -5,6 +5,7 @@ NOTE that this is with the updated layer names.
 '''
 print('>>> Running DV_MULTI_TRANSFER.py')
 import os
+import ast
 import sys
 import datetime
 import argparse
@@ -22,10 +23,10 @@ nets.K.set_image_data_format('channels_last')
 #===============================================================
 # Set training parameters:
 #===============================================================
-patience = 25; print('patience: ',patience)
-lr_patience = 10; print('learning rate patience: ',lr_patience)
-N_epochs_metric = 10
-print(f'classification metrics calculated every {N_epochs_metric} epochs')
+#patience = 25; print('patience: ',patience)
+#lr_patience = 10; print('learning rate patience: ',lr_patience)
+#N_epochs_metric = 10
+#print(f'classification metrics calculated every {N_epochs_metric} epochs')
 KERNEL = (3,3,3)
 LR = 3e-3 # increased to 3e-3 since we have LRreduceonplateau anyway
 #===============================================================
@@ -58,6 +59,9 @@ Optional Flags:
   --TENSORBOARD_FLAG: If set, will use TensorBoard. Default is False.
   --EPOCHS: Number of epochs for training. Default is 500.
   --BATCH_SIZE: Batch size for training. Default is 8.
+  --LEARNING_RATE: Initial learning rate. Default is 0.001.
+  --LEARNING_RATE_PATIENCE: Number of epochs to wait before reducing learning rate. Default is 10.
+  --PATIENCE: Number of epochs to wait before early stopping. Default is 25.
 
 Notes:
 MODEL_NAME (SIM, base_L will be pulled from that)
@@ -65,8 +69,8 @@ TL_TYPEs:
 - ENC: freeze entire encoding side (and bottleneck)
 - LL: freeze entire model except last conv block and output
 - ENC_EO: freeze every other encoding conv block
-(not implemented):
-- ENC_D{freeze_depth}: freeze encoding side down to some depth?
+- ENC_D1: freeze encoding side down to the second level
+- ENC_D2: freeze encoding side down to the third level
 
 Double transfer learning:
 Transfer learning a model that has already been transfer learned
@@ -85,8 +89,11 @@ opt_group.add_argument('--MULTI_FLAG',action='store_true',help='If set, use mult
 opt_group.add_argument('--LOW_MEM_FLAG', action='store_false', help='If not set, will load less training data and report less metrics.')
 opt_group.add_argument('--LOAD_INTO_MEM',action='store_true',help='If set, will load entire dataset into memory.')
 opt_group.add_argument('--TENSORBOARD_FLAG',action='store_true',help='If set, will use TensorBoard.')
-opt_group.add_argument('--EPOCHS',type=int, help='Number of epochs for training. Default is 500.')
-opt_group.add_argument('--BATCH_SIZE',type=int, help='Batch size for training. Default is 8.')
+opt_group.add_argument('--EPOCHS',type=int, default=500, help='Number of epochs for training. Default is 500.')
+opt_group.add_argument('--BATCH_SIZE',type=int, default=8, help='Batch size for training. Default is 8.')
+opt_group.add_argument('--LEARNING_RATE',type=float, default=3e-3, help='Learning rate for training. Default is 3e-3.')
+opt_group.add_argument('--LEARNING_RATE_PATIENCE',type=int, default=10, help='Patience for learning rate reduction. Default is 10.')
+opt_group.add_argument('--PATIENCE',type=int, default=25, help='Patience for early stopping. Default is 25.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 MODEL_NAME = args.MODEL_NAME
@@ -98,6 +105,9 @@ LOAD_INTO_MEM = args.LOAD_INTO_MEM
 TENSORBOARD_FLAG = args.TENSORBOARD_FLAG
 epochs = args.EPOCHS
 batch_size = args.BATCH_SIZE
+LR = args.LEARNING_RATE
+lr_patience = args.LEARNING_RATE_PATIENCE
+patience = args.PATIENCE
 #===============================================================
 # hp dict is the old model, hp_dict_model is the new model
 #===============================================================
@@ -123,9 +133,9 @@ if GRID == 640:
 path_to_TNG = ROOT_DIR + 'data/TNG/'
 path_to_BOL = ROOT_DIR + 'data/Bolshoi/'
 if SIM == 'TNG':
-    DATA_PATH = path_to_TNG
+  DATA_PATH = path_to_TNG
 elif SIM == 'Bolshoi' or SIM == 'BOL':
-    DATA_PATH = path_to_BOL
+  DATA_PATH = path_to_BOL
 FIG_DIR_PATH = ROOT_DIR + 'figs/'
 MODEL_PATH = ROOT_DIR + 'models/'
 PRED_PATH = ROOT_DIR + 'preds/'
@@ -137,8 +147,42 @@ FILE_MODEL = MODEL_PATH + MODEL_NAME
 hp_dict_model = {}
 hp_dict_model['MODEL_NAME_ATTRIBUTES'] = hp_dict
 hp_dict_path = MODEL_PATH + MODEL_NAME + '_hps.txt'
-hp_dict = nets.load_dict_from_text(hp_dict_path)
-hp_dict_model['BASE_MODEL_ATTRIBUTES'] = hp_dict
+try:
+  hp_dict = nets.load_dict_from_text(hp_dict_path)
+  REGULARIZE_FLAG = hp_dict['REGULARIZE_FLAG']
+  hp_dict_model['BASE_MODEL_ATTRIBUTES'] = hp_dict
+  if LOSS == 'FOCAL_CCE':
+    alpha = hp_dict['focal_alpha']
+    gamma = hp_dict['focal_gamma']
+    alpha_list_float = ast.literal_eval(alpha)
+    gamma = float(gamma)
+  print('>>> Model hps found:',hp_dict_path)
+except:
+  print('>>> Model hps not found:',hp_dict_path)
+  print('>>> But whatever!!!! IDC :)')
+  REGULARIZE_FLAG = False
+  # parse model name for alpha, gamma if loss is focal
+  # this is janky but whatever saving the hps is messed up and i dont wanna fix it
+  if LOSS == 'FOCAL_CCE':
+    if 'BAL' in MODEL_NAME:
+      alpha = [0.25,0.25,0.25,0.25]
+      gamma = 2.0
+    if 'BAL_HG' in MODEL_NAME:
+      alpha = [0.25,0.25,0.25,0.25]
+      gamma = 3.0
+    if 'VOL' in MODEL_NAME:
+      alpha = [0.65,0.25,0.15,0.1]
+      gamma = 2.0
+    if 'VOL_HG' in MODEL_NAME:
+      alpha = [0.65,0.25,0.15,0.1]
+      gamma = 3.0
+    if 'VW' in MODEL_NAME:
+      alpha = [0.6,0.5,0.25,0.25]
+      gamma = 2.0
+    if 'VW_HG' in MODEL_NAME:
+      alpha = [0.6,0.5,0.25,0.25]
+      gamma = 3.0
+    alpha_list_float = alpha
 ONE_HOT_FLAG = True # for compute metrics callback
 metrics = ['accuracy']
 if LOSS == 'CCE':
@@ -147,10 +191,8 @@ elif LOSS == 'SCCE':
   loss = nets.SparseCategoricalCrossentropy()
   ONE_HOT_FLAG = False
 elif LOSS == 'FOCAL_CCE':
-  alpha = hp_dict_model['focal_alpha']
-  gamma = hp_dict_model['focal_gamma']
-  #loss = [nets.categorical_focal_loss(alpha=0.25,gamma=2.0)] 
-  loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma)
+  loss = [nets.categorical_focal_loss(alpha=alpha_list_float,gamma=gamma)] 
+  #loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma)
 more_metrics = [nets.MCC_keras(int_labels=~ONE_HOT_FLAG),nets.balanced_accuracy_keras(int_labels=~ONE_HOT_FLAG),
                 nets.void_F1_keras(int_labels=~ONE_HOT_FLAG),nets.F1_micro_keras(int_labels=~ONE_HOT_FLAG)]
 if not LOW_MEM_FLAG:
@@ -171,6 +213,8 @@ custom_objects['F1_micro'] = nets.F1_micro_keras(int_labels=~ONE_HOT_FLAG)
 custom_objects['recall_micro'] = nets.recall_micro_keras(int_labels=~ONE_HOT_FLAG)
 custom_objects['precision_micro'] = nets.precision_micro_keras(int_labels=~ONE_HOT_FLAG)
 custom_objects['true_wall_pred_as_void'] = nets.true_wall_pred_as_void_keras(int_labels=~ONE_HOT_FLAG)
+if LOSS == 'FOCAL_CCE':
+  custom_objects['categorical_focal_loss_fixed'] = nets.categorical_focal_loss(alpha=alpha_list_float,gamma=gamma)
 #===============================================================
 # Load data
 #===============================================================
@@ -231,6 +275,9 @@ if LOAD_INTO_MEM:
     print('Y_train shape: ',Y_train.shape)
     print('Y_test shape: ',Y_test.shape)
   print('>>> Data loaded!')
+  # Make tf.data.Dataset
+  train_dataset = tf.data.Dataset.from_tensor_slices((X_train,Y_train))
+  test_dataset = tf.data.Dataset.from_tensor_slices((X_test,Y_test))
 else:
   # load data from saved files into tf.data.Dataset
   print('>>> Loading train, val data into tf.data.Dataset from memmapped .npy files')
@@ -251,13 +298,15 @@ else:
       tf.TensorSpec(shape=(SUBGRID,SUBGRID,SUBGRID,last_dim),dtype=tf.float32)
     )
   )
-  # shuffle
-  train_dataset = train_dataset.shuffle(buffer_size=1024).batch(batch_size)
-  test_dataset = test_dataset.batch(batch_size)
-  # batch and prefetch
-  train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
-  test_dataset = test_dataset.prefetch(tf.data.experimental.AUTOTUNE)
-  print('>>> Data loaded!')
+# shuffle
+print('>>> Shuffling and batching datasets')
+train_dataset = train_dataset.shuffle(buffer_size=1024).batch(batch_size)
+test_dataset = test_dataset.batch(batch_size)
+# batch and prefetch
+print('>>> Prefetching datasets')
+train_dataset = train_dataset.prefetch(tf.data.experimental.AUTOTUNE)
+test_dataset = test_dataset.prefetch(tf.data.experimental.AUTOTUNE)
+print('>>> Data loaded!')
 print(f'Transfer learning on delta with L={tran_L}')
 print('Density field:',FILE_DEN)
 print('Mask field:',FILE_MASK)
@@ -319,6 +368,26 @@ if MULTI_FLAG:
           for i in range(len(freeze_blocks)):
             layer = clone.layers[freeze_blocks[i]]
             layer.trainable = False
+        elif TL_TYPE == 'ENC_D1':
+          # freeze encoding side down to depth 2 (really 1 since it is zero indexed)
+          # blocks are named: enocder_block_D{i}
+          # freeze down to encoder_block_D1_maxpool
+          print('Freezing encoding side down to depth 1 (really 2 since it is zero indexed)')
+          block_name = 'encoder_block_D1_maxpool'
+          block_idx = nets.get_layer_index(clone,block_name)
+          print('Freezing all layers down to', clone.layers[block_idx].name)
+          for layer in clone.layers[:block_idx]:
+            layer.trainable = False
+        elif TL_TYPE == 'ENC_D2':
+          # freeze encoding side down to depth 3 (really 2 since it is zero indexed)
+          # blocks are named: enocder_block_D{i}
+          # freeze down to encoder_block_D2_maxpool
+          print('Freezing encoding side down to depth 2 (really 3 since it is zero indexed)')
+          block_name = 'encoder_block_D2_maxpool'
+          block_idx = nets.get_layer_index(clone,block_name)
+          print('Freezing all layers down to', clone.layers[block_idx].name)
+          for layer in clone.layers[:block_idx]:
+            layer.trainable = False
         # compile model:
         clone.compile(optimizer=nets.Adam(learning_rate=LR),loss=loss,
                       metrics=metrics)
@@ -359,6 +428,26 @@ else:
       for i in range(len(freeze_blocks)):
         layer = clone.layers[freeze_blocks[i]]
         layer.trainable = False
+    elif TL_TYPE == 'ENC_D1':
+      # freeze encoding side down to depth 2 (really 1 since it is zero indexed)
+      # blocks are named: enocder_block_D{i}
+      # freeze down to encoder_block_D1_maxpool
+      print('Freezing encoding side down to depth 1 (really 2 since it is zero indexed)')
+      block_name = 'encoder_block_D1_maxpool'
+      block_idx = nets.get_layer_index(clone,block_name)
+      print('Freezing all layers down to', clone.layers[block_idx].name)
+      for layer in clone.layers[:block_idx]:
+        layer.trainable = False
+    elif TL_TYPE == 'ENC_D2':
+      # freeze encoding side down to depth 3 (really 2 since it is zero indexed)
+      # blocks are named: enocder_block_D{i}
+      # freeze down to encoder_block_D2_maxpool
+      print('Freezing encoding side down to depth 2 (really 3 since it is zero indexed)')
+      block_name = 'encoder_block_D2_maxpool'
+      block_idx = nets.get_layer_index(clone,block_name)
+      print('Freezing all layers down to', clone.layers[block_idx].name)
+      for layer in clone.layers[:block_idx]:
+        layer.trainable = False
     clone.compile(optimizer=nets.Adam(learning_rate=LR),loss=loss,
                   metrics=metrics)
 clone.summary()
@@ -368,8 +457,8 @@ hp_dict_model['BASE_MODEL'] = MODEL_NAME
 hp_dict_model['MODEL_NAME'] = CLONE_NAME
 hp_dict_model['TL_TYPE'] = TL_TYPE
 if LOSS == 'FOCAL_CCE':
-    hp_dict_model['focal_alpha'] = alpha
-    hp_dict_model['focal_gamma'] = gamma
+  hp_dict_model['focal_alpha'] = alpha
+  hp_dict_model['focal_gamma'] = gamma
 FILE_HPS_CLONE = FILE_MODEL+CLONE_NAME+'_hps.txt'
 # get # of trainable params to ensure it's working:
 trainable_ps = nets.layer_utils.count_params(clone.trainable_weights)
@@ -385,29 +474,20 @@ print('>>> Training')
 # set up callbacks
 model_chkpt = nets.ModelCheckpoint(MODEL_PATH+CLONE_NAME+'.keras',monitor='val_loss',
                                    save_best_only=True,verbose=2)
-log_dir = ROOT_DIR + 'logs/fit/' + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") 
+log_dir = ROOT_DIR + 'logs/fit/' + CLONE_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") 
 tb_call = nets.TensorBoard(log_dir=log_dir) # do we even need this if we CSV log?
 csv_logger = nets.CSVLogger(MODEL_PATH+CLONE_NAME+'_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") + '_train_log.csv')
 reduce_lr = nets.ReduceLROnPlateau(monitor='val_loss',factor=0.25,patience=lr_patience, 
-                                   verbose=1,min_lr=1e-6)
+                                   verbose=1,min_lr=1e-9)
 early_stop = nets.EarlyStopping(monitor='val_loss',patience=patience,restore_best_weights=True)
-if LOW_MEM_FLAG:
-  # dont calc metrics, too memory intensive
-  callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger]
-else:
-  if LOAD_INTO_MEM: # metrics doesnt work with tf.data.Dataset right now
-    callbacks = [metrics,model_chkpt,reduce_lr,early_stop,csv_logger]
-  else:
-    callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger]
+callbacks = [model_chkpt,reduce_lr,early_stop,csv_logger,tb_call]
 if TENSORBOARD_FLAG:
   callbacks.append(tb_call)
-if LOAD_INTO_MEM:
-  history = clone.fit(X_train, Y_train, batch_size = batch_size, epochs = epochs,
-                      validation_data=(X_test,Y_test), verbose = 2, shuffle = True,
-                      callbacks = callbacks)
-else:
-  history = clone.fit(train_dataset,epochs=epochs,validation_data=test_dataset,verbose=2,
-                      callbacks=callbacks)
+#===============================================================
+# Train model
+#===============================================================
+history = clone.fit(train_dataset,epochs=epochs,validation_data=test_dataset,verbose=2,
+                    callbacks=callbacks)
 #================================================================
 # plot performance metrics:
 #================================================================
@@ -428,13 +508,27 @@ ORTHO_FLAG = True
 scores = {}
 scores['SIM'] = SIM; scores['DEPTH'] = DEPTH; scores['FILTERS'] = FILTERS
 scores['L_TRAIN'] = base_L; scores['L_PRED'] = tran_L
+scores['TL_TYPE'] = TL_TYPE
 scores['UNIFORM_FLAG'] = UNIFORM_FLAG; scores['BATCHNORM'] = BATCHNORM
 scores['DROPOUT'] = DROP; scores['LOSS'] = LOSS
-scores['GRID'] = GRID; scores['DATE'] = DATE; scores['MODEL_NAME'] = MODEL_NAME
+scores['GRID'] = GRID; scores['DATE'] = DATE; scores['MODEL_NAME'] = CLONE_NAME
 scores['VAL_FLAG'] = VAL_FLAG
 scores['ORTHO_FLAG'] = ORTHO_FLAG
 epochs = len(history.epoch)
 scores['EPOCHS'] = epochs
+scores['BATCHSIZE'] = batch_size
+scores['LR'] = LR
+scores['REG_FLAG'] = REGULARIZE_FLAG
+scores['TRAINABLE_PARAMS'] = trainable_ps
+scores['NONTRAINABLE_PARAMS'] = nontrainable_ps
+scores['TOTAL_PARAMS'] = trainable_ps + nontrainable_ps
+scores['TRAIN_LOSS'] = history.history['loss'][-1]
+scores['VAL_LOSS'] = history.history['val_loss'][-1]
+scores['TRAIN_ACC'] = history.history['accuracy'][-1]
+scores['VAL_ACC'] = history.history['val_accuracy'][-1]
+if LOSS == 'FOCAL_CCE':
+  scores['FOCAL_ALPHA'] = alpha
+  scores['FOCAL_GAMMA'] = gamma
 #===============================================================
 # Predict, record metrics, and plot metrics on TEST DATA
 #===============================================================
@@ -455,12 +549,15 @@ if LOSS != 'SCCE':
   Y_test = np.argmax(Y_test,axis=-1)
   Y_test = np.expand_dims(Y_test,axis=-1)
 nets.save_scores_from_fvol(Y_test,Y_pred,
-                           FILE_MODEL+CLONE_NAME,CLONE_FIG_DIR,
+                           MODEL_PATH+CLONE_NAME,CLONE_FIG_DIR,
                            scores,
                            VAL_FLAG=VAL_FLAG)
 # save score_dict by appending to the end of the csv.
 # csv will be at ROOT_DIR/model_scores.csv
+print(f'>>> Saving all scores to {ROOT_DIR}/model_scores.csv')
 nets.save_scores_to_csv(scores,ROOT_DIR+'model_scores.csv')
+print(f'>>> Saving score summary to {ROOT_DIR}/model_scores_summary.csv')
+nets.save_scores_to_csv_small(scores,ROOT_DIR+'model_scores_summary.csv')
 #========================================================================
 # Predict and plot and record metrics on TRAINING DATA
 # with TRAIN_SCORE = False, all this does is predict on the entire 
@@ -468,10 +565,10 @@ nets.save_scores_to_csv(scores,ROOT_DIR+'model_scores.csv')
 # for slice plotting:
 #========================================================================
 if SIM == 'TNG':
-  nets.save_scores_from_model(FILE_DEN, FILE_MASK, MODEL_PATH+MODEL_NAME, CLONE_FIG_DIR, PRED_PATH,
+  nets.save_scores_from_model(FILE_DEN, FILE_MASK, MODEL_PATH+CLONE_NAME, CLONE_FIG_DIR, PRED_PATH,
                               GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,TRAIN_SCORE=False)
 elif SIM == 'BOL':
-  nets.save_scores_from_model(FILE_DEN, FILE_MASK, MODEL_PATH+MODEL_NAME, CLONE_FIG_DIR, PRED_PATH,
+  nets.save_scores_from_model(FILE_DEN, FILE_MASK, MODEL_PATH+CLONE_NAME, CLONE_FIG_DIR, PRED_PATH,
                               GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,BOXSIZE=256,BOLSHOI_FLAG=True,
                               TRAIN_SCORE=False)
 print('>>> Finished predicting on training data')
@@ -487,7 +584,6 @@ print('Total nontrainable parameters:',nontrainable_ps)
 print('Total parameters:',trainable_ps+nontrainable_ps)
 print('>>> Finished training!!!')
 #===============================================================
-
 # steps:
 # score on test set
 # save results to model_scores.csv 
