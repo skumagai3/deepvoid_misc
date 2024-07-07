@@ -33,6 +33,7 @@ from keras.callbacks import Callback, ModelCheckpoint, EarlyStopping, ReduceLROn
 #from keras.saving import register_keras_serializable
 from keras import regularizers
 from tensorflow.keras import metrics
+from concurrent.futures import ThreadPoolExecutor
 
 from sklearn.preprocessing import label_binarize
 from sklearn.metrics import precision_recall_fscore_support, balanced_accuracy_score, roc_auc_score, matthews_corrcoef
@@ -992,7 +993,35 @@ def F1s(y_true, y_pred, FILE_MODEL, score_dict):
   print(f'Balanced accuracy: {bal_acc}')
   print(f'Matthews correlation coefficient: {mcc}')
 
-  
+def compute_metrics(y_true, y_pred):
+  '''
+  For parallelization purposes. This function will calculate
+  the F1 score, precision, recall for a multi-class classification.
+  (assumes y_true and y_pred are already raveled)
+  '''
+  ps, rs, f1s, _ = precision_recall_fscore_support(y_true, y_pred, average=None,zero_division=0.0)
+  micro_f1 = f1_score(y_true, y_pred, average='micro')
+  return ps, rs, f1s, micro_f1
+
+def split_into_chunks(y_true, y_pred, chunk_size):
+  '''
+  Helper function for save_scores_from_fvol to split the
+  true and predicted labels into chunks for parallel
+  processing. Assumes y_true and y_pred are already raveled.
+  '''
+  n_samples = len(y_true)
+  for i in range(0, n_samples, chunk_size):
+    yield y_true[i:i+chunk_size], y_pred[i:i+chunk_size]
+
+def parallel_compute_metrics(y_true, y_pred, chunk_size):
+  chunks = list(split_into_chunks(y_true, y_pred, chunk_size))
+  results = []
+  with ThreadPoolExecutor() as executor:
+    futures = [executor.submit(compute_metrics, chunk[0], chunk[1]) for chunk in chunks]
+    for future in futures:
+      results.append(future.result())
+  return results
+
 def CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG):
   '''
   helper fxn for save_scores_from_fvol to plot confusion matrix
