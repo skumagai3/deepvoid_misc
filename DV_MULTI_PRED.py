@@ -121,16 +121,14 @@ if SIM == 'TNG':
     BoxSize = 205
     BOLSHOI_FLAG = False
     DATA_PATH = path_to_TNG
-    FILE_DEN = DATA_PATH + FN_DEN
-    FILE_MSK = DATA_PATH + FN_MSK
     FIG_OUT = FIG_DIR_PATH + 'TNG/' + MODEL_NAME + '/'
 if SIM == 'BOL':
     BoxSize = 256
     BOLSHOI_FLAG = True
     DATA_PATH = path_to_BOL
-    FILE_DEN = DATA_PATH + FN_DEN
-    FILE_MSK = DATA_PATH + FN_MSK
     FIG_OUT = FIG_DIR_PATH + 'Bolshoi/' + MODEL_NAME + '/'
+FILE_DEN = DATA_PATH + FN_DEN
+FILE_MSK = DATA_PATH + FN_MSK
 # we want the figures to be saved in ROOT_DIR/figs/SIM/MODEL_NAME/:
 if not os.path.exists(FIG_OUT):
     os.makedirs(FIG_OUT)
