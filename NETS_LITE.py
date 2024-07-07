@@ -1247,7 +1247,7 @@ def plot_vw_misses(mask, pred, idx=None, Nm=512, boxsize=205., **kwargs):
   title = f'Slice {idx} of Mask\nTrue void voxels misclassified as wall (red) \nTrue wall voxels misclassified as void (blue)'
   ax.set_title(title)
   # fix axis labels:
-  plotter.set_window(0,boxsize,Nm,ax)
+  plotter.set_window(0,boxsize,Nm,ax,boxsize)
   return fig
 
 def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, VAL_FLAG=True, downsample=10):
