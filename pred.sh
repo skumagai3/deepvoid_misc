@@ -13,6 +13,8 @@ Parameters:
   GRID: Desired cube size on a side in voxels.
   TH: Threshold for the mask. always 0.65
   TL_FLAG: Transfer flag. 0 for base models, 1 for transfer learning models.
+  Optional:
+  XOVER_FLAG: set when performing crossover predictions from a model trained on one simulation to another.
 END_COMMENT
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
 current_time=$(date +"%Y%m%d-%H%M"); echo "Current time: $current_time";

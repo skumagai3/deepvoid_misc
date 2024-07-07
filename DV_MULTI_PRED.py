@@ -34,12 +34,15 @@ tf.random.set_seed(seed)
 parser = argparse.ArgumentParser(
     prog='DV_MULTI_PRED.py',
     description='A script for making predictions with a trained model.')
-parser.add_argument('ROOT_DIR', type=str, help='Root directory where data, models, preds, etc. are stored.')
-parser.add_argument('SIM', type=str, help='Either BOL or TNG.')
-parser.add_argument('MODEL_NAME', type=str, help='Name of the network to load.')
-parser.add_argument('FN_DEN', type=str, help='Filepath for the density cube.')
-parser.add_argument('FN_MSK', type=str, help='Filepath for the mask cube.')
-parser.add_argument('GRID', type=int, help='Desired cube size on a side in voxels.')
+req_group = parser.add_argument_group('required arguments')
+req_group.add_argument('ROOT_DIR', type=str, help='Root directory where data, models, preds, etc. are stored.')
+req_group.add_argument('SIM', type=str, help='Either BOL or TNG. Should match the density field being used.')
+req_group.add_argument('MODEL_NAME', type=str, help='Name of the network to load.')
+req_group.add_argument('FN_DEN', type=str, help='Filepath for the density cube.')
+req_group.add_argument('FN_MSK', type=str, help='Filepath for the mask cube.')
+req_group.add_argument('GRID', type=int, help='Desired cube size on a side in voxels.')
+opt_group = parser.add_argument_group('optional arguments')
+opt_group.add_argument('--XOVER_FLAG', action='store_true', default=False, help='Cross-over flag.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 SIM = args.SIM
@@ -47,6 +50,7 @@ MODEL_NAME = args.MODEL_NAME
 FN_DEN = args.FN_DEN
 FN_MSK = args.FN_MSK
 GRID = args.GRID
+XOVER_FLAG = args.XOVER_FLAG
 DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 #===============================================================================
 # parse MODEL_NAME for model attributes
@@ -54,7 +58,7 @@ DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 DEPTH = int(MODEL_NAME.split('_D')[1][0]) 
 FILTERS = int(MODEL_NAME.split('-F')[1].split('-')[0])
 GRID_MODEL_NAME = int(MODEL_NAME.split('-Nm')[1].split('-')[0])
-if GRID != GRID_MODEL_NAME:
+if GRID != GRID_MODEL_NAME and not XOVER_FLAG:
     print(f'Model was trained on GRID size {GRID_MODEL_NAME} but you are using GRID size {GRID}.')
     sys.exit()
 th = float(MODEL_NAME.split('-th')[1].split('-')[0])
@@ -89,6 +93,9 @@ print('BATCHNORM = ',BATCHNORM)
 print('DROPOUT = ',DROPOUT)
 print('LOSS = ',LOSS)
 print('GRID = ',GRID)
+print('XOVER_FLAG = ',XOVER_FLAG)
+if XOVER_FLAG:
+    print('Cross-over flag is set, performing prediction on other sim.')
 print('#############################################')
 #===============================================================================
 # set paths
@@ -196,6 +203,7 @@ scores['UNIFORM_FLAG'] = UNIFORM_FLAG; scores['BATCHNORM'] = BATCHNORM
 scores['DROPOUT'] = DROPOUT; scores['LOSS'] = LOSS
 scores['GRID'] = GRID; scores['DATE'] = DATE; scores['MODEL_NAME'] = MODEL_NAME
 scores['VAL_FLAG'] = VAL_FLAG; scores['ORTHO_FLAG'] = ORTHO_FLAG
+scores['XOVER_FLAG'] = XOVER_FLAG
 #===============================================================================
 # score and save results to a row in model_scores.csv
 #===============================================================================
