@@ -43,6 +43,7 @@ req_group.add_argument('FN_MSK', type=str, help='Filepath for the mask cube.')
 req_group.add_argument('GRID', type=int, help='Desired cube size on a side in voxels.')
 opt_group = parser.add_argument_group('optional arguments')
 opt_group.add_argument('--XOVER_FLAG', action='store_true', default=False, help='Cross-over flag.')
+opt_group.add_argument('--ORTHO_FLAG', action='store_false', default=True, help='Orthogonal flag.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 SIM = args.SIM
@@ -51,6 +52,7 @@ FN_DEN = args.FN_DEN
 FN_MSK = args.FN_MSK
 GRID = args.GRID
 XOVER_FLAG = args.XOVER_FLAG
+ORTHO_FLAG = args.ORTHO_FLAG
 DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 #===============================================================================
 # parse MODEL_NAME for model attributes
@@ -147,7 +149,7 @@ model.summary()
 #===============================================================================
 # we want to extract L from FILE_DEN...not necessarily base_L
 if SIM == 'TNG':
-    if FN_DEN == 'DM_DEN_snap99_Nm=512.fvol' or FN_DEN == 'DM_DEN_snap99_Nm=128.fvol' or FN_DEN == 'DM_DEN_snap99_Nm=256.fvol':
+    if 'DM_DEN' in FN_DEN:
         L = 0.33
     else:
         # recall TNG files have names like subs1_mass_Nm512_L3_d_None_smooth.fvol
@@ -194,7 +196,6 @@ print('>>> Finished predicting...')
 # for 45 deg rotated cubes, ORTHO_FLAG = False
 #===============================================================================
 scores = {}
-ORTHO_FLAG = True
 scores['SIM'] = SIM; scores['DEPTH'] = DEPTH; scores['FILTERS'] = FILTERS
 scores['L_TRAIN'] = base_L; scores['L_PRED'] = L
 scores['UNIFORM_FLAG'] = UNIFORM_FLAG; scores['BATCHNORM'] = BATCHNORM

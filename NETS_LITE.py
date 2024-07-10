@@ -1362,6 +1362,8 @@ def consolidate_columns(df):
   df = df.loc[:, ~df.columns.duplicated(keep='first')]
   # Drop rows with all NaN values
   df = df.dropna(how='all')
+  # strip whitespace from column names
+  df = df.rename(columns=lambda x: x.strip())
   return df
 def save_scores_to_csv(score_dict, file_path):
   '''

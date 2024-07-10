@@ -15,6 +15,7 @@ Parameters:
   TL_FLAG: Transfer flag. 0 for base models, 1 for transfer learning models.
   Optional:
   XOVER_FLAG: set when performing crossover predictions from a model trained on one simulation to another.
+  ORTHO_FLAG: set when performing preds on non-orthogonally rotated density fields, e.g. 45 degrees.
 END_COMMENT
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
 current_time=$(date +"%Y%m%d-%H%M"); echo "Current time: $current_time";
