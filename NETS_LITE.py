@@ -1364,6 +1364,8 @@ def consolidate_columns(df):
   df = df.dropna(how='all')
   # strip whitespace from column names
   df = df.rename(columns=lambda x: x.strip())
+  # strip whitespace from values
+  df = df.applymap(lambda x: x.strip() if isinstance(x, str) else x)
   return df
 def save_scores_to_csv(score_dict, file_path):
   '''
