@@ -39,11 +39,24 @@ def summary(array):
   print('Std deviation: ',np.std(array))
   print('Variance: ',np.var(array))
 def Mpc_to_cou(x,Nm,boxsize=205.):
+    # convert Mpc to mesh cell units
     d = np.round(x * (Nm/boxsize))
     return d.astype(int)
 def cou_to_Mpc(x,Nm,boxsize=205.):
+    # convert mesh cell units to Mpc
     return x * (boxsize/Nm)
-def set_window(b,t,Nm,ax,boxsize=205.,nticks=7,fix=True,Latex=False):
+def set_window(b,t,Nm,ax,boxsize=205.,nticks=7,fix=True,Latex=False,return_ints=True):
+    '''
+    Set window function for plotting. Fixes axes labels, ticks, and limits.
+    This is to address the mismatch in physical and mesh cell units.
+    b - lower bound in Mpc
+    t - upper bound in Mpc
+    Nm - number of mesh cells in one dimension
+    ax - axis to plot onto
+    fix - whether or not to fix the window to the nearest integer
+    Latex - whether or not to use Latex in labels
+    return_ints - whether or not to return the window in integers
+    '''
     b_cou = Mpc_to_cou(b,Nm,boxsize)
     t_cou = Mpc_to_cou(t,Nm,boxsize)
     if fix:
@@ -58,8 +71,12 @@ def set_window(b,t,Nm,ax,boxsize=205.,nticks=7,fix=True,Latex=False):
         ax.set_ylabel('Mpc/h')
     ax.set_xticks(np.linspace(b_cou,t_cou,nticks))
     ax.set_yticks(np.linspace(b_cou,t_cou,nticks))
-    ax.set_xticklabels(np.round(np.linspace(b,t,nticks)))
-    ax.set_yticklabels(np.round(np.linspace(b,t,nticks)))
+    if return_ints:
+        ax.set_xticklabels(np.round(np.linspace(b,t,nticks)).astype(int))
+        ax.set_yticklabels(np.round(np.linspace(b,t,nticks)).astype(int))
+    else:
+        ax.set_xticklabels(np.linspace(b,t,nticks))
+        ax.set_yticklabels(np.linspace(b,t,nticks))
     pass
 def minmax_norm(arr):
     norm_arr = (arr-arr.min())/(arr.max()-arr.min())
