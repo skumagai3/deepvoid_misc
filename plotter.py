@@ -716,3 +716,11 @@ def plot_training_metrics_all(history,FILE_OUT,aspect='rect',savefig=False,CSV_F
         fig.delaxes(ax.flatten()[i])
     if savefig:
         plt.savefig(FILE_OUT)
+
+# returns golden ratio sized rectangle for plotting:
+def golden_ratio(width):
+    '''
+    Returns a golden ratio sized rectangle for plotting.
+    '''
+    GR = (1 + np.sqrt(5))/2
+    return (width, width/GR)
