@@ -27,6 +27,13 @@ t indicates the upper bound of the window.
 ALL ARE IN Mpc!!!!
 '''
 #---------------------------------------------------------
+# Regularization options: minmax and standardize
+#---------------------------------------------------------
+def minmax(a):
+    return (a-np.min(a))/(np.max(a)-np.min(a))
+def standardize(a):
+  return (a-np.mean(a))/(np.std(a))
+#---------------------------------------------------------
 # Summary statistics for a Numpy array
 #---------------------------------------------------------
 def summary(array):
