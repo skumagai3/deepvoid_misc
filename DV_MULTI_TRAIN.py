@@ -93,7 +93,7 @@ req_group.add_argument('L', type=lambda x: float(x) if x in ['0.33', '0.122'] el
                        help='Interparticle separation in Mpc/h. TNG full DM 0.33, BOL full DM 0.122, 3,5,7,10.')
 req_group.add_argument('DEPTH', type=int, default=3, help='Depth of the U-Net.')
 req_group.add_argument('FILTERS', type=int, default=32, help='Number of filters in the first layer.')
-req_group.add_argument('LOSS', type=str, default='CCE', help='Loss function to use: CCE, SCCE, FOCAL_CCE.')
+req_group.add_argument('LOSS', type=str, default='CCE', help='Loss function to use: CCE, SCCE, FOCAL_CCE, DISCCE.')
 req_group.add_argument('GRID', type=int, help='Size of the density and mask fields on a side. For TNG, GRID=512, for Bolshoi, GRID=640.')
 # optional args: UNIFORM_FLAG, BATCHNORM, DROPOUT, MULTI_FLAG, LOW_MEM_FLAG
 opt_group = parser.add_argument_group('optional arguments')
@@ -206,7 +206,7 @@ if SIM == 'Bolshoi':
 # set up .npy filepaths for saving/loading data
 X_PREFIX = f'{SIM}_L{L}_Nm={GRID}'
 Y_PREFIX = f'{SIM}_Nm={GRID}'
-if LOSS == 'SCCE':
+if LOSS == 'SCCE' or LOSS == 'DISCCE':
   Y_PREFIX += '_int'
 ### TNG ### 
 if SIM == 'TNG':
@@ -302,7 +302,7 @@ if LOAD_INTO_MEM:
   print(f'>>> Split into training ({(1-test_size)*100}%) and validation ({test_size*100}%) sets')
   print('X_train shape: ',X_train.shape); print('Y_train shape: ',Y_train.shape)
   print('X_test shape: ',X_test.shape); print('Y_test shape: ',Y_test.shape)
-  if LOSS != 'SCCE':
+  if (LOSS != 'SCCE' and LOSS != 'DISCCE'):
     print('>>> Converting to one-hot encoding')
     Y_train = nets.to_categorical(Y_train, num_classes=N_CLASSES)
     Y_test  = nets.to_categorical(Y_test,  num_classes=N_CLASSES)
@@ -346,7 +346,7 @@ else:
   print('>>> X_test:',FILE_X_TEST); print('>>> Y_test:',FILE_Y_TEST)
   n_samples_train = np.load(FILE_X_TRAIN,mmap_mode='r').shape[0]
   n_samples_test = np.load(FILE_X_TEST,mmap_mode='r').shape[0]
-  last_dim = 1 if LOSS == 'SCCE' else N_CLASSES
+  last_dim = 1 if LOSS == 'SCCE' or LOSS == 'DISCCE' else N_CLASSES
   train_dataset = tf.data.Dataset.from_generator(
     lambda: nets.data_gen_mmap(FILE_X_TRAIN,FILE_Y_TRAIN),
     output_signature=(
@@ -447,15 +447,15 @@ elif LOSS == 'SCCE':
 elif LOSS == 'FOCAL_CCE':
   loss = [nets.categorical_focal_loss(alpha=alpha,gamma=gamma)]
   #loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma) # only works on 2.16.1
-elif LOSS == 'DICE_AVG':
+elif LOSS == 'DISCCE':
   # implement dice loss averaged over all classes
-  pass
+  loss = [nets.SCCE_Dice_loss]
 elif LOSS == 'DICE_VOID':
   # implement dice loss with void class
   pass
 # set one-hot flag:
 ONE_HOT_FLAG = True # for compute metrics callback
-if LOSS == 'SCCE':
+if LOSS == 'SCCE' or LOSS == 'DISCCE':
   ONE_HOT_FLAG = False
 print('>>> One-hot flag:',ONE_HOT_FLAG)
 # add more metrics here, may slow down training?
@@ -604,10 +604,12 @@ else:
   Y_pred = np.concatenate(Y_pred_list,axis=0)
   Y_test = np.concatenate(Y_test_list,axis=0)
 # adjust Y_test shape to be [N_samples,SUBGRID,SUBGRID,SUBGRID,1]:
-if LOSS != 'SCCE':
+if (LOSS != 'SCCE' and LOSS != 'DISCCE'):
   # undo one-hot encoding for input into save_scores_from_fvol
   Y_test = np.argmax(Y_test,axis=-1)
   Y_test = np.expand_dims(Y_test,axis=-1)
+print('Y_pred summary:',np.unique(Y_pred,return_counts=True))
+print('Y_test summary:',np.unique(Y_test,return_counts=True))
 print('Y_pred shape:',Y_pred.shape)
 print('Y_test shape:',Y_test.shape)
 # save scores

@@ -402,6 +402,39 @@ def categorical_focal_loss(alpha, gamma=2.):
 
   return categorical_focal_loss_fixed
 #---------------------------------------------------------
+# Custom combo SCCE and Dice loss function
+#---------------------------------------------------------
+def SCCE_Dice_loss(y_true, y_pred, cce_weight=1.0, dice_weight=1.0):
+  """
+  DISCCE loss
+  Custom loss function combining sparse categorical cross-entropy (SCCE) and dice score.
+  This uses the macro-averaged Dice score. NOTE could be modified to use micro-averaged 
+  dice score, or some kind of weighted averaging.
+
+  Args:
+    y_true: True labels.
+    y_pred: Predicted labels.
+    cce_weight: Weight for SCCE loss (default: 1.0).
+    dice_weight: Weight for dice score loss (default: 1.0).
+
+  Returns:
+    Weighted average of SCCE loss and dice score.
+  """
+  # cast y_true to float32
+  y_true = tf.cast(y_true, tf.float32)
+  # Calculate SCCE loss
+  scce_loss = tf.keras.losses.sparse_categorical_crossentropy(y_true, y_pred)
+
+  # Calculate multi-class dice score
+  smooth = 1e-5
+  intersection = tf.reduce_sum(y_true * y_pred, axis=-1)
+  union = tf.reduce_sum(y_true, axis=-1) + tf.reduce_sum(y_pred, axis=-1)
+  dice_score = (2 * intersection + smooth) / (union + smooth)
+  dice_score = tf.reduce_mean(dice_score)
+
+  # Weighted average of SCCE loss and dice score
+  return cce_weight * scce_loss + dice_weight * (1 - dice_score)
+#---------------------------------------------------------
 # U-Net creator
 #---------------------------------------------------------
 def conv_block(input_tensor, filters, name, activation='relu', batch_normalization=True, dropout_rate=None, BN_scheme='last', DROP_scheme='last', kernel_regularizer=None, kernel_initializer='he_normal'):
@@ -1702,6 +1735,8 @@ def create_model_name(SIM, DEPTH, FILTERS, GRID, LAMBDA_TH, SIGMA, base_L, UNIFO
     mn += '_SCCE'
   if LOSS == 'FOCAL_CCE':
     mn += '_FOCAL'
+  if LOSS == 'DISCCE':
+    mn += '_DISCCE'
   if LOSS == 'CCE':
     pass
   if suffix is not None:

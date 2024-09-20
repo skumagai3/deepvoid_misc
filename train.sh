@@ -11,7 +11,7 @@ Parameters:
   for BOL full DM use '0.122'. Other valid values are '3', '5', '7', '10'. 
   D: Depth of the model. Default is 3.
   F: Number of filters in the model. Default is 32.
-  LOSS: Loss function to be used. CCE, FOCAL_CCE, or SCCE. Default is CCE.
+  LOSS: Loss function to be used. CCE, FOCAL_CCE, SCCE, or DISCCE. Default is CCE.
   GRID: Desired cube size on a side in voxels. For TNG use 512, for BOL use 640.
 
 Optional Flags:
