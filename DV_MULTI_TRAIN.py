@@ -608,8 +608,8 @@ if (LOSS != 'SCCE' and LOSS != 'DISCCE'):
   # undo one-hot encoding for input into save_scores_from_fvol
   Y_test = np.argmax(Y_test,axis=-1)
   Y_test = np.expand_dims(Y_test,axis=-1)
-print('Y_pred summary:',np.unique(Y_pred,return_counts=True))
-print('Y_test summary:',np.unique(Y_test,return_counts=True))
+#print('Y_pred summary:',np.unique(Y_pred,return_counts=True))
+#print('Y_test summary:',np.unique(Y_test,return_counts=True))
 print('Y_pred shape:',Y_pred.shape)
 print('Y_test shape:',Y_test.shape)
 # save scores

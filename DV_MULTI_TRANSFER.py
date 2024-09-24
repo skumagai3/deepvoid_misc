@@ -190,6 +190,9 @@ if LOSS == 'CCE':
 elif LOSS == 'SCCE':
   loss = nets.SparseCategoricalCrossentropy()
   ONE_HOT_FLAG = False
+elif LOSS == 'DISCCE':
+  loss = [nets.SCCE_Dice_loss]
+  ONE_HOT_FLAG = False
 elif LOSS == 'FOCAL_CCE':
   loss = [nets.categorical_focal_loss(alpha=alpha_list_float,gamma=gamma)] 
   #loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma)
@@ -204,6 +207,7 @@ metrics += more_metrics
 print('>>> Metrics:')
 for metric in metrics:
   print(str(metric))
+print(LOSS)
 # set up custom objects for loading model
 custom_objects = {}
 custom_objects['MCC'] = nets.MCC_keras(int_labels=~ONE_HOT_FLAG)
@@ -215,6 +219,12 @@ custom_objects['precision_micro'] = nets.precision_micro_keras(int_labels=~ONE_H
 custom_objects['true_wall_pred_as_void'] = nets.true_wall_pred_as_void_keras(int_labels=~ONE_HOT_FLAG)
 if LOSS == 'FOCAL_CCE':
   custom_objects['categorical_focal_loss_fixed'] = nets.categorical_focal_loss(alpha=alpha_list_float,gamma=gamma)
+if LOSS == 'DISCCE':
+  custom_objects['SCCE_Dice_loss'] = nets.SCCE_Dice_loss
+# print custom objects:
+print('>>> Custom Objects:')
+for key, value in custom_objects.items():
+  print(f'{key}: {value}')
 #===============================================================
 # Load data
 #===============================================================
@@ -223,7 +233,7 @@ if SIM == 'TNG':
   tran_L = int(FN_DEN.split('_L')[1].split('_')[0])
   X_PREFIX = f'{SIM}_L{tran_L}_Nm={GRID}'
   Y_PREFIX = f'{SIM}_Nm={GRID}'
-  if LOSS == 'SCCE':
+  if LOSS == 'SCCE' or LOSS == 'DISCCE':
     Y_PREFIX += '_int'
   FILE_X_TRAIN = DATA_PATH + X_PREFIX + '_X_train.npy'
   FILE_Y_TRAIN = DATA_PATH + Y_PREFIX + '_Y_train.npy'
@@ -235,7 +245,7 @@ elif SIM == 'Bolshoi':
   tran_L = int(FN_DEN.split('L=')[1].split('.0')[0])
   X_PREFIX = f'BOL_L{tran_L}_Nm={GRID}'
   Y_PREFIX = f'BOL_Nm={GRID}'
-  if LOSS == 'SCCE':
+  if LOSS == 'SCCE' or LOSS == 'DISCCE':
     Y_PREFIX += '_int'
   FILE_X_TRAIN = DATA_PATH + X_PREFIX + '_X_train.npy'
   FILE_Y_TRAIN = DATA_PATH + Y_PREFIX + '_Y_train.npy'
@@ -267,7 +277,7 @@ if LOAD_INTO_MEM:
   print(f'>>> Split into training ({(1-test_size)*100}%) and validation ({test_size*100}%) sets')
   print('X_train shape: ',X_train.shape); print('Y_train shape: ',Y_train.shape)
   print('X_test shape: ',X_test.shape); print('Y_test shape: ',Y_test.shape)
-  if LOSS != 'SCCE':
+  if (LOSS != 'SCCE' and LOSS != 'DISCCE'):
     print('>>> Converting to one-hot encoding')
     Y_train = nets.to_categorical(Y_train, num_classes=N_CLASSES,dtype='uint8')
     Y_test  = nets.to_categorical(Y_test, num_classes=N_CLASSES,dtype='uint8')
@@ -283,7 +293,7 @@ else:
   print('>>> Loading train, val data into tf.data.Dataset from memmapped .npy files')
   print('X_train:',FILE_X_TRAIN); print('Y_train:',FILE_Y_TRAIN)
   print('X_test:',FILE_X_TEST); print('Y_test:',FILE_Y_TEST)
-  last_dim = 1 if LOSS == 'SCCE' else N_CLASSES
+  last_dim = 1 if LOSS == 'SCCE' or LOSS == 'DISCCE' else N_CLASSES
   train_dataset = tf.data.Dataset.from_generator(
     lambda: nets.data_gen_mmap(FILE_X_TRAIN,FILE_Y_TRAIN),
     output_signature=(
@@ -544,7 +554,7 @@ else:
   Y_test = np.concatenate(Y_test_list,axis=0)
 # since output argmax = False, Y_pred shape = [N_samples,SUBGRID,SUBGRID,SUBGRID,N_CLASSES]
 # adjust Y_test shape to be [N_samples,SUBGRID,SUBGRID,SUBGRID,1]:
-if LOSS != 'SCCE':
+if (LOSS != 'SCCE' and LOSS != 'DISCCE'):
   # undo one-hot encoding for input into save_scores_from_fvol
   Y_test = np.argmax(Y_test,axis=-1)
   Y_test = np.expand_dims(Y_test,axis=-1)

@@ -1798,6 +1798,8 @@ def parse_model_name(MODEL_NAME):
     LOSS = 'FOCAL_CCE'
   else:
     LOSS = 'CCE'
+  if 'DISCCE' in MODEL_NAME:
+    LOSS = 'DISCCE'
   # return dictionary of parameters:
   return {
     'SIM': SIM,
