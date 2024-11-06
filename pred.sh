@@ -16,6 +16,7 @@ Parameters:
   Optional:
   XOVER_FLAG: set when performing crossover predictions from a model trained on one simulation to another.
   ORTHO_FLAG: set when performing preds on non-orthogonally rotated density fields, e.g. 45 degrees.
+  CH4_FLAG: set when you want to save the 4-channel predictions (before argmax) to disk.
 END_COMMENT
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
 current_time=$(date +"%Y%m%d-%H%M"); echo "Current time: $current_time";
@@ -43,6 +44,12 @@ TH=0.65; echo "Threshold: $TH";
 TL_FLAG=1; echo "Transfer Flag: $TL_FLAG";
 ### CHOOSE LAMBDA TO PREDICT ON ###
 TRAN_L=7; echo "Transfer/pred Lambda: $TRAN_L";
+### XOVER FLAG ###
+XOVER_FLAG=0; echo "Crossover flag: $XOVER_FLAG";
+### ORTHO FLAG ###
+ORTHO_FLAG=0; echo "Orthogonal flag: $ORTHO_FLAG";
+### SAVE 4 CHANNELS BEFORE ARGMAX ###
+CH4_FLAG=0; echo "Save 4 channel prediction flag: $CH4_FLAG";
 #######################################################################
 if [ "$TL_FLAG" = 0 ]; then
   TRAN_L=$BASE_L;
@@ -94,6 +101,14 @@ fi
 echo "Model Name: $MODEL_NAME";
 echo "Mask Field: $FN_MSK";
 echo "Density Field: $FN_DEN";
+echo "4 channel flag: $CH4_FLAG";
 
-python3 ./deepvoid_misc/DV_MULTI_PRED.py $ROOT_DIR $SIM $MODEL_NAME $FN_DEN $FN_MSK $GRID > ${output_fn} 2> ${error_fn};
+CMD_ARGS="$ROOT_DIR $SIM $MODEL_NAME $FN_DEN $FN_MSK $GRID";
+[ "$XOVER_FLAG" -eq 1 ] && CMD_ARGS+=" --XOVER_FLAG";
+[ "$ORTHO_FLAG" -eq 0 ] && CMD_ARGS+=" --ORTHO_FLAG";
+[ "$CH4_FLAG" -eq 1 ] && CMD_ARGS+=" --CH4_FLAG";
+echo "CMD_ARGS: $CMD_ARGS";
+
+echo ">>> PREDICTING <<<";
+python3 ./deepvoid_misc/DV_MULTI_PRED.py $CMD_ARGS > ${output_fn} 2> ${error_fn};
 kill $NVIDIA_SMI_PID

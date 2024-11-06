@@ -44,6 +44,7 @@ req_group.add_argument('GRID', type=int, help='Desired cube size on a side in vo
 opt_group = parser.add_argument_group('optional arguments')
 opt_group.add_argument('--XOVER_FLAG', action='store_true', default=False, help='Cross-over flag.')
 opt_group.add_argument('--ORTHO_FLAG', action='store_false', default=True, help='Orthogonal flag.')
+opt_group.add_argument('--CH4_FLAG', action='store_true', default=False, help='CH4 flag.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 SIM = args.SIM
@@ -53,6 +54,7 @@ FN_MSK = args.FN_MSK
 GRID = args.GRID
 XOVER_FLAG = args.XOVER_FLAG
 ORTHO_FLAG = args.ORTHO_FLAG
+CH4_FLAG = args.CH4_FLAG
 DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 #===============================================================================
 # parse MODEL_NAME for model attributes
@@ -98,6 +100,8 @@ print('GRID = ',GRID)
 print('XOVER_FLAG = ',XOVER_FLAG)
 if XOVER_FLAG:
     print('Cross-over flag is set, performing prediction on other sim.')
+print('ORTHO_FLAG = ',ORTHO_FLAG)
+print('CH4_FLAG = ',CH4_FLAG)
 print('#############################################')
 #===============================================================================
 # set paths
@@ -189,6 +193,11 @@ batch_size = 4
 print('>>> Predicting...')
 Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False)
 print('>>> Finished predicting...')
+if CH4_FLAG:
+    print('>>> Saving 4-channel predictions to disk...')
+    FILE_PRED_4CH = FILE_PRED + MODEL_NAME + '-pred-4ch.npy'
+    np.save(FILE_PRED_4CH,Y_pred)
+    print(f'>>> Saved 4-channel predictions to {FILE_PRED_4CH}')
 #===============================================================================
 # set up score_dict. 
 # VAL_FLAG is True if scores are based on val set
