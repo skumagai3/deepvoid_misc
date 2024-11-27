@@ -503,6 +503,8 @@ for metric in metrics:
 #===============================================================
 if BINARY_MASK:
   N_CLASSES = 1 # just for unet_3d() call
+last_activation = 'softmax' if N_CLASSES > 1 else 'sigmoid'
+print('>>> Last activation function:',last_activation)
 if MULTI_FLAG:
   strategy = tf.distribute.MirroredStrategy()
   print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
@@ -515,10 +517,11 @@ if MULTI_FLAG:
       model.set_weights(model.get_weights())
     else:
       model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
-                          batch_normalization=BATCHNORM,
-                          dropout_rate=DROPOUT,
-                          model_name=MODEL_NAME,
-                          REG_FLAG=REGULARIZE_FLAG)
+                           last_activation=last_activation,
+                           batch_normalization=BATCHNORM,
+                           dropout_rate=DROPOUT,
+                           model_name=MODEL_NAME,
+                           REG_FLAG=REGULARIZE_FLAG)
       model.compile(optimizer=nets.Adam(learning_rate=LR),
                                         loss=loss,
                                         metrics=metrics)
@@ -529,10 +532,11 @@ else:
     model.set_weights(model.get_weights())
   else:
     model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
-                          batch_normalization=BATCHNORM,
-                          dropout_rate=DROPOUT,
-                          model_name=MODEL_NAME,
-                          REG_FLAG=REGULARIZE_FLAG)
+                         last_activation=last_activation,
+                         batch_normalization=BATCHNORM,
+                         dropout_rate=DROPOUT,
+                         model_name=MODEL_NAME,
+                         REG_FLAG=REGULARIZE_FLAG)
     model.compile(optimizer=nets.Adam(learning_rate=LR),
                                           loss=loss,
                                           metrics=metrics)
