@@ -494,6 +494,8 @@ if not LOW_MEM_FLAG:
                    nets.precision_micro_keras(int_labels=not ONE_HOT_FLAG),
                    nets.true_wall_pred_as_void_keras(int_labels=not ONE_HOT_FLAG)]
 metrics += more_metrics
+if BINARY_MASK:
+  metrics = ['accuracy',nets.BinaryAccuracy()]
 # print metrics:
 print('>>> Metrics:')
 for metric in metrics:
