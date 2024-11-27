@@ -501,6 +501,8 @@ for metric in metrics:
 #===============================================================
 # Multiprocessing
 #===============================================================
+if BINARY_MASK:
+  N_CLASSES = 1 # just for unet_3d() call
 if MULTI_FLAG:
   strategy = tf.distribute.MirroredStrategy()
   print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
