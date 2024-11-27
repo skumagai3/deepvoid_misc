@@ -27,7 +27,7 @@ from tensorflow.python.keras.utils import layer_utils
 from keras.utils import to_categorical
 from keras.layers import Input, Conv3D, MaxPooling3D, Conv3DTranspose, UpSampling3D, Concatenate, BatchNormalization, Activation, Dropout
 from keras import backend as K
-from keras.losses import CategoricalCrossentropy, SparseCategoricalCrossentropy
+from keras.losses import CategoricalCrossentropy, SparseCategoricalCrossentropy, BinaryCrossentropy
 #from keras.losses import CategoricalFocalCrossentropy # not available in tf 2.10.0!!!
 from keras.callbacks import Callback, ModelCheckpoint, EarlyStopping, ReduceLROnPlateau, TensorBoard, CSVLogger
 #from keras.saving import register_keras_serializable
@@ -60,6 +60,14 @@ def minmax(a):
     return (a-np.min(a))/(np.max(a)-np.min(a))
 def standardize(a):
   return (a-np.mean(a))/(np.std(a))
+#---------------------------------------------------------
+# Convert multiclass mask to binary void/not void mask
+#---------------------------------------------------------
+def convert_to_binary_mask(mask):
+  # Create a binary mask where class 0 remains 0 and 
+  # classes 1, 2, 3 become 1. assuming mask is not one-hot.
+  binary_mask = (mask > 0).astype(int)
+  return binary_mask
 #---------------------------------------------------------
 # Assemble cube from subcubes
 #---------------------------------------------------------

@@ -11,7 +11,7 @@ Parameters:
   for BOL full DM use '0.122'. Other valid values are '3', '5', '7', '10'. 
   D: Depth of the model. Default is 3.
   F: Number of filters in the model. Default is 32.
-  LOSS: Loss function to be used. CCE, FOCAL_CCE, SCCE, or DISCCE. Default is CCE.
+  LOSS: Loss function to be used. CCE, FOCAL_CCE, SCCE, DISCCE, or BCE. Default is CCE.
   GRID: Desired cube size on a side in voxels. For TNG use 512, for BOL use 640.
 
 Optional Flags:
@@ -33,6 +33,7 @@ Optional Flags:
   --REG_FLAG: If set to 1, use L2 regularization. Default is 0.
   --PICOTTE_FLAG: If set to 1, use Picotte. Default is 0.
   --TENSORBOARD: If set, use TensorBoard. Default is to not.
+  --BINARY_MASK: If set to 1, use binary mask. Default is 0. Requires BCE loss.
 END_COMMENT
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
 current_time=$(date +"%Y%m%d-%H%M"); echo "Current time: $current_time";
@@ -79,6 +80,7 @@ PATIENCE=25; echo "Patience: $PATIENCE";
 REG_FLAG=0; echo "Regularization: $REG_FLAG";
 PICOTTE_FLAG=0; echo "Picotte: $PICOTTE_FLAG";
 TENSORBOARD=1; echo "TensorBoard: $TENSORBOARD";
+BINARY_MASK=1; echo "Binary Mask: $BINARY_MASK";
 
 # Constructing command line arguments dynamically
 CMD_ARGS="$ROOT_DIR $SIM $L $D $F $LOSS $GRID"
@@ -99,6 +101,7 @@ CMD_ARGS+=" --PATIENCE $PATIENCE"
 [ "$REG_FLAG" -eq 1 ] && CMD_ARGS+=" --REGULARIZE_FLAG"
 [ "$PICOTTE_FLAG" -eq 1 ] && CMD_ARGS+=" --PICOTTE_FLAG"
 [ "$TENSORBOARD" -eq 1 ] && CMD_ARGS+=" --TENSORBOARD"
+[ "$BINARY_MASK" -eq 1 ] && CMD_ARGS+=" --BINARY_MASK"
 echo "Command line arguments: $CMD_ARGS";
 
 # Running the Python script with dynamically constructed arguments

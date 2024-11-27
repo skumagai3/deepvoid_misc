@@ -115,6 +115,7 @@ opt_group.add_argument('--PATIENCE', type=int, default=25, help='Number of epoch
 opt_group.add_argument('--REGULARIZE_FLAG', action='store_true', help='If set, use L2 regularization.')
 opt_group.add_argument('--PICOTTE_FLAG', action='store_true', help='If set, set up for sbatch run on Picotte.')
 opt_group.add_argument('--TENSORBOARD_FLAG', action='store_true', help='If set, use tensorboard.')
+opt_group.add_argument('--BINARY_MASK', action='store_true', help='If set, use binary mask.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 SIM = args.SIM
@@ -141,6 +142,7 @@ PATIENCE = args.PATIENCE
 REGULARIZE_FLAG = args.REGULARIZE_FLAG
 PICOTTE_FLAG = args.PICOTTE_FLAG
 TENSORBOARD_FLAG = args.TENSORBOARD_FLAG
+BINARY_MASK = args.BINARY_MASK
 print('#############################################')
 print('>>> Running DV_MULTI_TRAIN.py')
 print('>>> Root directory:',ROOT_DIR)
@@ -149,9 +151,9 @@ print('Simulation =', SIM);
 print('L =',L); 
 print('DEPTH =',DEPTH); print('FILTERS =',FILTERS)
 print('GRID =',GRID)
-print('BATCHNORM =',BATCHNORM)
+print(f'Batch normalization: {bool(BATCHNORM)}')
 print('DROPOUT =',DROPOUT)
-print('L2_REGULARIZATION =',REGULARIZE_FLAG)
+print(f'L2 Regularization: {bool(REGULARIZE_FLAG)}')
 print('LEARNING_RATE =',LR)
 print('LR_PATIENCE =',LR_PATIENCE)
 print('LOSS =',LOSS)
@@ -161,12 +163,15 @@ if LOSS == 'FOCAL_CCE':
 print('MODEL_NAME_SUFFIX =',MODEL_NAME_SUFFIX)
 print('BATCH_SIZE =',batch_size)
 print('EPOCHS =',epochs)
-print('UNIFORM_FLAG =',UNIFORM_FLAG)
-print('LOAD_MODEL_FLAG =',LOAD_MODEL_FLAG)
-print('LOAD_INTO_MEM =',LOAD_INTO_MEM)
-print('LOW_MEM_FLAG =',LOW_MEM_FLAG)
-print('MULTI_FLAG =',MULTI_FLAG)
-print('TENSORBOARD =',TENSORBOARD_FLAG)
+print(f'Use uniform subhalo masses: {bool(UNIFORM_FLAG)}')
+print(f'Load existing model flag: {bool(LOAD_MODEL_FLAG)}')
+print(f'Load entire dataset into memory: {bool(LOAD_INTO_MEM)}')
+print(f'Use saved memory-mapped arrays: {bool(not LOAD_INTO_MEM)}')
+print(f'Low memory flag: {bool(LOW_MEM_FLAG)}')
+print(f'Multiprocessing: {bool(MULTI_FLAG)}')
+print(f'Picotte flag: {bool(PICOTTE_FLAG)}')
+print(f'Tensorboard: {bool(TENSORBOARD_FLAG)}')
+print(f'Using binary mask: {bool(BINARY_MASK)}')
 print('#############################################')
 #===============================================================
 # set paths
@@ -203,11 +208,18 @@ th = 0.65 # eigenvalue threshold NOTE SET THRESHOLD HERE
 # fix SIM prefix name for Bolshoi if provided as 'Bolshoi'
 if SIM == 'Bolshoi':
   SIM = 'BOL'
+  if BINARY_MASK:
+    sys.exit('ERROR: BINARY_MASK not implemented for Bolshoi')
 # set up .npy filepaths for saving/loading data
 X_PREFIX = f'{SIM}_L{L}_Nm={GRID}'
 Y_PREFIX = f'{SIM}_Nm={GRID}'
 if LOSS == 'SCCE' or LOSS == 'DISCCE':
   Y_PREFIX += '_int'
+  if BINARY_MASK:
+    sys.exit('ERROR: categorical crossentropy loss not compatible with binary mask')
+if BINARY_MASK:
+  N_CLASSES = 2
+  class_labels = ['void','wall']
 ### TNG ### 
 if SIM == 'TNG':
   BoxSize = 205.0 # Mpc/h
@@ -244,6 +256,9 @@ if SIM == 'TNG':
   FILE_Y_TRAIN = path_to_TNG + Y_PREFIX + '_Y_train.npy'
   FILE_X_TEST  = path_to_TNG + X_PREFIX + '_X_test.npy'
   FILE_Y_TEST  = path_to_TNG + Y_PREFIX + '_Y_test.npy'
+  if BINARY_MASK:
+    FILE_Y_TRAIN = path_to_TNG + Y_PREFIX + '_Y_train_binary.npy'
+    FILE_Y_TEST  = path_to_TNG + Y_PREFIX + '_Y_test_binary.npy'
 ### Bolshoi ###
 elif SIM == 'BOL' or SIM == 'Bolshoi':
   SIM = 'BOL'
@@ -299,16 +314,21 @@ if LOAD_INTO_MEM:
                                                           random_state=seed)
   X_train = features[X_train]; X_test = features[X_test]
   del features; del labels # memory purposes
+  if BINARY_MASK:
+    Y_train = nets.convert_to_binary_mask(Y_train)
+    Y_test = nets.convert_to_binary_mask(Y_test)
+    print('>>> Converted to binary mask!')
   print(f'>>> Split into training ({(1-test_size)*100}%) and validation ({test_size*100}%) sets')
   print('X_train shape: ',X_train.shape); print('Y_train shape: ',Y_train.shape)
   print('X_test shape: ',X_test.shape); print('Y_test shape: ',Y_test.shape)
   if (LOSS != 'SCCE' and LOSS != 'DISCCE'):
-    print('>>> Converting to one-hot encoding')
-    Y_train = nets.to_categorical(Y_train, num_classes=N_CLASSES)
-    Y_test  = nets.to_categorical(Y_test,  num_classes=N_CLASSES)
-    print('>>> One-hot encoding complete')
-    print('Y_train shape: ',Y_train.shape)
-    print('Y_test shape: ',Y_test.shape)
+    if not BINARY_MASK:
+      print('>>> Converting to one-hot encoding')
+      Y_train = nets.to_categorical(Y_train, num_classes=N_CLASSES)
+      Y_test  = nets.to_categorical(Y_test,  num_classes=N_CLASSES)
+      print('>>> One-hot encoding complete')
+      print('Y_train shape: ',Y_train.shape)
+      print('Y_test shape: ',Y_test.shape)
   #===============================================================
   # Save training and test arrays for later preds:
   # only need SIM, L, GRID to define filenames
@@ -347,6 +367,8 @@ else:
   n_samples_train = np.load(FILE_X_TRAIN,mmap_mode='r').shape[0]
   n_samples_test = np.load(FILE_X_TEST,mmap_mode='r').shape[0]
   last_dim = 1 if LOSS == 'SCCE' or LOSS == 'DISCCE' else N_CLASSES
+  if BINARY_MASK:
+    last_dim = 1
   train_dataset = tf.data.Dataset.from_generator(
     lambda: nets.data_gen_mmap(FILE_X_TRAIN,FILE_Y_TRAIN),
     output_signature=(
@@ -450,6 +472,10 @@ elif LOSS == 'FOCAL_CCE':
 elif LOSS == 'DISCCE':
   # implement dice loss averaged over all classes
   loss = [nets.SCCE_Dice_loss]
+elif LOSS == 'BCE':
+  loss = nets.BinaryCrossentropy()
+  if not BINARY_MASK:
+    sys.exit('ERROR: Binary crossentropy loss only compatible with binary mask')
 elif LOSS == 'DICE_VOID':
   # implement dice loss with void class
   pass
@@ -457,14 +483,16 @@ elif LOSS == 'DICE_VOID':
 ONE_HOT_FLAG = True # for compute metrics callback
 if LOSS == 'SCCE' or LOSS == 'DISCCE':
   ONE_HOT_FLAG = False
+if BINARY_MASK:
+  ONE_HOT_FLAG = False
 print('>>> One-hot flag:',ONE_HOT_FLAG)
 # add more metrics here, may slow down training?
-more_metrics = [nets.MCC_keras(int_labels=~ONE_HOT_FLAG),nets.balanced_accuracy_keras(int_labels=~ONE_HOT_FLAG),
-                nets.void_F1_keras(int_labels=~ONE_HOT_FLAG),nets.F1_micro_keras(int_labels=~ONE_HOT_FLAG)]
+more_metrics = [nets.MCC_keras(int_labels=not ONE_HOT_FLAG),nets.balanced_accuracy_keras(int_labels=not ONE_HOT_FLAG),
+                nets.void_F1_keras(int_labels=not ONE_HOT_FLAG),nets.F1_micro_keras(int_labels=not ONE_HOT_FLAG)]
 if not LOW_MEM_FLAG:
-  more_metrics += [nets.recall_micro_keras(int_labels=~ONE_HOT_FLAG),
-                   nets.precision_micro_keras(int_labels=~ONE_HOT_FLAG),
-                   nets.true_wall_pred_as_void_keras(int_labels=~ONE_HOT_FLAG)]
+  more_metrics += [nets.recall_micro_keras(int_labels=not ONE_HOT_FLAG),
+                   nets.precision_micro_keras(int_labels=not ONE_HOT_FLAG),
+                   nets.true_wall_pred_as_void_keras(int_labels=not ONE_HOT_FLAG)]
 metrics += more_metrics
 # print metrics:
 print('>>> Metrics:')
@@ -605,9 +633,10 @@ else:
   Y_test = np.concatenate(Y_test_list,axis=0)
 # adjust Y_test shape to be [N_samples,SUBGRID,SUBGRID,SUBGRID,1]:
 if (LOSS != 'SCCE' and LOSS != 'DISCCE'):
-  # undo one-hot encoding for input into save_scores_from_fvol
-  Y_test = np.argmax(Y_test,axis=-1)
-  Y_test = np.expand_dims(Y_test,axis=-1)
+  if not BINARY_MASK:
+    # undo one-hot encoding for input into save_scores_from_fvol
+    Y_test = np.argmax(Y_test,axis=-1)
+    Y_test = np.expand_dims(Y_test,axis=-1)
 #print('Y_pred summary:',np.unique(Y_pred,return_counts=True))
 #print('Y_test summary:',np.unique(Y_test,return_counts=True))
 print('Y_pred shape:',Y_pred.shape)
