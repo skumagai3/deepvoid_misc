@@ -1320,7 +1320,7 @@ def plot_vw_misses(mask, pred, idx=None, Nm=512, boxsize=205., **kwargs):
   plotter.set_window(0,boxsize,Nm,ax,boxsize)
   return fig
 
-def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, VAL_FLAG=True, downsample=10):
+def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, N_CLASSES=4, VAL_FLAG=True, downsample=10):
   '''
   Save F1 scores, confusion matrix, population histograms, ROC curves,
   precision-recall curves. THIS FXN DOES NOT PREDICT!
@@ -1338,12 +1338,15 @@ def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, VAL_
   '''
   if not VAL_FLAG:
     print('WARNING: Model is being scored on training data. Scores may not be accurate.')
-  if y_pred.shape[-1] != 4:
-    print('y_pred must be a 4 channel array of class probabilities. save_scores_from_fvol may not work as intended')
+  if y_pred.shape[-1] != N_CLASSES:
+    print(f'y_pred must be a {N_CLASSES} channel array of class probabilities. save_scores_from_fvol may not work as intended')
   # get in shape for ROC, PR curves:
-  y_true_binarized = to_categorical(y_true,num_classes=4,dtype='int8')
-  y_true_binarized = y_true_binarized.reshape(-1,4)
-  y_pred_reshaped = y_pred.reshape(-1,4)
+  try:
+    y_true_binarized = to_categorical(y_true,num_classes=N_CLASSES,dtype='int8')
+  except TypeError:
+    y_true_binarized = to_categorical(y_true,num_classes=N_CLASSES)
+  y_true_binarized = y_true_binarized.reshape(-1,N_CLASSES)
+  y_pred_reshaped = y_pred.reshape(-1,N_CLASSES)
   # downsample by some skip parameter, e.g. 10:
   y_true_binarized = y_true_binarized[::downsample]
   y_pred_reshaped =   y_pred_reshaped[::downsample]

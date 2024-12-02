@@ -654,6 +654,7 @@ print('>>> Calculating scores')
 nets.save_scores_from_fvol(Y_test,Y_pred,
                            FILE_OUT+MODEL_NAME,FIG_DIR,
                            scores,
+                           N_CLASSES=N_CLASSES,
                            VAL_FLAG=VAL_FLAG)
 # save score_dict by appending to the end of the csv.
 # csv will be at ROOT_DIR/model_scores.csv
