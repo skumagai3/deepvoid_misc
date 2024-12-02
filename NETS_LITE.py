@@ -1340,6 +1340,9 @@ def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, N_CL
     print('WARNING: Model is being scored on training data. Scores may not be accurate.')
   if y_pred.shape[-1] != N_CLASSES:
     print(f'y_pred must be a {N_CLASSES} channel array of class probabilities. save_scores_from_fvol may not work as intended')
+  # janky fix for binary masks:
+  if N_CLASSES == 1:
+    N_CLASSES = 2 # idk man
   # get in shape for ROC, PR curves:
   try:
     y_true_binarized = to_categorical(y_true,num_classes=N_CLASSES,dtype='int8')
