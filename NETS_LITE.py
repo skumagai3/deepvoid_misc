@@ -1321,47 +1321,47 @@ def plot_vw_misses(mask, pred, idx=None, Nm=512, boxsize=205., **kwargs):
   return fig
 
 def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, N_CLASSES=4, VAL_FLAG=True, downsample=10):
-    if not VAL_FLAG:
-        print('WARNING: Model is being scored on training data. Scores may not be accurate.')
-    if y_pred.shape[-1] != N_CLASSES:
-        print(f'y_pred must be a {N_CLASSES} channel array of class probabilities. save_scores_from_fvol may not work as intended')
+  if not VAL_FLAG:
+    print('WARNING: Model is being scored on training data. Scores may not be accurate.')
+  if y_pred.shape[-1] != N_CLASSES:
+    print(f'y_pred must be a {N_CLASSES} channel array of class probabilities. save_scores_from_fvol may not work as intended')
 
-    # Binary classification adjustment
-    if N_CLASSES == 2:
-        y_true_flat = y_true.flatten()
-        y_pred_flat = y_pred.reshape(-1, N_CLASSES)[:, 1]  # Select positive class probabilities
-        # Downsample
-        y_true_flat = y_true_flat[::downsample]
-        y_pred_flat = y_pred_flat[::downsample]
-        # Handle invalid values
-        valid_indices = ~np.isnan(y_pred_flat) & ~np.isnan(y_true_flat) & ~np.isinf(y_pred_flat)
-        y_true_flat = y_true_flat[valid_indices]
-        y_pred_flat = y_pred_flat[valid_indices]
-        ROC_curves(y_true_flat, y_pred_flat, FILE_MODEL, FILE_FIG, score_dict)
-        PR_curves(y_true_flat, y_pred_flat, FILE_MODEL, FILE_FIG, score_dict)
-        print('Saved ROC and PR curves for binary classification.')
-    else:
-        # Multi-class logic
-        try:
-            y_true_binarized = to_categorical(y_true, num_classes=N_CLASSES)
-        except TypeError:
-            y_true_binarized = to_categorical(y_true, num_classes=N_CLASSES)
-        y_true_binarized = y_true_binarized.reshape(-1, N_CLASSES)
-        y_pred_reshaped = y_pred.reshape(-1, N_CLASSES)
-        # Downsample
-        downsample_size = min(len(y_true_binarized), len(y_pred_reshaped))
-        y_true_binarized = y_true_binarized[:downsample_size:downsample]
-        y_pred_reshaped = y_pred_reshaped[:downsample_size:downsample]
-        ROC_curves(y_true_binarized, y_pred_reshaped, FILE_MODEL, FILE_FIG, score_dict)
-        PR_curves(y_true_binarized, y_pred_reshaped, FILE_MODEL, FILE_FIG, score_dict)
-        print('Saved ROC and PR curves for multi-class classification.')
+  # Binary classification adjustment
+  if N_CLASSES == 1:
+    y_true_flat = y_true.flatten()
+    y_pred_flat = y_pred.reshape(-1, N_CLASSES)[:, 1]  # Select positive class probabilities
+    # Downsample
+    y_true_flat = y_true_flat[::downsample]
+    y_pred_flat = y_pred_flat[::downsample]
+    # Handle invalid values
+    valid_indices = ~np.isnan(y_pred_flat) & ~np.isnan(y_true_flat) & ~np.isinf(y_pred_flat)
+    y_true_flat = y_true_flat[valid_indices]
+    y_pred_flat = y_pred_flat[valid_indices]
+    ROC_curves(y_true_flat, y_pred_flat, FILE_MODEL, FILE_FIG, score_dict)
+    PR_curves(y_true_flat, y_pred_flat, FILE_MODEL, FILE_FIG, score_dict)
+    print('Saved ROC and PR curves for binary classification.')
+  else:
+    # Multi-class logic
+    try:
+        y_true_binarized = to_categorical(y_true, num_classes=N_CLASSES)
+    except TypeError:
+        y_true_binarized = to_categorical(y_true, num_classes=N_CLASSES)
+    y_true_binarized = y_true_binarized.reshape(-1, N_CLASSES)
+    y_pred_reshaped = y_pred.reshape(-1, N_CLASSES)
+    # Downsample
+    downsample_size = min(len(y_true_binarized), len(y_pred_reshaped))
+    y_true_binarized = y_true_binarized[:downsample_size:downsample]
+    y_pred_reshaped = y_pred_reshaped[:downsample_size:downsample]
+    ROC_curves(y_true_binarized, y_pred_reshaped, FILE_MODEL, FILE_FIG, score_dict)
+    PR_curves(y_true_binarized, y_pred_reshaped, FILE_MODEL, FILE_FIG, score_dict)
+    print('Saved ROC and PR curves for multi-class classification.')
 
-    # Argmax predictions and reshape for F1/Confusion Matrix
-    y_pred = np.argmax(y_pred, axis=-1)
-    y_pred = np.expand_dims(y_pred, axis=-1)
-    F1s(y_true, y_pred, FILE_MODEL, score_dict)
-    CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG)
-    print('Saved metrics.')
+  # Argmax predictions and reshape for F1/Confusion Matrix
+  y_pred = np.argmax(y_pred, axis=-1)
+  y_pred = np.expand_dims(y_pred, axis=-1)
+  F1s(y_true, y_pred, FILE_MODEL, score_dict)
+  CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG)
+  print('Saved metrics.')
 
 '''
 4/29/24: I'm tired of looking through model's hyperparameter txt files.
