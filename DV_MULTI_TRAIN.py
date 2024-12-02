@@ -651,6 +651,8 @@ print('Y_pred shape:',Y_pred.shape)
 print('Y_test shape:',Y_test.shape)
 # save scores
 print('>>> Calculating scores')
+if BINARY_MASK:
+  N_CLASSES = 2 # janky fix for save_scores_from_fvol
 nets.save_scores_from_fvol(Y_test,Y_pred,
                            FILE_OUT+MODEL_NAME,FIG_DIR,
                            scores,
