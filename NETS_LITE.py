@@ -1136,7 +1136,7 @@ def population_hists(y_true, y_pred, FILE_MODEL, FILE_FIG, FILE_DEN, n_bins=50):
   plt.savefig(FILE_FIG+MODEL_NAME+'_hists.png',facecolor='white',bbox_inches='tight')
   print(f'Saved population hists of mask and pred to '+FILE_FIG+MODEL_NAME+'_hists.png')
      
-def ROC_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, micro=True, macro=True):
+def ROC_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, micro=True, macro=True, N_classes=4):
   '''
   Helper function for save_scores_from_fvol to plot ROC curves.
   # NOTE USE SOFTMAX PROBABILITY OUTPUTS FOR Y_PRED!!!!!
@@ -1158,7 +1158,6 @@ def ROC_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, micro=True, mac
   ax.set_title('Multiclass One vs. Rest ROC Curves')
   # plot chance level (AUC=0.5)
   ax.plot([0,1],[0,1],linestyle='--',lw=2,color='r',label='Chance level')
-  N_classes = len(class_labels)
   for i in range(N_classes):
     _ = RocCurveDisplay.from_predictions(
       y_true[:,i],
@@ -1343,15 +1342,17 @@ def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, N_CL
     valid_indices = ~np.isnan(y_pred_flat) & ~np.isnan(y_true_flat) & ~np.isinf(y_pred_flat)
     y_true_flat = y_true_flat[valid_indices]
     y_pred_flat = y_pred_flat[valid_indices]
-    ROC_curves(y_true_flat, y_pred_flat, FILE_MODEL, FILE_FIG, score_dict)
+    print(f'Processed y_true shape: {y_true_flat.shape}')
+    print(f'Processed y_pred shape: {y_pred_flat.shape}')
+    ROC_curves(y_true_flat, y_pred_flat, FILE_MODEL, FILE_FIG, score_dict,N_classes=N_CLASSES)
     PR_curves(y_true_flat, y_pred_flat, FILE_MODEL, FILE_FIG, score_dict)
     print('Saved ROC and PR curves for binary classification.')
   else:
     # Multi-class logic
     try:
-        y_true_binarized = to_categorical(y_true, num_classes=N_CLASSES)
+      y_true_binarized = to_categorical(y_true, num_classes=N_CLASSES)
     except TypeError:
-        y_true_binarized = to_categorical(y_true, num_classes=N_CLASSES)
+      y_true_binarized = to_categorical(y_true, num_classes=N_CLASSES)
     y_true_binarized = y_true_binarized.reshape(-1, N_CLASSES)
     y_pred_reshaped = y_pred.reshape(-1, N_CLASSES)
     # Downsample
