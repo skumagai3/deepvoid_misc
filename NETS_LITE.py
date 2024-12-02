@@ -1327,7 +1327,13 @@ def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, N_CL
     print(f'y_pred must be a {N_CLASSES} channel array of class probabilities. save_scores_from_fvol may not work as intended')
 
   # Binary classification adjustment
-  if N_CLASSES == 1:
+  if N_CLASSES == 2:
+    print(f'Shape of y_pred before processing: {y_pred.shape}')
+    print(f'Shape of y_true before processing: {y_true.shape}')
+    # adjust single-channel preds to two-channel preds:
+    if y_pred.shape[-1] == 1:
+      y_pred = np.concatenate([1-y_pred, y_pred], axis=-1)
+      print(f'Adjusted y_pred shape: {y_pred.shape}')
     y_true_flat = y_true.flatten()
     y_pred_flat = y_pred.reshape(-1, N_CLASSES)[:, 1]  # Select positive class probabilities
     # Downsample
