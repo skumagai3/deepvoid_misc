@@ -1212,6 +1212,48 @@ def ROC_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, micro=True, mac
   #    f.write('\n'+f'Class {class_labels[i]} ROC AUC: {class_aucs[i]:.2f}\n')
   #print(f'Wrote ROC AUCs to '+FILE_HPTXT)
 
+def ROC_curves_binary(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict):
+  '''
+  Helper function to plot ROC curves for binary classification.
+  # NOTE USE SOFTMAX OR SIGMOID PROBABILITY OUTPUTS FOR Y_PRED!!!!!
+  y_true: true binary labels. shape: (N_samples, dim1, dim2, dim3, 1)
+  y_pred: predicted probabilities. shape: (N_samples, dim1, dim2, dim3, 1)
+  FILE_MODEL: str, model filepath
+  FILE_FIG: str, directory to save plot in
+  score_dict: dict to store AUC score
+  '''
+  # Flatten inputs
+  y_true_flat = y_true.ravel()
+  y_pred_flat = y_pred.ravel()
+
+  # Plot ROC curve
+  plt.rcParams.update({'font.size': 16})
+  fig, ax = plt.subplots(1, 1, figsize=(12, 12))
+  ax.axis('square')
+  ax.set_title('Binary ROC Curve')
+  
+  # Plot chance level (AUC=0.5)
+  ax.plot([0, 1], [0, 1], linestyle='--', lw=2, color='r', label='Chance level')
+
+  # Calculate and plot ROC curve
+  fpr, tpr, _ = roc_curve(y_true_flat, y_pred_flat)
+  roc_auc = auc(fpr, tpr)
+  ax.plot(fpr, tpr, label=f"ROC curve (AUC = {roc_auc:.2f})")
+
+  # Set plot limits and labels
+  ax.legend(loc='best', prop={'size': 11})
+  ax.set_xlim(-0.05, 1.05)
+  ax.set_ylim(-0.05, 1.05)
+  ax.set(xlabel='False Positive Rate', ylabel='True Positive Rate')
+
+  # Save the plot
+  MODEL_NAME = FILE_MODEL.split('/')[-1]
+  plt.savefig(FILE_FIG + MODEL_NAME + '_ROC.png', facecolor='white', bbox_inches='tight')
+  print(f'Saved ROC curve to {FILE_FIG + MODEL_NAME}_ROC.png')
+
+  # Save AUC to score_dict
+  score_dict['ROC_AUC'] = roc_auc
+
 def PR_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, chance_lvl=False):
   '''
   function to plot Precision vs. Recall curves.
@@ -1287,6 +1329,55 @@ def PR_curves(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, chance_lvl=False
   #    f.write('\n'+f'Class {class_labels[i]} average precision: {avg_prec[i]:.2f}\n')
   #print(f'Wrote average precisions to '+FILE_HPTXT)
 
+def PR_curves_binary(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict):
+  '''
+  Function to plot Precision-Recall curves for binary classification.
+  # NOTE USE SOFTMAX OR SIGMOID PROBABILITY OUTPUTS FOR Y_PRED!!!!!
+  y_true: true binary labels. shape: (N_samples, dim1, dim2, dim3, 1)
+  y_pred: predicted probabilities. shape: (N_samples, dim1, dim2, dim3, 1)
+  FILE_MODEL: str, model filepath
+  FILE_FIG: str, directory to save plot in
+  score_dict: dictionary to save average precision scores
+  '''
+  # Flatten inputs
+  y_true_flat = y_true.ravel()
+  y_pred_flat = y_pred.ravel()
+
+  # Calculate precision, recall, and average precision
+  precision, recall, _ = precision_recall_curve(y_true_flat, y_pred_flat)
+  avg_precision = average_precision_score(y_true_flat, y_pred_flat)
+
+  # Plot Precision-Recall curve
+  plt.rcParams.update({'font.size': 16})
+  fig, ax = plt.subplots(1, 1, figsize=(12, 12))
+  ax.axis('square')
+  ax.set_title('Binary Precision-Recall Curve')
+
+  # Plot iso-F1 curves
+  f_scores = np.linspace(0.3, 0.9, num=4)
+  for f_score in f_scores:
+      x = np.linspace(0.01, 1)
+      y = f_score * x / (2 * x - f_score)
+      y = y[y >= 0]  # Keep only valid values
+      ax.plot(x[:len(y)], y, color='gray', alpha=0.2)
+      ax.annotate(f"F1={f_score:0.1f}", xy=(0.85, y[-1] + 0.02), fontsize=10)
+
+  # Plot the Precision-Recall curve
+  ax.plot(recall, precision, label=f"PR curve (AP = {avg_precision:.2f})")
+  ax.set_xlim([0.0, 1.0])
+  ax.set_ylim([0.0, 1.05])
+  ax.set_xlabel('Recall')
+  ax.set_ylabel('Precision')
+  ax.legend(loc='best', prop={'size': 11})
+
+  # Save the plot
+  MODEL_NAME = FILE_MODEL.split('/')[-1]
+  plt.savefig(FILE_FIG + MODEL_NAME + '_PR.png', facecolor='white', bbox_inches='tight')
+  print(f'Saved Precision-Recall curve to {FILE_FIG + MODEL_NAME}_PR.png')
+
+  # Save average precision to score_dict
+  score_dict['average_precision'] = avg_precision
+
 # 7/6/24: Create function to plot void voxels misclassified as wall voxels as 
 # a certain color and vice versa. overlay on top of mask:
 def plot_vw_misses(mask, pred, idx=None, Nm=512, boxsize=205., **kwargs):
@@ -1345,7 +1436,7 @@ def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, N_CL
     y_pred_flat = y_pred_flat[valid_indices]
     print(f'Processed y_true shape: {y_true_flat.shape}')
     print(f'Processed y_pred shape: {y_pred_flat.shape}')
-    ROC_curves(y_true_flat, y_pred_flat, FILE_MODEL, FILE_FIG, score_dict,N_classes=N_CLASSES)
+    ROC_curves_binary(y_true_flat, y_pred_flat, FILE_MODEL, FILE_FIG, score_dict)
     PR_curves(y_true_flat, y_pred_flat, FILE_MODEL, FILE_FIG, score_dict)
     print('Saved ROC and PR curves for binary classification.')
   else:
