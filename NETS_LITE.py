@@ -1437,7 +1437,7 @@ def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, N_CL
     print(f'Processed y_true shape: {y_true_flat.shape}')
     print(f'Processed y_pred shape: {y_pred_flat.shape}')
     ROC_curves_binary(y_true_flat, y_pred_flat, FILE_MODEL, FILE_FIG, score_dict)
-    PR_curves(y_true_flat, y_pred_flat, FILE_MODEL, FILE_FIG, score_dict)
+    PR_curves_binary(y_true_flat, y_pred_flat, FILE_MODEL, FILE_FIG, score_dict)
     print('Saved ROC and PR curves for binary classification.')
   else:
     # Multi-class logic
