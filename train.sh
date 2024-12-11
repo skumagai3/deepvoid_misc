@@ -52,7 +52,7 @@ NVIDIA_SMI_PID=$!;
 SIM="TNG"; echo "Simulation: $SIM"; # TNG/BOL
 L=0.33; echo "Lambda: $L";
 D=3; echo "Depth: $D";
-F=8;  echo "Filters: $F";
+F=32;  echo "Filters: $F";
 LOSS="BCE"; echo "Loss: $LOSS";
 if [ "$SIM" = "TNG" ]; then
   GRID=512
@@ -62,7 +62,7 @@ fi
 #GRID=256; echo "GRID: $GRID";
 
 # optional flags initialization
-BATCHNORM_ENABLED=1; echo "Batch Norm: $BATCHNORM_ENABLED";
+BATCHNORM_ENABLED=0; echo "Batch Norm: $BATCHNORM_ENABLED";
 DROPOUT_RATE=0.0; echo "Dropout: $DROPOUT_RATE";
 MULTIPROCESSING_ENABLED=0; echo "Multiprocessing: $MULTIPROCESSING_ENABLED";
 HIGH_MEM_ENABLED=0; echo "High memory usage: $HIGH_MEM_ENABLED";
@@ -73,7 +73,7 @@ UNIFORM_FLAG=0; echo "Uniform Flag: $UNIFORM_FLAG";
 LOAD_MODEL=0; echo "Load Model: $LOAD_MODEL";
 LOAD_INTO_MEM=1; echo "Load into memory: $LOAD_INTO_MEM";
 BATCH_SIZE=4; echo "Batch Size: $BATCH_SIZE";
-EPOCHS=2; echo "Epochs: $EPOCHS";
+EPOCHS=500; echo "Epochs: $EPOCHS";
 LEARNING_RATE=0.0001; echo "Learning Rate: $LEARNING_RATE";
 LEARNING_RATE_PATIENCE=10; echo "Learning Rate Patience: $LEARNING_RATE_PATIENCE";
 PATIENCE=25; echo "Patience: $PATIENCE";
