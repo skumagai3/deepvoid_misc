@@ -1621,13 +1621,13 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
   if COMPILE:
     try: 
       model = load_model(FILE_MODEL)
-    except IOError:
+    except IOError or ValueError:
       print('Model not found. Trying with .keras extension...')
       model = load_model(FILE_MODEL+'.keras')
   else:
     try:
       model = load_model(FILE_MODEL, compile=False)
-    except IOError:
+    except IOError or ValueError:
       print('Model not found. Trying with .keras extension...')
       model = load_model(FILE_MODEL+'.keras', compile=False)
 
