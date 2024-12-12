@@ -1063,7 +1063,7 @@ def parallel_compute_metrics(y_true, y_pred, chunk_size):
       results.append(future.result())
   return results
 
-def CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG):
+def CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG, BINARY=False):
   '''
   helper fxn for save_scores_from_fvol to plot confusion matrix
   and save a text version in hyperparameters txt file.
@@ -1072,9 +1072,13 @@ def CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG):
   MODEL_NAME = FILE_MODEL.split('/')[-1]
   # compute confusion matrix:
   plt.rcParams.update({'font.size': 14})
-  cm = confusion_matrix(y_true.ravel(), y_pred.ravel(),
-                        labels=[0,1,2,3],normalize='true')
-  class_report = classification_report(y_true.ravel(), y_pred.ravel(),labels=[0,1,2,3],output_dict=True)
+  if BINARY:
+    cm = confusion_matrix(y_true.ravel(), y_pred.ravel(),labels=[0,1],normalize='true')
+    class_report = classification_report(y_true.ravel(), y_pred.ravel(),labels=[0,1],output_dict=True)
+  else:
+    cm = confusion_matrix(y_true.ravel(), y_pred.ravel(),
+                          labels=[0,1,2,3],normalize='true')
+    class_report = classification_report(y_true.ravel(), y_pred.ravel(),labels=[0,1,2,3],output_dict=True)
   # write confusion matrix to hyperparameters txt file:
   with open(FILE_HPTXT, 'a') as f:
     f.write('\nConfusion matrix: \n')
@@ -1356,11 +1360,11 @@ def PR_curves_binary(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict):
   # Plot iso-F1 curves
   f_scores = np.linspace(0.3, 0.9, num=4)
   for f_score in f_scores:
-      x = np.linspace(0.01, 1)
-      y = f_score * x / (2 * x - f_score)
-      y = y[y >= 0]  # Keep only valid values
-      ax.plot(x[:len(y)], y, color='gray', alpha=0.2)
-      ax.annotate(f"F1={f_score:0.1f}", xy=(0.85, y[-1] + 0.02), fontsize=10)
+    x = np.linspace(0.01, 1)
+    y = f_score * x / (2 * x - f_score)
+    y = y[y >= 0]  # Keep only valid values
+    ax.plot(x[:len(y)], y, color='gray', alpha=0.2)
+    ax.annotate(f"F1={f_score:0.1f}", xy=(0.85, y[-1] + 0.02), fontsize=10)
 
   # Plot the Precision-Recall curve
   ax.plot(recall, precision, label=f"PR curve (AP = {avg_precision:.2f})")
@@ -1418,6 +1422,7 @@ def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, N_CL
 
   # Binary classification adjustment
   if N_CLASSES == 2:
+    BINARY = True
     print(f'Shape of y_pred before processing: {y_pred.shape}')
     print(f'Shape of y_true before processing: {y_true.shape}')
     # adjust single-channel preds to two-channel preds:
@@ -1440,6 +1445,7 @@ def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, N_CL
     PR_curves_binary(y_true_flat, y_pred_flat, FILE_MODEL, FILE_FIG, score_dict)
     print('Saved ROC and PR curves for binary classification.')
   else:
+    BINARY = False
     # Multi-class logic
     try:
       y_true_binarized = to_categorical(y_true, num_classes=N_CLASSES)
@@ -1459,7 +1465,7 @@ def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, N_CL
   y_pred = np.argmax(y_pred, axis=-1)
   y_pred = np.expand_dims(y_pred, axis=-1)
   F1s(y_true, y_pred, FILE_MODEL, score_dict)
-  CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG)
+  CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG, BINARY=BINARY)
   print('Saved metrics.')
 
 '''
