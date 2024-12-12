@@ -324,6 +324,10 @@ if LOAD_INTO_MEM:
     print('Y_test unique:',np.unique(Y_test))
     print(f'Y_train summary: {plotter.summary(Y_train)}')
     print(f'Y_test summary: {plotter.summary(Y_test)}')
+  # change labels dtype to int8
+  Y_train = Y_train.astype(np.int8)
+  Y_test = Y_test.astype(np.int8)
+  print('>>> Labels dtype changed to int8')
   print(f'>>> Split into training ({(1-test_size)*100}%) and validation ({test_size*100}%) sets')
   print('X_train shape: ',X_train.shape); print('Y_train shape: ',Y_train.shape)
   print('X_test shape: ',X_test.shape); print('Y_test shape: ',Y_test.shape)
