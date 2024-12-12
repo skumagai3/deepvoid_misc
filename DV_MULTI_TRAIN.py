@@ -327,6 +327,8 @@ if LOAD_INTO_MEM:
   print(f'>>> Split into training ({(1-test_size)*100}%) and validation ({test_size*100}%) sets')
   print('X_train shape: ',X_train.shape); print('Y_train shape: ',Y_train.shape)
   print('X_test shape: ',X_test.shape); print('Y_test shape: ',Y_test.shape)
+  print('X_train dtype:',X_train.dtype); print('Y_train dtype:',Y_train.dtype)
+  print('X_test dtype:',X_test.dtype); print('Y_test dtype:',Y_test.dtype)
   if (LOSS != 'SCCE' and LOSS != 'DISCCE'):
     if not BINARY_MASK:
       print('>>> Converting to one-hot encoding')
