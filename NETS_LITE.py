@@ -1090,6 +1090,8 @@ def CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG, BINARY=False):
     f.write(str(class_report))
   # plot confusion matrix:
   fig, ax = plt.subplots(1,1,figsize=(8,8))
+  if BINARY:
+    class_labels = ['Void','Wall']
   display = ConfusionMatrixDisplay(confusion_matrix=cm,display_labels=class_labels)
   _ = display.plot(ax=ax)
   plt.savefig(FILE_FIG+MODEL_NAME+'_cm.png',facecolor='white',bbox_inches='tight')
