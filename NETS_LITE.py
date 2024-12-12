@@ -1073,9 +1073,11 @@ def CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG, BINARY=False):
   # compute confusion matrix:
   plt.rcParams.update({'font.size': 14})
   if BINARY:
+    print('Making binary confusion matrix')
     cm = confusion_matrix(y_true.ravel(), y_pred.ravel(),labels=[0,1],normalize='true')
     class_report = classification_report(y_true.ravel(), y_pred.ravel(),labels=[0,1],output_dict=True)
   else:
+    print('Making multi-class confusion matrix')
     cm = confusion_matrix(y_true.ravel(), y_pred.ravel(),
                           labels=[0,1,2,3],normalize='true')
     class_report = classification_report(y_true.ravel(), y_pred.ravel(),labels=[0,1,2,3],output_dict=True)
