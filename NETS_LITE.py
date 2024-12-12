@@ -1630,16 +1630,16 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
   ### load model:
   if COMPILE:
     try: 
-      model = load_model(FILE_MODEL)
-    except IOError or ValueError:
-      print('Model not found. Trying with .keras extension...')
       model = load_model(FILE_MODEL+'.keras')
+    except IOError or ValueError:
+      print('Model not found. Trying without .keras extension...')
+      model = load_model(FILE_MODEL)
   else:
     try:
-      model = load_model(FILE_MODEL, compile=False)
-    except IOError or ValueError:
-      print('Model not found. Trying with .keras extension...')
       model = load_model(FILE_MODEL+'.keras', compile=False)
+    except IOError or ValueError:
+      print('Model not found. Trying without .keras extension...')
+      model = load_model(FILE_MODEL, compile=False)
 
   X_test = load_dataset(FILE_DEN,SUBGRID,OFF,preproc='mm')
   Y_pred = run_predict_model(model, X_test, BATCH_SIZE)
