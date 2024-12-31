@@ -1582,7 +1582,7 @@ def data_generator(data, batch_size):
     i += 1
     if i * batch_size >= num_samples:
       i = 0
-def run_predict_model(model, X_test, batch_size, output_argmax=True):
+def run_predict_model(model, X_test, batch_size, output_argmax=True, BINARY=False):
   '''
   This function runs a prediction on a model that has already been loaded.
   It returns the predicted labels. Meant for multi-class models.
@@ -1602,9 +1602,13 @@ def run_predict_model(model, X_test, batch_size, output_argmax=True):
     X_batch = next(gen)
     Y_pred.append(model.predict(X_batch, verbose=0))
   Y_pred = np.concatenate(Y_pred, axis=0)
-  if output_argmax:
-    # if we want the actual predictions [0,1,2,3]
-    Y_pred = np.argmax(Y_pred, axis=-1); Y_pred = np.expand_dims(Y_pred, axis=-1)
+  if not BINARY:
+    if output_argmax:
+      # if we want the actual predictions [0,1,2,3]
+      Y_pred = np.argmax(Y_pred, axis=-1); Y_pred = np.expand_dims(Y_pred, axis=-1)
+  else:
+    # use 0.5 threshold for binary classification
+    Y_pred = np.where(Y_pred > 0.5, 1, 0)
   return Y_pred
 def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, GRID=512, SUBGRID=128, OFF=64, BOXSIZE=205, BOLSHOI_FLAG=False, TRAIN_SCORE=False, COMPILE=False, LATEX=False):
   '''
