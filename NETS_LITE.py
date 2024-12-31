@@ -1702,24 +1702,27 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
     ax[0,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
     ax[1,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
     ax[2,0].set_title('Mass Density'+'\n'+f'File: {DELTA_NAME}')
-
+  if BINARY:
+    SEGMENTED_CB = False
+  else:
+    SEGMENTED_CB = True
   ax[0,1].set_title(f'Predicted Mask\nSlice {i-step}')
   ax[0,2].set_title(f'True Mask\nSlice {i-step}')
   plotter.plot_arr(d,i-step,ax=ax[0,0],cmap=den_cmap,logged=True)
-  plotter.plot_arr(Y_pred,i-step,ax=ax[0,1],segmented_cb=True)
-  plotter.plot_arr(m,i-step,ax=ax[0,2],segmented_cb=True)
+  plotter.plot_arr(Y_pred,i-step,ax=ax[0,1],segmented_cb=SEGMENTED_CB)
+  plotter.plot_arr(m,i-step,ax=ax[0,2],segmented_cb=SEGMENTED_CB)
   # i slice:
   ax[1,1].set_title(f'Predicted Mask\nSlice {i}')
   ax[1,2].set_title(f'True Mask\nSlice {i}')
   plotter.plot_arr(d,i,ax=ax[1,0],cmap=den_cmap,logged=True)
-  plotter.plot_arr(Y_pred,i,ax=ax[1,1],segmented_cb=True)
-  plotter.plot_arr(m,i,ax=ax[1,2],segmented_cb=True)
+  plotter.plot_arr(Y_pred,i,ax=ax[1,1],segmented_cb=SEGMENTED_CB)
+  plotter.plot_arr(m,i,ax=ax[1,2],segmented_cb=SEGMENTED_CB)
   # i + step slice:
   ax[2,1].set_title(f'Predicted Mask\nSlice {i+step}')
   ax[2,2].set_title(f'True Mask\nSlice {i+step}')
   plotter.plot_arr(d,i+step,ax=ax[2,0],cmap=den_cmap,logged=True)
-  plotter.plot_arr(Y_pred,i+step,ax=ax[2,1],segmented_cb=True)
-  plotter.plot_arr(m,i+step,ax=ax[2,2],segmented_cb=True)
+  plotter.plot_arr(Y_pred,i+step,ax=ax[2,1],segmented_cb=SEGMENTED_CB)
+  plotter.plot_arr(m,i+step,ax=ax[2,2],segmented_cb=SEGMENTED_CB)
   # fix axis labels to be Mpc/h:
   for axis in ax.flatten():
     plotter.set_window(b=0,t=BOXSIZE,Nm=GRID,ax=axis,boxsize=BOXSIZE,Latex=LATEX)
