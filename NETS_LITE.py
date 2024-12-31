@@ -1448,6 +1448,8 @@ def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, N_CL
     ROC_curves_binary(y_true_flat, y_pred_flat, FILE_MODEL, FILE_FIG, score_dict)
     PR_curves_binary(y_true_flat, y_pred_flat, FILE_MODEL, FILE_FIG, score_dict)
     print('Saved ROC and PR curves for binary classification.')
+    # apply threshold to y_pred:
+    y_pred = np.where(y_pred > 0.5, 1, 0)
   else:
     BINARY = False
     # Multi-class logic
@@ -1464,10 +1466,9 @@ def save_scores_from_fvol(y_true, y_pred, FILE_MODEL, FILE_FIG, score_dict, N_CL
     ROC_curves(y_true_binarized, y_pred_reshaped, FILE_MODEL, FILE_FIG, score_dict)
     PR_curves(y_true_binarized, y_pred_reshaped, FILE_MODEL, FILE_FIG, score_dict)
     print('Saved ROC and PR curves for multi-class classification.')
-
-  # Argmax predictions and reshape for F1/Confusion Matrix
-  y_pred = np.argmax(y_pred, axis=-1)
-  y_pred = np.expand_dims(y_pred, axis=-1)
+    # Argmax predictions and reshape for F1/Confusion Matrix
+    y_pred = np.argmax(y_pred, axis=-1)
+    y_pred = np.expand_dims(y_pred, axis=-1)
   F1s(y_true, y_pred, FILE_MODEL, score_dict)
   CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG, BINARY=BINARY)
   print('Saved metrics.')
