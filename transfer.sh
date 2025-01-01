@@ -109,7 +109,7 @@ fi
 # optional flags:
 MULTI_FLAG=0; echo "Multiprocessing: $MULTI_FLAG"; # 0 for no, 1 for multiple GPUs
 LOW_MEM_FLAG=0; echo "Low memory flag: $LOW_MEM_FLAG"; # 0 for no, 1 for yes
-LOAD_INTO_MEM=0; echo "Load into memory: $LOAD_INTO_MEM"; # 0 for no, 1 for yes
+LOAD_INTO_MEM=1; echo "Load into memory: $LOAD_INTO_MEM"; # 0 for no, 1 for yes
 TENSORBOARD_FLAG=0; echo "TensorBoard: $TENSORBOARD_FLAG"; # 0 for no, 1 for yes
 EPOCHS=5; echo "Epochs: $EPOCHS";
 BATCH_SIZE=8; echo "Batch Size: $BATCH_SIZE";
