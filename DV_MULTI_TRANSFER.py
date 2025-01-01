@@ -121,7 +121,7 @@ SIGMA = hp_dict['SIGMA']
 BATCHNORM = hp_dict['BN']
 DROP = hp_dict['DROP']
 UNIFORM_FLAG = hp_dict['UNIFORM_FLAG']
-LOSS = hp_dict['LOSS']
+#LOSS = hp_dict['LOSS'] # this messes w/ binary models, axe for now
 model_TL_TYPE = hp_dict['TL_TYPE']
 base_L = hp_dict['base_L']
 DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -206,11 +206,6 @@ if not LOW_MEM_FLAG:
                    nets.precision_micro_keras(int_labels=~ONE_HOT_FLAG),
                    nets.true_wall_pred_as_void_keras(int_labels=~ONE_HOT_FLAG)]
 metrics += more_metrics
-# print metrics:
-print('>>> Metrics:')
-for metric in metrics:
-  print(str(metric))
-print(LOSS)
 # set up custom objects for loading model
 custom_objects = {}
 custom_objects['MCC'] = nets.MCC_keras(int_labels=~ONE_HOT_FLAG)
@@ -224,10 +219,6 @@ if LOSS == 'FOCAL_CCE':
   custom_objects['categorical_focal_loss_fixed'] = nets.categorical_focal_loss(alpha=alpha_list_float,gamma=gamma)
 if LOSS == 'DISCCE':
   custom_objects['SCCE_Dice_loss'] = nets.SCCE_Dice_loss
-# print custom objects:
-print('>>> Custom Objects:')
-for key, value in custom_objects.items():
-  print(f'{key}: {value}')
 # clear custom objects, metrics for binary models:
 if BINARY_MASK:
   custom_objects = {}
@@ -235,6 +226,15 @@ if BINARY_MASK:
   print('>>> Binary mask model, clearing custom objects and metrics')
   N_CLASSES = 1
   class_labels = ['void','wall']
+# print metrics:
+print('>>> Metrics:')
+for metric in metrics:
+  print(str(metric))
+print(LOSS)
+# print custom objects:
+print('>>> Custom Objects:')
+for key, value in custom_objects.items():
+  print(f'{key}: {value}')
 #===============================================================
 # Load data
 #===============================================================
