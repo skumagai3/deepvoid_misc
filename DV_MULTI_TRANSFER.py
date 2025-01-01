@@ -94,7 +94,7 @@ opt_group.add_argument('--BATCH_SIZE',type=int, default=8, help='Batch size for 
 opt_group.add_argument('--LEARNING_RATE',type=float, default=3e-3, help='Learning rate for training. Default is 3e-3.')
 opt_group.add_argument('--LEARNING_RATE_PATIENCE',type=int, default=10, help='Patience for learning rate reduction. Default is 10.')
 opt_group.add_argument('--PATIENCE',type=int, default=25, help='Patience for early stopping. Default is 25.')
-opt_group.add_argument('--BINARY_MASK',action='store_true',help='If set, will use binary mask for training.')
+opt_group.add_argument('--BINARY_FLAG',action='store_true',help='If set, will use binary mask for training.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 MODEL_NAME = args.MODEL_NAME
@@ -109,7 +109,7 @@ batch_size = args.BATCH_SIZE
 LR = args.LEARNING_RATE
 lr_patience = args.LEARNING_RATE_PATIENCE
 patience = args.PATIENCE
-BINARY_MASK = args.BINARY_MASK
+BINARY_MASK = args.BINARY_FLAG
 #===============================================================
 # hp dict is the old model, hp_dict_model is the new model
 #===============================================================
