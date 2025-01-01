@@ -44,19 +44,19 @@ nvidia-smi --query-gpu=timestamp,name,memory.used,memory.free,memory.total,tempe
 NVIDIA_SMI_PID=$!;
 #######################################################################
 ### Select SIM: TNG/Bolshoi
-SIM="BOL"; 
+SIM="TNG"; 
 echo "Simulation: $SIM"; 
 #######################################################################
 # Choose model hyperparameters, choose base interparticle separation
 # full dm density: TNG: 0.33, BOL: 0.122
 # L = 3,5,7,10 for both
-base_L=0.122; echo "Lambda: $base_L"; 
-D=4; echo "Depth: $D";
-F=16;  echo "Filters: $F";
-LOSS="SCCE"; echo "Loss: $LOSS"; # make blank if CCE
+base_L=0.33; echo "Lambda: $base_L"; 
+D=3; echo "Depth: $D";
+F=32;  echo "Filters: $F";
+LOSS="BCE"; echo "Loss: $LOSS"; # make blank if CCE
 #######################################################################
 ### Interparticle separation for transfer learning
-tran_L=7; echo "Transfer lambda: $tran_L";
+tran_L=10; echo "Transfer lambda: $tran_L";
 TL_TYPE="ENC_EO"; echo "Transfer type: $TL_TYPE";
 #######################################################################
 if [ $SIM = "TNG" ]
@@ -75,7 +75,7 @@ then
 fi
 # other options (just type out model name manually):
 BN=0; echo "Batch Norm: $BN";
-MN_SUFFIX=""; echo "Model Name Suffix: $MN_SUFFIX";
+MN_SUFFIX="BIN"; echo "Model Name Suffix: $MN_SUFFIX";
 #UNIFORM_FLAG=0; echo "Uniform Flag: $UNIFORM_FLAG";
 #DROP=0.0; echo "Dropout: $DROP";
 

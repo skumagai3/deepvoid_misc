@@ -662,7 +662,7 @@ if (LOSS != 'SCCE' and LOSS != 'DISCCE'):
 print('Y_pred shape:',Y_pred.shape)
 print('Y_test shape:',Y_test.shape)
 # save scores
-print('>>> Calculating scores')
+print('>>> Calculating scores on validation data')
 if BINARY_MASK:
   N_CLASSES = 2 # janky fix for save_scores_from_fvol
 nets.save_scores_from_fvol(Y_test,Y_pred,
