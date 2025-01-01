@@ -27,6 +27,10 @@ Optional Flags:
   --TENSORBOARD_FLAG: If set to 1, use TensorBoard. Default is 0.
   --EPOCHS: Number of epochs to train. Default is 500.
   --BATCH_SIZE: Batch size for training. Default is 8.
+  --LEARNING_RATE: Learning rate for the optimizer. Default is 0.0003.
+  --LEARNING_RATE_PATIENCE: Patience for the learning rate scheduler. Default is 10.
+  --PATIENCE: Patience for the early stopping. Default is 25.
+  --BINARY_FLAG: If set to 1, use binary classification. 
 END_COMMENT
 #######################################################################
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
@@ -112,6 +116,7 @@ BATCH_SIZE=8; echo "Batch Size: $BATCH_SIZE";
 LEARNING_RATE=0.0003; echo "Learning Rate: $LEARNING_RATE";
 LEARNING_RATE_PATIENCE=10; echo "Learning Rate Patience: $LEARNING_RATE_PATIENCE";
 PATIENCE=25; echo "Patience: $PATIENCE";
+BINARY_FLAG=1; echo "Binary Flag: $BINARY_FLAG";
 
 # Constructing command line arguments dynamically
 CMD_ARGS="$ROOT_DIR $MODEL_NAME $FN_DEN $TL_TYPE"
@@ -119,6 +124,7 @@ CMD_ARGS="$ROOT_DIR $MODEL_NAME $FN_DEN $TL_TYPE"
 [ "$LOW_MEM_FLAG" -eq 1 ] && CMD_ARGS+=" --LOW_MEM_FLAG"
 [ "$LOAD_INTO_MEM" -eq 1 ] && CMD_ARGS+=" --LOAD_INTO_MEM"
 [ "$TENSORBOARD_FLAG" -eq 1 ] && CMD_ARGS+=" --TENSORBOARD_FLAG"
+[ "$BINARY_FLAG" -eq 1 ] && CMD_ARGS+=" --BINARY_FLAG"
 CMD_ARGS+=" --EPOCHS $EPOCHS"
 CMD_ARGS+=" --BATCH_SIZE $BATCH_SIZE"
 CMD_ARGS+=" --LEARNING_RATE $LEARNING_RATE"
