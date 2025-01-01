@@ -80,7 +80,7 @@ MN_SUFFIX="BIN"; echo "Model Name Suffix: $MN_SUFFIX";
 #DROP=0.0; echo "Dropout: $DROP";
 
 # assuming L_th for every model is 0.65 (so far it is):
-if [ $LOSS = "CCE" ] || [ $LOSS = "BCE"];
+if [ $LOSS = "CCE" ] || [ $LOSS = "BCE" ];
 then
     if [ $BN -eq 1 ]
     then
