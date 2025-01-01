@@ -80,7 +80,7 @@ MN_SUFFIX="BIN"; echo "Model Name Suffix: $MN_SUFFIX";
 #DROP=0.0; echo "Dropout: $DROP";
 
 # assuming L_th for every model is 0.65 (so far it is):
-if [ $LOSS = "CCE" ]
+if [ $LOSS = "CCE" ] || [ $LOSS = "BCE"]
 then
     if [ $BN -eq 1 ]
     then
@@ -107,7 +107,7 @@ MULTI_FLAG=0; echo "Multiprocessing: $MULTI_FLAG"; # 0 for no, 1 for multiple GP
 LOW_MEM_FLAG=0; echo "Low memory flag: $LOW_MEM_FLAG"; # 0 for no, 1 for yes
 LOAD_INTO_MEM=0; echo "Load into memory: $LOAD_INTO_MEM"; # 0 for no, 1 for yes
 TENSORBOARD_FLAG=0; echo "TensorBoard: $TENSORBOARD_FLAG"; # 0 for no, 1 for yes
-EPOCHS=500; echo "Epochs: $EPOCHS";
+EPOCHS=5; echo "Epochs: $EPOCHS";
 BATCH_SIZE=8; echo "Batch Size: $BATCH_SIZE";
 LEARNING_RATE=0.0003; echo "Learning Rate: $LEARNING_RATE";
 LEARNING_RATE_PATIENCE=10; echo "Learning Rate Patience: $LEARNING_RATE_PATIENCE";
