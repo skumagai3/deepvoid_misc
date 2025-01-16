@@ -50,6 +50,8 @@ XOVER_FLAG=0; echo "Crossover flag: $XOVER_FLAG";
 ORTHO_FLAG=1; echo "Orthogonal flag: $ORTHO_FLAG";
 ### SAVE 4 CHANNELS BEFORE ARGMAX ###
 CH4_FLAG=1; echo "Save 4 channel prediction flag: $CH4_FLAG";
+### BINARY MODEL FLAG ###
+BINARY_FLAG=0; echo "Binary model flag: $BINARY_FLAG";
 #######################################################################
 if [ "$TL_FLAG" = 0 ]; then
   TRAN_L=$BASE_L;
@@ -73,6 +75,7 @@ elif [ "$LOSS" = "SCCE" ]; then
   LOSS_SUFFIX="SCCE"
 elif [ "$LOSS" = "BCE" ]; then
   LOSS_SUFFIX=""
+  BINARY_FLAG=1
 fi
 
 ### BASE MODELS ###
@@ -105,11 +108,13 @@ echo "Model Name: $MODEL_NAME";
 echo "Mask Field: $FN_MSK";
 echo "Density Field: $FN_DEN";
 echo "4 channel flag: $CH4_FLAG";
+echo "Binary model? $BINARY_FLAG";
 
 CMD_ARGS="$ROOT_DIR $SIM $MODEL_NAME $FN_DEN $FN_MSK $GRID";
 [ "$XOVER_FLAG" -eq 1 ] && CMD_ARGS+=" --XOVER_FLAG";
 [ "$ORTHO_FLAG" -eq 0 ] && CMD_ARGS+=" --ORTHO_FLAG";
 [ "$CH4_FLAG" -eq 1 ] && CMD_ARGS+=" --CH4_FLAG";
+[ "$BINARY_FLAG" -eq 1 ] && CMD_ARGS+=" --BINARY_FLAG";
 echo "CMD_ARGS: $CMD_ARGS";
 
 echo ">>> PREDICTING <<<";
