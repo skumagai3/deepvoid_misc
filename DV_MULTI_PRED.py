@@ -142,7 +142,7 @@ if not os.path.exists(FIG_OUT):
 # load model (set compile=False if necessary?)
 #===============================================================================
 try:
-    model = nets.load_model(FILE_OUT+MODEL_NAME,compile=False)
+    model = nets.load_model(FILE_OUT+MODEL_NAME+'.keras',compile=False)
 except OSError or ValueError:
     print('Model not found. Trying with .keras extension')
     model = nets.load_model(FILE_OUT+MODEL_NAME+'.keras',compile=False)
