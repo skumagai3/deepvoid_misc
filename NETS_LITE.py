@@ -1604,10 +1604,12 @@ def run_predict_model(model, X_test, batch_size, output_argmax=True, BINARY=Fals
   Y_pred = np.concatenate(Y_pred, axis=0)
   if not BINARY:
     if output_argmax:
+      print('Returning argmax of prediction')
       # if we want the actual predictions [0,1,2,3]
       Y_pred = np.argmax(Y_pred, axis=-1); Y_pred = np.expand_dims(Y_pred, axis=-1)
   else:
     if output_argmax:
+      print('Thresholding prediction at 0.5')
       # use 0.5 threshold for binary classification
       Y_pred = np.where(Y_pred > 0.5, 1, 0)
   return Y_pred
