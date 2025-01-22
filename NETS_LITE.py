@@ -1607,8 +1607,9 @@ def run_predict_model(model, X_test, batch_size, output_argmax=True, BINARY=Fals
       # if we want the actual predictions [0,1,2,3]
       Y_pred = np.argmax(Y_pred, axis=-1); Y_pred = np.expand_dims(Y_pred, axis=-1)
   else:
-    # use 0.5 threshold for binary classification
-    Y_pred = np.where(Y_pred > 0.5, 1, 0)
+    if output_argmax:
+      # use 0.5 threshold for binary classification
+      Y_pred = np.where(Y_pred > 0.5, 1, 0)
   return Y_pred
 def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, GRID=512, SUBGRID=128, OFF=64, BOXSIZE=205, BOLSHOI_FLAG=False, TRAIN_SCORE=False, COMPILE=False, LATEX=False, BINARY=False):
   '''
