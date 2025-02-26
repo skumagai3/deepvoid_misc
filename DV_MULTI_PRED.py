@@ -45,6 +45,7 @@ opt_group = parser.add_argument_group('optional arguments')
 opt_group.add_argument('--XOVER_FLAG', action='store_true', default=False, help='Cross-over flag.')
 opt_group.add_argument('--ORTHO_FLAG', action='store_false', default=True, help='Orthogonal flag.')
 opt_group.add_argument('--CH4_FLAG', action='store_true', default=False, help='CH4 flag.')
+opt_group.add_argument('--BINARY_FLAG', action='store_true', default=False, help='Binary flag.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 SIM = args.SIM
@@ -55,6 +56,7 @@ GRID = args.GRID
 XOVER_FLAG = args.XOVER_FLAG
 ORTHO_FLAG = args.ORTHO_FLAG
 CH4_FLAG = args.CH4_FLAG
+BINARY_FLAG = args.BINARY_FLAG
 DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 #===============================================================================
 # parse MODEL_NAME for model attributes
@@ -142,8 +144,8 @@ if not os.path.exists(FIG_OUT):
 # load model (set compile=False if necessary?)
 #===============================================================================
 try:
-    model = nets.load_model(FILE_OUT+MODEL_NAME,compile=False)
-except OSError:
+    model = nets.load_model(FILE_OUT+MODEL_NAME+'.keras',compile=False)
+except OSError or ValueError:
     print('Model not found. Trying with .keras extension')
     model = nets.load_model(FILE_OUT+MODEL_NAME+'.keras',compile=False)
 model.summary()
@@ -191,7 +193,8 @@ else:
 #===============================================================================
 batch_size = 4
 print('>>> Predicting...')
-Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False)
+Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False,
+                                BINARY=BINARY_FLAG)
 print('>>> Finished predicting...')
 if CH4_FLAG:
     if VAL_FLAG:
@@ -222,10 +225,15 @@ scores['XOVER_FLAG'] = XOVER_FLAG
 #===============================================================================
 # score and save results to a row in model_scores.csv
 #===============================================================================
+if BINARY_FLAG:
+    N_classes = 2
+else:
+    N_classes = 4
 nets.save_scores_from_fvol(Y_test,Y_pred,FILE_OUT+MODEL_NAME,
                            FIG_OUT,
                            scores,
-                           VAL_FLAG)
+                           N_CLASSES=N_classes,
+                           VAL_FLAG=VAL_FLAG)
 for key in scores.keys():
     print(f'{key}: {scores[key]}')
 print(f'>>> Saving all scores to {ROOT_DIR}/model_scores.csv')
@@ -242,7 +250,7 @@ print('>>> Plotting slices from training data...')
 nets.save_scores_from_model(FILE_DEN, FILE_MSK, FILE_OUT+MODEL_NAME, FIG_OUT,
                             FILE_PRED, GRID=GRID, SUBGRID=SUBGRID, OFF=OFF,
                             BOXSIZE=BoxSize, BOLSHOI_FLAG=BOLSHOI_FLAG, 
-                            TRAIN_SCORE=False, COMPILE=False)
+                            TRAIN_SCORE=False, COMPILE=False, BINARY=BINARY_FLAG)
 #===============================================================================
 # rotate training data (delta, mask) by 45 degrees and score again. 
 # ORTHO_FLAG = False.... VAL_FLAG = False

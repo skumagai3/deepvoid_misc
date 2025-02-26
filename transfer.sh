@@ -27,6 +27,10 @@ Optional Flags:
   --TENSORBOARD_FLAG: If set to 1, use TensorBoard. Default is 0.
   --EPOCHS: Number of epochs to train. Default is 500.
   --BATCH_SIZE: Batch size for training. Default is 8.
+  --LEARNING_RATE: Learning rate for the optimizer. Default is 0.0003.
+  --LEARNING_RATE_PATIENCE: Patience for the learning rate scheduler. Default is 10.
+  --PATIENCE: Patience for the early stopping. Default is 25.
+  --BINARY_FLAG: If set to 1, use binary classification. 
 END_COMMENT
 #######################################################################
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
@@ -44,19 +48,19 @@ nvidia-smi --query-gpu=timestamp,name,memory.used,memory.free,memory.total,tempe
 NVIDIA_SMI_PID=$!;
 #######################################################################
 ### Select SIM: TNG/Bolshoi
-SIM="BOL"; 
+SIM="TNG"; 
 echo "Simulation: $SIM"; 
 #######################################################################
 # Choose model hyperparameters, choose base interparticle separation
 # full dm density: TNG: 0.33, BOL: 0.122
 # L = 3,5,7,10 for both
-base_L=0.122; echo "Lambda: $base_L"; 
-D=4; echo "Depth: $D";
-F=16;  echo "Filters: $F";
-LOSS="SCCE"; echo "Loss: $LOSS"; # make blank if CCE
+base_L=0.33; echo "Lambda: $base_L"; 
+D=3; echo "Depth: $D";
+F=32;  echo "Filters: $F";
+LOSS="BCE"; echo "Loss: $LOSS"; # make blank if CCE
 #######################################################################
 ### Interparticle separation for transfer learning
-tran_L=7; echo "Transfer lambda: $tran_L";
+tran_L=10; echo "Transfer lambda: $tran_L";
 TL_TYPE="ENC_EO"; echo "Transfer type: $TL_TYPE";
 #######################################################################
 if [ $SIM = "TNG" ]
@@ -75,12 +79,12 @@ then
 fi
 # other options (just type out model name manually):
 BN=0; echo "Batch Norm: $BN";
-MN_SUFFIX=""; echo "Model Name Suffix: $MN_SUFFIX";
+MN_SUFFIX="BIN"; echo "Model Name Suffix: $MN_SUFFIX";
 #UNIFORM_FLAG=0; echo "Uniform Flag: $UNIFORM_FLAG";
 #DROP=0.0; echo "Dropout: $DROP";
 
 # assuming L_th for every model is 0.65 (so far it is):
-if [ $LOSS = "CCE" ]
+if [ $LOSS = "CCE" ] || [ $LOSS = "BCE" ];
 then
     if [ $BN -eq 1 ]
     then
@@ -97,7 +101,7 @@ else
     fi
 fi
 # add model name suffix if not empty
-if [ ! -z "$MN_SUFFIX" ]
+if [ ! -z "$MN_SUFFIX" ];
 then
     MODEL_NAME="${MODEL_NAME}_${MN_SUFFIX}";
 fi
@@ -105,13 +109,14 @@ fi
 # optional flags:
 MULTI_FLAG=0; echo "Multiprocessing: $MULTI_FLAG"; # 0 for no, 1 for multiple GPUs
 LOW_MEM_FLAG=0; echo "Low memory flag: $LOW_MEM_FLAG"; # 0 for no, 1 for yes
-LOAD_INTO_MEM=0; echo "Load into memory: $LOAD_INTO_MEM"; # 0 for no, 1 for yes
+LOAD_INTO_MEM=1; echo "Load into memory: $LOAD_INTO_MEM"; # 0 for no, 1 for yes
 TENSORBOARD_FLAG=0; echo "TensorBoard: $TENSORBOARD_FLAG"; # 0 for no, 1 for yes
-EPOCHS=500; echo "Epochs: $EPOCHS";
+EPOCHS=5; echo "Epochs: $EPOCHS";
 BATCH_SIZE=8; echo "Batch Size: $BATCH_SIZE";
 LEARNING_RATE=0.0003; echo "Learning Rate: $LEARNING_RATE";
 LEARNING_RATE_PATIENCE=10; echo "Learning Rate Patience: $LEARNING_RATE_PATIENCE";
 PATIENCE=25; echo "Patience: $PATIENCE";
+BINARY_FLAG=1; echo "Binary Flag: $BINARY_FLAG";
 
 # Constructing command line arguments dynamically
 CMD_ARGS="$ROOT_DIR $MODEL_NAME $FN_DEN $TL_TYPE"
@@ -119,6 +124,7 @@ CMD_ARGS="$ROOT_DIR $MODEL_NAME $FN_DEN $TL_TYPE"
 [ "$LOW_MEM_FLAG" -eq 1 ] && CMD_ARGS+=" --LOW_MEM_FLAG"
 [ "$LOAD_INTO_MEM" -eq 1 ] && CMD_ARGS+=" --LOAD_INTO_MEM"
 [ "$TENSORBOARD_FLAG" -eq 1 ] && CMD_ARGS+=" --TENSORBOARD_FLAG"
+[ "$BINARY_FLAG" -eq 1 ] && CMD_ARGS+=" --BINARY_FLAG"
 CMD_ARGS+=" --EPOCHS $EPOCHS"
 CMD_ARGS+=" --BATCH_SIZE $BATCH_SIZE"
 CMD_ARGS+=" --LEARNING_RATE $LEARNING_RATE"

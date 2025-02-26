@@ -651,6 +651,8 @@ else:
     Y_test_list.append(Y_batch.numpy()) # NOTE this may OOM???
   Y_pred = np.concatenate(Y_pred_list,axis=0)
   Y_test = np.concatenate(Y_test_list,axis=0)
+# save Y_pred as is:
+np.save(FILE_OUT+MODEL_NAME+'_Y_pred.npy',Y_pred,allow_pickle=True)
 # adjust Y_test shape to be [N_samples,SUBGRID,SUBGRID,SUBGRID,1]:
 if (LOSS != 'SCCE' and LOSS != 'DISCCE'):
   if not BINARY_MASK:
@@ -662,7 +664,7 @@ if (LOSS != 'SCCE' and LOSS != 'DISCCE'):
 print('Y_pred shape:',Y_pred.shape)
 print('Y_test shape:',Y_test.shape)
 # save scores
-print('>>> Calculating scores')
+print('>>> Calculating scores on validation data')
 if BINARY_MASK:
   N_CLASSES = 2 # janky fix for save_scores_from_fvol
 nets.save_scores_from_fvol(Y_test,Y_pred,

@@ -94,6 +94,7 @@ opt_group.add_argument('--BATCH_SIZE',type=int, default=8, help='Batch size for 
 opt_group.add_argument('--LEARNING_RATE',type=float, default=3e-3, help='Learning rate for training. Default is 3e-3.')
 opt_group.add_argument('--LEARNING_RATE_PATIENCE',type=int, default=10, help='Patience for learning rate reduction. Default is 10.')
 opt_group.add_argument('--PATIENCE',type=int, default=25, help='Patience for early stopping. Default is 25.')
+opt_group.add_argument('--BINARY_FLAG',action='store_true',help='If set, will use binary mask for training.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 MODEL_NAME = args.MODEL_NAME
@@ -108,6 +109,7 @@ batch_size = args.BATCH_SIZE
 LR = args.LEARNING_RATE
 lr_patience = args.LEARNING_RATE_PATIENCE
 patience = args.PATIENCE
+BINARY_MASK = args.BINARY_FLAG
 #===============================================================
 # hp dict is the old model, hp_dict_model is the new model
 #===============================================================
@@ -121,7 +123,9 @@ SIGMA = hp_dict['SIGMA']
 BATCHNORM = hp_dict['BN']
 DROP = hp_dict['DROP']
 UNIFORM_FLAG = hp_dict['UNIFORM_FLAG']
-LOSS = hp_dict['LOSS']
+LOSS = hp_dict['LOSS'] # this messes w/ binary models, axe for now
+if BINARY_MASK:
+  LOSS = 'BCE'
 model_TL_TYPE = hp_dict['TL_TYPE']
 base_L = hp_dict['base_L']
 DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
@@ -196,6 +200,9 @@ elif LOSS == 'DISCCE':
 elif LOSS == 'FOCAL_CCE':
   loss = [nets.categorical_focal_loss(alpha=alpha_list_float,gamma=gamma)] 
   #loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma)
+elif LOSS == 'BCE':
+  loss = nets.BinaryCrossentropy()
+  BINARY_MASK = True
 more_metrics = [nets.MCC_keras(int_labels=~ONE_HOT_FLAG),nets.balanced_accuracy_keras(int_labels=~ONE_HOT_FLAG),
                 nets.void_F1_keras(int_labels=~ONE_HOT_FLAG),nets.F1_micro_keras(int_labels=~ONE_HOT_FLAG)]
 if not LOW_MEM_FLAG:
@@ -203,11 +210,6 @@ if not LOW_MEM_FLAG:
                    nets.precision_micro_keras(int_labels=~ONE_HOT_FLAG),
                    nets.true_wall_pred_as_void_keras(int_labels=~ONE_HOT_FLAG)]
 metrics += more_metrics
-# print metrics:
-print('>>> Metrics:')
-for metric in metrics:
-  print(str(metric))
-print(LOSS)
 # set up custom objects for loading model
 custom_objects = {}
 custom_objects['MCC'] = nets.MCC_keras(int_labels=~ONE_HOT_FLAG)
@@ -221,6 +223,18 @@ if LOSS == 'FOCAL_CCE':
   custom_objects['categorical_focal_loss_fixed'] = nets.categorical_focal_loss(alpha=alpha_list_float,gamma=gamma)
 if LOSS == 'DISCCE':
   custom_objects['SCCE_Dice_loss'] = nets.SCCE_Dice_loss
+# clear custom objects, metrics for binary models:
+if BINARY_MASK:
+  custom_objects = {}
+  metrics = ['accuracy']
+  print('>>> Binary mask model, clearing custom objects and metrics')
+  N_CLASSES = 1
+  class_labels = ['void','wall']
+# print metrics:
+print('>>> Metrics:')
+for metric in metrics:
+  print(str(metric))
+print(LOSS)
 # print custom objects:
 print('>>> Custom Objects:')
 for key, value in custom_objects.items():
@@ -239,6 +253,9 @@ if SIM == 'TNG':
   FILE_Y_TRAIN = DATA_PATH + Y_PREFIX + '_Y_train.npy'
   FILE_X_TEST = DATA_PATH + X_PREFIX + '_X_test.npy'
   FILE_Y_TEST = DATA_PATH + Y_PREFIX + '_Y_test.npy'
+  if BINARY_MASK:
+    FILE_Y_TRAIN = path_to_TNG + Y_PREFIX + '_Y_train_binary.npy'
+    FILE_Y_TEST  = path_to_TNG + Y_PREFIX + '_Y_test_binary.npy'
   FILE_MASK = DATA_PATH + f'TNG300-3-Dark-mask-Nm={GRID}-th={LAMBDA_TH}-sig={SIGMA}.fvol'
   FILE_FIG = FIG_DIR_PATH + 'TNG/'
 elif SIM == 'Bolshoi':
@@ -274,16 +291,30 @@ if LOAD_INTO_MEM:
                                                           random_state=seed)
   X_train = features[X_train]; X_test = features[X_test]
   del features; del labels # memory purposes
+  if BINARY_MASK:
+    Y_train = nets.convert_to_binary_mask(Y_train)
+    Y_test = nets.convert_to_binary_mask(Y_test)
+    print('>>> Converted to binary mask!')
+    print('Y_train shape:',Y_train.shape)
+    print('Y_test shape:',Y_test.shape)
+    print('Y_train unique:',np.unique(Y_train))
+    print('Y_test unique:',np.unique(Y_test))
+    print(f'Y_train summary: {plotter.summary(Y_train)}')
+    print(f'Y_test summary: {plotter.summary(Y_test)}')
+  # change labels dtype to int8
+  Y_train = Y_train.astype(np.int8)
+  Y_test = Y_test.astype(np.int8)
   print(f'>>> Split into training ({(1-test_size)*100}%) and validation ({test_size*100}%) sets')
   print('X_train shape: ',X_train.shape); print('Y_train shape: ',Y_train.shape)
   print('X_test shape: ',X_test.shape); print('Y_test shape: ',Y_test.shape)
   if (LOSS != 'SCCE' and LOSS != 'DISCCE'):
-    print('>>> Converting to one-hot encoding')
-    Y_train = nets.to_categorical(Y_train, num_classes=N_CLASSES,dtype='uint8')
-    Y_test  = nets.to_categorical(Y_test, num_classes=N_CLASSES,dtype='uint8')
-    print('>>> One-hot encoding complete')
-    print('Y_train shape: ',Y_train.shape)
-    print('Y_test shape: ',Y_test.shape)
+    if not BINARY_MASK:
+      print('>>> Converting to one-hot encoding')
+      Y_train = nets.to_categorical(Y_train, num_classes=N_CLASSES,dtype='uint8')
+      Y_test  = nets.to_categorical(Y_test, num_classes=N_CLASSES,dtype='uint8')
+      print('>>> One-hot encoding complete')
+      print('Y_train shape: ',Y_train.shape)
+      print('Y_test shape: ',Y_test.shape)
   print('>>> Data loaded!')
   # Make tf.data.Dataset
   train_dataset = tf.data.Dataset.from_tensor_slices((X_train,Y_train))
@@ -294,6 +325,8 @@ else:
   print('X_train:',FILE_X_TRAIN); print('Y_train:',FILE_Y_TRAIN)
   print('X_test:',FILE_X_TEST); print('Y_test:',FILE_Y_TEST)
   last_dim = 1 if LOSS == 'SCCE' or LOSS == 'DISCCE' else N_CLASSES
+  if BINARY_MASK:
+    last_dim = 1
   train_dataset = tf.data.Dataset.from_generator(
     lambda: nets.data_gen_mmap(FILE_X_TRAIN,FILE_Y_TRAIN),
     output_signature=(
@@ -555,12 +588,17 @@ else:
 # since output argmax = False, Y_pred shape = [N_samples,SUBGRID,SUBGRID,SUBGRID,N_CLASSES]
 # adjust Y_test shape to be [N_samples,SUBGRID,SUBGRID,SUBGRID,1]:
 if (LOSS != 'SCCE' and LOSS != 'DISCCE'):
-  # undo one-hot encoding for input into save_scores_from_fvol
-  Y_test = np.argmax(Y_test,axis=-1)
-  Y_test = np.expand_dims(Y_test,axis=-1)
+  if not BINARY_MASK:
+    # undo one-hot encoding for input into save_scores_from_fvol
+    Y_test = np.argmax(Y_test,axis=-1)
+    Y_test = np.expand_dims(Y_test,axis=-1)
+print('>>> Calculating scores on validation data')
+if BINARY_MASK:
+  N_CLASSES = 2 # janky fix for save_scores_from_fvol
 nets.save_scores_from_fvol(Y_test,Y_pred,
                            MODEL_PATH+CLONE_NAME,CLONE_FIG_DIR,
                            scores,
+                           N_CLASSES=N_CLASSES,
                            VAL_FLAG=VAL_FLAG)
 # save score_dict by appending to the end of the csv.
 # csv will be at ROOT_DIR/model_scores.csv
@@ -576,11 +614,12 @@ nets.save_scores_to_csv_small(scores,ROOT_DIR+'model_scores_summary.csv')
 #========================================================================
 if SIM == 'TNG':
   nets.save_scores_from_model(FILE_DEN, FILE_MASK, MODEL_PATH+CLONE_NAME, CLONE_FIG_DIR, PRED_PATH,
-                              GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,TRAIN_SCORE=False)
+                              GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,TRAIN_SCORE=False,
+                              BINARY=BINARY_MASK)
 elif SIM == 'BOL':
   nets.save_scores_from_model(FILE_DEN, FILE_MASK, MODEL_PATH+CLONE_NAME, CLONE_FIG_DIR, PRED_PATH,
                               GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,BOXSIZE=256,BOLSHOI_FLAG=True,
-                              TRAIN_SCORE=False)
+                              TRAIN_SCORE=False,BINARY=BINARY_MASK)
 print('>>> Finished predicting on training data')
 #===============================================================
 print('Finished training!')

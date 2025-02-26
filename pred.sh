@@ -34,22 +34,24 @@ NVIDIA_SMI_PID=$!;
 
 # BASE MODELS:
 echo ">>> MODEL PARAMETERS:";
-SIM="BOL"; echo "Simulation: $SIM";
-BASE_L=0.122; echo "Base Lambda: $BASE_L";
-D=4; echo "Depth: $D";
-F=16; echo "Filters: $F";
-LOSS="SCCE"; echo "Loss: $LOSS";
-GRID=640; echo "Grid: $GRID";
+SIM="TNG"; echo "Simulation: $SIM";
+BASE_L=0.33; echo "Base Lambda: $BASE_L";
+D=3; echo "Depth: $D";
+F=32; echo "Filters: $F";
+LOSS="BCE"; echo "Loss: $LOSS";
+GRID=512; echo "Grid: $GRID";
 TH=0.65; echo "Threshold: $TH";
-TL_FLAG=1; echo "Transfer Flag: $TL_FLAG";
+TL_FLAG=0; echo "Transfer Flag: $TL_FLAG";
 ### CHOOSE LAMBDA TO PREDICT ON ###
 TRAN_L=7; echo "Transfer/pred Lambda: $TRAN_L";
 ### XOVER FLAG ###
 XOVER_FLAG=0; echo "Crossover flag: $XOVER_FLAG";
 ### ORTHO FLAG ###
-ORTHO_FLAG=0; echo "Orthogonal flag: $ORTHO_FLAG";
+ORTHO_FLAG=1; echo "Orthogonal flag: $ORTHO_FLAG";
 ### SAVE 4 CHANNELS BEFORE ARGMAX ###
-CH4_FLAG=0; echo "Save 4 channel prediction flag: $CH4_FLAG";
+CH4_FLAG=1; echo "Save 4 channel prediction flag: $CH4_FLAG";
+### BINARY MODEL FLAG ###
+BINARY_FLAG=0; echo "Binary model flag: $BINARY_FLAG";
 #######################################################################
 if [ "$TL_FLAG" = 0 ]; then
   TRAN_L=$BASE_L;
@@ -71,6 +73,9 @@ elif [ "$LOSS" = "FOCAL_CCE" ]; then
   LOSS_SUFFIX="FOCAL"
 elif [ "$LOSS" = "SCCE" ]; then
   LOSS_SUFFIX="SCCE"
+elif [ "$LOSS" = "BCE" ]; then
+  LOSS_SUFFIX=""
+  BINARY_FLAG=1
 fi
 
 ### BASE MODELS ###
@@ -98,15 +103,18 @@ elif [ "$SIM" = "BOL" ]; then
     FN_DEN="Bolshoi_halo_CIC_${GRID}_L=${TRAN_L}.0.fvol"; # full/subhalo BOL density
   fi
 fi
+MODEL_NAME="TNG_D3-F32-Nm512-th0.65-sig2.4-base_L0.33_BN_BIN";
 echo "Model Name: $MODEL_NAME";
 echo "Mask Field: $FN_MSK";
 echo "Density Field: $FN_DEN";
 echo "4 channel flag: $CH4_FLAG";
+echo "Binary model? $BINARY_FLAG";
 
 CMD_ARGS="$ROOT_DIR $SIM $MODEL_NAME $FN_DEN $FN_MSK $GRID";
 [ "$XOVER_FLAG" -eq 1 ] && CMD_ARGS+=" --XOVER_FLAG";
 [ "$ORTHO_FLAG" -eq 0 ] && CMD_ARGS+=" --ORTHO_FLAG";
 [ "$CH4_FLAG" -eq 1 ] && CMD_ARGS+=" --CH4_FLAG";
+[ "$BINARY_FLAG" -eq 1 ] && CMD_ARGS+=" --BINARY_FLAG";
 echo "CMD_ARGS: $CMD_ARGS";
 
 echo ">>> PREDICTING <<<";
