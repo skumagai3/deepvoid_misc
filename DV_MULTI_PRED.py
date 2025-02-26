@@ -194,9 +194,16 @@ print('>>> Predicting...')
 Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False)
 print('>>> Finished predicting...')
 if CH4_FLAG:
-    print('>>> Saving 4-channel predictions to disk...')
-    FILE_PRED_4CH = FILE_PRED + MODEL_NAME + '-pred-4ch.npy'
-    np.save(FILE_PRED_4CH,Y_pred)
+    if VAL_FLAG:
+        print('>>> Saving 4-channel predictions to disk...')
+        FILE_PRED_4CH = FILE_PRED + MODEL_NAME + '-pred-4ch.npy'
+        np.save(FILE_PRED_4CH,Y_pred)
+    else:
+        # save entire 4-channel prediction cube (NOT subcubes):
+        print('>>> Saving entire cube 4-channel predictions to disk...')
+        FILE_PRED_4CH = FILE_PRED + MODEL_NAME + '-pred-4ch_full.npy'
+        Y_pred_cube = nets.assemble_cube_multichannel(Y_pred,GRID,SUBGRID,OFF,4)
+        np.save(FILE_PRED_4CH,Y_pred_cube)
     print(f'>>> Saved 4-channel predictions to {FILE_PRED_4CH}')
 #===============================================================================
 # set up score_dict. 

@@ -136,6 +136,71 @@ def assemble_cube2(Y_pred,GRID,SUBGRID,OFF):
                 cont = cont+1
     return cube
 #---------------------------------------------------------
+# Assemble cube with multiple channels
+#---------------------------------------------------------
+def assemble_cube_multichannel(Y_pred, GRID, SUBGRID, OFF, CHANNELS):
+    cube = np.zeros(shape=(GRID, GRID, GRID, CHANNELS))
+    nbins = (GRID // SUBGRID) + (GRID // SUBGRID - 1)
+    cont = 0
+    
+    SUBGRID_4 = SUBGRID // 4
+    SUBGRID_2 = SUBGRID // 2
+    
+    for i in range(nbins):
+        if i == 0:
+            di_0 = SUBGRID * i - OFF * i
+            di_1 = SUBGRID * i - OFF * i + SUBGRID_4 + SUBGRID_2
+            si_0 = 0
+            si_1 = -SUBGRID_4
+        else:
+            di_0 = SUBGRID * i - OFF * i + SUBGRID_4
+            di_1 = SUBGRID * i - OFF * i + SUBGRID_4 + SUBGRID_2
+            si_0 = SUBGRID_4
+            si_1 = -SUBGRID_4
+            if i == nbins - 1:
+                di_0 = SUBGRID * i - OFF * i + SUBGRID_4
+                di_1 = SUBGRID * i - OFF * i + SUBGRID
+                si_0 = SUBGRID_4
+                si_1 = SUBGRID
+
+        for j in range(nbins):
+            if j == 0:
+                dj_0 = SUBGRID * j - OFF * j
+                dj_1 = SUBGRID * j - OFF * j + SUBGRID_4 + SUBGRID_2
+                sj_0 = 0
+                sj_1 = -SUBGRID_4
+            else:
+                dj_0 = SUBGRID * j - OFF * j + SUBGRID_4
+                dj_1 = SUBGRID * j - OFF * j + SUBGRID_4 + SUBGRID_2
+                sj_0 = SUBGRID_4
+                sj_1 = -SUBGRID_4
+                if j == nbins - 1:
+                    dj_0 = SUBGRID * j - OFF * j + SUBGRID_4
+                    dj_1 = SUBGRID * j - OFF * j + SUBGRID
+                    sj_0 = SUBGRID_4
+                    sj_1 = SUBGRID
+
+            for k in range(nbins):
+                if k == 0:
+                    dk_0 = SUBGRID * k - OFF * k
+                    dk_1 = SUBGRID * k - OFF * k + SUBGRID_4 + SUBGRID_2
+                    sk_0 = 0
+                    sk_1 = -SUBGRID_4
+                else:
+                    dk_0 = SUBGRID * k - OFF * k + SUBGRID_4
+                    dk_1 = SUBGRID * k - OFF * k + SUBGRID_4 + SUBGRID_2
+                    sk_0 = SUBGRID_4
+                    sk_1 = -SUBGRID_4
+                    if k == nbins - 1:
+                        dk_0 = SUBGRID * k - OFF * k + SUBGRID_4
+                        dk_1 = SUBGRID * k - OFF * k + SUBGRID
+                        sk_0 = SUBGRID_4
+                        sk_1 = SUBGRID
+
+                cube[di_0:di_1, dj_0:dj_1, dk_0:dk_1, :] = Y_pred[cont, si_0:si_1, sj_0:sj_1, sk_0:sk_1, :]
+                cont += 1
+    return cube
+#---------------------------------------------------------
 # For loading training and testing data for training
 # if loading data for regression, ensure classification=False!!
 #---------------------------------------------------------
