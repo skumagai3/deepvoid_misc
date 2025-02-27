@@ -17,6 +17,8 @@ Parameters:
   XOVER_FLAG: set when performing crossover predictions from a model trained on one simulation to another.
   ORTHO_FLAG: set when performing preds on non-orthogonally rotated density fields, e.g. 45 degrees.
   CH4_FLAG: set when you want to save the 4-channel predictions (before argmax) to disk.
+  BINARY_FLAG: set when you want to use a binary model for prediction.
+  VAL_FLAG: set when you want to predict on the entire (training + val) set.
 END_COMMENT
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
 current_time=$(date +"%Y%m%d-%H%M"); echo "Current time: $current_time";
@@ -52,6 +54,8 @@ ORTHO_FLAG=1; echo "Orthogonal flag: $ORTHO_FLAG";
 CH4_FLAG=1; echo "Save 4 channel prediction flag: $CH4_FLAG";
 ### BINARY MODEL FLAG ###
 BINARY_FLAG=0; echo "Binary model flag: $BINARY_FLAG";
+### VALIDATION FLAG ###
+VAL_FLAG=0; echo "Validation flag: $VAL_FLAG";
 #######################################################################
 if [ "$TL_FLAG" = 0 ]; then
   TRAN_L=$BASE_L;
@@ -109,12 +113,16 @@ echo "Mask Field: $FN_MSK";
 echo "Density Field: $FN_DEN";
 echo "4 channel flag: $CH4_FLAG";
 echo "Binary model? $BINARY_FLAG";
+echo "Validation flag: $VAL_FLAG";
+echo "Orthogonal flag: $ORTHO_FLAG";
+echo "Xover flag: $XOVER_FLAG";
 
 CMD_ARGS="$ROOT_DIR $SIM $MODEL_NAME $FN_DEN $FN_MSK $GRID";
 [ "$XOVER_FLAG" -eq 1 ] && CMD_ARGS+=" --XOVER_FLAG";
 [ "$ORTHO_FLAG" -eq 0 ] && CMD_ARGS+=" --ORTHO_FLAG";
 [ "$CH4_FLAG" -eq 1 ] && CMD_ARGS+=" --CH4_FLAG";
 [ "$BINARY_FLAG" -eq 1 ] && CMD_ARGS+=" --BINARY_FLAG";
+[ "$VAL_FLAG" -eq 1 ] && CMD_ARGS+=" --VAL_FLAG";
 echo "CMD_ARGS: $CMD_ARGS";
 
 echo ">>> PREDICTING <<<";
