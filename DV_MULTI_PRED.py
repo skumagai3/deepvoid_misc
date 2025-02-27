@@ -207,7 +207,7 @@ if CH4_FLAG:
         FILE_PRED_4CH = FILE_PRED + MODEL_NAME + '-pred-4ch_full.npy'
         Y_pred_cube = nets.assemble_cube_multichannel(Y_pred,GRID,SUBGRID,OFF,4)
         np.save(FILE_PRED_4CH,Y_pred_cube)
-    print(f'>>> Saved 4-channel predictions to {FILE_PRED_4CH}')
+    print(f'>>> Saved an entire cube of 4-channel predictions to {FILE_PRED_4CH}')
 #===============================================================================
 # set up score_dict. 
 # VAL_FLAG is True if scores are based on val set
