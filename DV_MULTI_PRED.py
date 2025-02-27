@@ -46,6 +46,7 @@ opt_group.add_argument('--XOVER_FLAG', action='store_true', default=False, help=
 opt_group.add_argument('--ORTHO_FLAG', action='store_false', default=True, help='Orthogonal flag.')
 opt_group.add_argument('--CH4_FLAG', action='store_true', default=False, help='CH4 flag.')
 opt_group.add_argument('--BINARY_FLAG', action='store_true', default=False, help='Binary flag.')
+opt_group.add_argument('--VAL_FLAG', action='store_false', default=True, help='Validation flag.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 SIM = args.SIM
@@ -57,6 +58,7 @@ XOVER_FLAG = args.XOVER_FLAG
 ORTHO_FLAG = args.ORTHO_FLAG
 CH4_FLAG = args.CH4_FLAG
 BINARY_FLAG = args.BINARY_FLAG
+VAL_FLAG = args.VAL_FLAG
 DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 #===============================================================================
 # parse MODEL_NAME for model attributes
@@ -90,6 +92,7 @@ print('#############################################')
 print('>>> Running DV_MULTI_PRED.py')
 print('>>> Root directory: ',ROOT_DIR)
 print('Simulation = ', SIM); 
+print('MODEL_NAME = ',MODEL_NAME)
 print('Model originally trained on L = ',base_L); 
 print('Model predicting on :',FN_DEN)
 print('DEPTH = ',DEPTH); print('FILTERS = ',FILTERS)
@@ -103,6 +106,14 @@ print('XOVER_FLAG = ',XOVER_FLAG)
 if XOVER_FLAG:
     print('Cross-over flag is set, performing prediction on other sim.')
 print('ORTHO_FLAG = ',ORTHO_FLAG)
+print('VAL_FLAG = ',VAL_FLAG)
+if VAL_FLAG:
+    print('Model will be scored on validation data.')
+else:
+    print('Model will be scored on training data and validation data. Full cube predictions will be saved.')
+print('FN_DEN = ',FN_DEN)
+print('FN_MSK = ',FN_MSK)
+print('BINARY_FLAG = ',BINARY_FLAG)
 print('CH4_FLAG = ',CH4_FLAG)
 print('#############################################')
 #===============================================================================
@@ -172,8 +183,8 @@ if LOSS == 'SCCE':
     Y_VAL_DATA_NAME += '_int'
 X_TEST_PATH = DATA_PATH + X_VAL_DATA_NAME + '_X_test.npy'
 Y_TEST_PATH = DATA_PATH + Y_VAL_DATA_NAME + '_Y_test.npy'
-if os.path.exists(X_TEST_PATH) and os.path.exists(Y_TEST_PATH):
-    VAL_FLAG = True
+if VAL_FLAG and os.path.exists(X_TEST_PATH) and os.path.exists(Y_TEST_PATH):
+    # VAL_FLAG = True
     X_test = np.load(X_TEST_PATH,allow_pickle=True)
     Y_test = np.load(Y_TEST_PATH,allow_pickle=True)
     print(f'Loaded validation features from {X_TEST_PATH}')
@@ -183,7 +194,7 @@ if os.path.exists(X_TEST_PATH) and os.path.exists(Y_TEST_PATH):
         Y_test = np.argmax(Y_test,axis=-1)
         Y_test = np.expand_dims(Y_test,axis=-1)
 else:
-    VAL_FLAG = False
+    # VAL_FLAG = False
     print('Model is being scored on training data. Scores may be better than they actually should be.')
     X_test = nets.load_dataset(FILE_DEN, SUBGRID, OFF)
     Y_test = nets.load_dataset(FILE_MSK, SUBGRID, OFF, preproc=None, return_int=True)
