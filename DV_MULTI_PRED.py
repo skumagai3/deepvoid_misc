@@ -46,7 +46,7 @@ opt_group.add_argument('--XOVER_FLAG', action='store_true', default=False, help=
 opt_group.add_argument('--ORTHO_FLAG', action='store_false', default=True, help='Orthogonal flag.')
 opt_group.add_argument('--CH4_FLAG', action='store_true', default=False, help='CH4 flag.')
 opt_group.add_argument('--BINARY_FLAG', action='store_true', default=False, help='Binary flag.')
-opt_group.add_argument('--VAL_FLAG', action='store_false', default=True, help='Validation flag.')
+opt_group.add_argument('--VAL_FLAG', action='store_true', default=False, help='Validation flag.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 SIM = args.SIM
@@ -107,7 +107,7 @@ if XOVER_FLAG:
     print('Cross-over flag is set, performing prediction on other sim.')
 print('ORTHO_FLAG = ',ORTHO_FLAG)
 print('VAL_FLAG = ',VAL_FLAG)
-if VAL_FLAG:
+if not VAL_FLAG:
     print('Model will be scored on validation data.')
 else:
     print('Model will be scored on training data and validation data. Full cube predictions will be saved.')
@@ -183,7 +183,7 @@ if LOSS == 'SCCE':
     Y_VAL_DATA_NAME += '_int'
 X_TEST_PATH = DATA_PATH + X_VAL_DATA_NAME + '_X_test.npy'
 Y_TEST_PATH = DATA_PATH + Y_VAL_DATA_NAME + '_Y_test.npy'
-if VAL_FLAG and os.path.exists(X_TEST_PATH) and os.path.exists(Y_TEST_PATH):
+if not VAL_FLAG and os.path.exists(X_TEST_PATH) and os.path.exists(Y_TEST_PATH):
     # VAL_FLAG = True
     X_test = np.load(X_TEST_PATH,allow_pickle=True)
     Y_test = np.load(Y_TEST_PATH,allow_pickle=True)
@@ -208,7 +208,7 @@ Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False,
                                 BINARY=BINARY_FLAG)
 print('>>> Finished predicting...')
 if CH4_FLAG:
-    if VAL_FLAG:
+    if not VAL_FLAG:
         print('>>> Saving 4-channel predictions to disk...')
         FILE_PRED_4CH = FILE_PRED + MODEL_NAME + '-pred-4ch.npy'
         np.save(FILE_PRED_4CH,Y_pred)
