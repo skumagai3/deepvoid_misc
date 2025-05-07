@@ -2071,3 +2071,25 @@ def data_gen_mmap_batch(FILE_X,FILE_Y,batch_size):
   for start_idx in range(0,num_samples,batch_size):
     end_idx = min(start_idx+batch_size,num_samples)
     yield (X[start_idx:end_idx], Y[start_idx:end_idx])
+
+### Boundary Condition Test Functions:
+def create_mask_slab(mask, height, slab_height):
+  '''
+  Creates a chunk of invalid or out of bounds data 
+  for a periodic cube by filling it with zeros.
+  Inputs:
+  mask: np.ndarray of shape (GRID, GRID, GRID)
+  height: int, the lowest z-index of the slab
+  slab_height: int, the height of the slab (in voxels)
+  Outputs:
+  masked_cube: np.ndarray of shape (GRID, GRID, GRID), with 
+  some invalid data in the slab region, denoted by zeros.
+  boundary_cube: np.ndarray of shape (GRID, GRID, GRID), with
+  the slab region filled with ones.
+  '''
+  masked_cube = np.copy(mask)
+  masked_cube[:, :, height:height+slab_height] = 0
+  # Create a cube with ones in the slab region, and zeros elsewhere
+  boundary_cube = np.zeros(mask.shape)
+  boundary_cube[:, :, height:height+slab_height] = 1
+  return masked_cube, boundary_cube
