@@ -1157,6 +1157,8 @@ def CMatrix(y_true, y_pred, FILE_MODEL, FILE_FIG, BINARY=False):
   fig, ax = plt.subplots(1,1,figsize=(8,8))
   if BINARY:
     class_labels = ['Void','Wall']
+  else:
+    class_labels = ['Void','Wall','Filament','Halo']
   display = ConfusionMatrixDisplay(confusion_matrix=cm,display_labels=class_labels)
   _ = display.plot(ax=ax)
   plt.savefig(FILE_FIG+MODEL_NAME+'_cm.png',facecolor='white',bbox_inches='tight')
@@ -1678,7 +1680,7 @@ def run_predict_model(model, X_test, batch_size, output_argmax=True, BINARY=Fals
       # use 0.5 threshold for binary classification
       Y_pred = np.where(Y_pred > 0.5, 1, 0)
   return Y_pred
-def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, GRID=512, SUBGRID=128, OFF=64, BOXSIZE=205, BOLSHOI_FLAG=False, TRAIN_SCORE=False, COMPILE=False, LATEX=False, BINARY=False):
+def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, GRID=512, SUBGRID=128, OFF=64, BOXSIZE=205, BOLSHOI_FLAG=False, TRAIN_SCORE=False, COMPILE=False, LATEX=False, BINARY=False, PRED_NAME_SUFFIX=''):
   '''
   Save image of density, mask, and predicted mask. Using save_scores_from_fvol,
   saves F1 scores, confusion matrix to MODEL_NAME_hps.txt and plots confusion matrix.
@@ -1719,9 +1721,9 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
   Y_pred = assemble_cube2(Y_pred,GRID,SUBGRID,OFF)
 
   ### write out prediction
-  PRED_NAME = MODEL_NAME + '-pred.fvol'
+  PRED_NAME = MODEL_NAME + f'{PRED_NAME_SUFFIX}-pred.fvol'
   if BOLSHOI_FLAG == True:
-    PRED_NAME = MODEL_NAME + '-pred-bolshoi.fvol'
+    PRED_NAME = MODEL_NAME + f'{PRED_NAME_SUFFIX}-pred-bolshoi.fvol'
   volumes.write_fvolume(Y_pred, FILE_PRED+PRED_NAME)
   print(f'Wrote prediction to {FILE_PRED+PRED_NAME}')
   
@@ -2093,3 +2095,34 @@ def create_mask_slab(mask, height, slab_height):
   boundary_cube = np.zeros(mask.shape)
   boundary_cube[:, :, height:height+slab_height] = 1
   return masked_cube, boundary_cube
+
+def chunk_array(arr_path, SUBGRID):
+  '''
+  Chunk and augment a single 3D array (e.g., a bitwise mask) into subcubes with rotations.
+  The chunking and augmentation is identical to load_dataset_all().
+  No preprocessing is performed.
+  Returns: np.ndarray of shape (n_chunks, SUBGRID, SUBGRID, SUBGRID, 1)
+  '''
+  arr = volumes.read_fvolume(arr_path)
+  den_shp = arr.shape
+  n_bins = den_shp[0] // SUBGRID
+  n_chunks = (n_bins ** 3) * 4
+  out = np.zeros((n_chunks, SUBGRID, SUBGRID, SUBGRID, 1), dtype=arr.dtype)
+  cont = 0
+  for i in range(n_bins):
+    for j in range(n_bins):
+      for k in range(n_bins):
+        sub = arr[i*SUBGRID:(i+1)*SUBGRID, j*SUBGRID:(j+1)*SUBGRID, k*SUBGRID:(k+1)*SUBGRID]
+        # 0 deg
+        out[cont, :, :, :, 0] = sub
+        cont += 1
+        # 180 deg
+        out[cont, :, :, :, 0] = volumes.rotate_cube(sub, 2)
+        cont += 1
+        # 90 deg
+        out[cont, :, :, :, 0] = volumes.rotate_cube(sub, 1)
+        cont += 1
+        # 270 deg
+        out[cont, :, :, :, 0] = volumes.rotate_cube(sub, 0)
+        cont += 1
+  return out

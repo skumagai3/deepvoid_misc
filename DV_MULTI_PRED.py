@@ -47,6 +47,7 @@ opt_group.add_argument('--ORTHO_FLAG', action='store_false', default=True, help=
 opt_group.add_argument('--CH4_FLAG', action='store_true', default=False, help='CH4 flag.')
 opt_group.add_argument('--BINARY_FLAG', action='store_true', default=False, help='Binary flag.')
 opt_group.add_argument('--VAL_FLAG', action='store_true', default=False, help='Validation flag.')
+opt_group.add_argument('--PRED_SUFFIX', type=str, default='', help='Suffix for the prediction file.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 SIM = args.SIM
@@ -59,6 +60,7 @@ ORTHO_FLAG = args.ORTHO_FLAG
 CH4_FLAG = args.CH4_FLAG
 BINARY_FLAG = args.BINARY_FLAG
 VAL_FLAG = args.VAL_FLAG
+PRED_SUFFIX = args.PRED_SUFFIX
 DATE = datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S')
 #===============================================================================
 # parse MODEL_NAME for model attributes
@@ -107,7 +109,7 @@ if XOVER_FLAG:
     print('Cross-over flag is set, performing prediction on other sim.')
 print('ORTHO_FLAG = ',ORTHO_FLAG)
 print('VAL_FLAG = ',VAL_FLAG)
-if not VAL_FLAG:
+if VAL_FLAG:
     print('Model will be scored on validation data.')
 else:
     print('Model will be scored on training data and validation data. Full cube predictions will be saved.')
@@ -148,6 +150,7 @@ if SIM == 'BOL':
     FIG_OUT = FIG_DIR_PATH + 'Bolshoi/' + MODEL_NAME + '/'
 FILE_DEN = DATA_PATH + FN_DEN
 FILE_MSK = DATA_PATH + FN_MSK
+PRED_NAME = MODEL_NAME + PRED_SUFFIX
 # we want the figures to be saved in ROOT_DIR/figs/SIM/MODEL_NAME/:
 if not os.path.exists(FIG_OUT):
     os.makedirs(FIG_OUT)
@@ -166,8 +169,10 @@ model.summary()
 #===============================================================================
 # we want to extract L from FILE_DEN...not necessarily base_L
 if SIM == 'TNG':
-    if 'DM_DEN' in FN_DEN:
+    if 'DM_DEN' in FN_DEN or '_TEST_BA_' in FN_DEN:
         L = 0.33
+    elif '_TEST_L10_' in FN_DEN:
+        L = 10
     else:
         # recall TNG files have names like subs1_mass_Nm512_L3_d_None_smooth.fvol
         L = int(FN_DEN.split('L')[1].split('_')[0])
@@ -183,7 +188,7 @@ if LOSS == 'SCCE':
     Y_VAL_DATA_NAME += '_int'
 X_TEST_PATH = DATA_PATH + X_VAL_DATA_NAME + '_X_test.npy'
 Y_TEST_PATH = DATA_PATH + Y_VAL_DATA_NAME + '_Y_test.npy'
-if not VAL_FLAG and os.path.exists(X_TEST_PATH) and os.path.exists(Y_TEST_PATH):
+if VAL_FLAG and os.path.exists(X_TEST_PATH) and os.path.exists(Y_TEST_PATH):
     # VAL_FLAG = True
     X_test = np.load(X_TEST_PATH,allow_pickle=True)
     Y_test = np.load(Y_TEST_PATH,allow_pickle=True)
@@ -210,12 +215,12 @@ print('>>> Finished predicting...')
 if CH4_FLAG:
     if not VAL_FLAG:
         print('>>> Saving 4-channel predictions to disk...')
-        FILE_PRED_4CH = FILE_PRED + MODEL_NAME + '-pred-4ch.npy'
+        FILE_PRED_4CH = FILE_PRED + PRED_NAME + '-pred-4ch.npy'
         np.save(FILE_PRED_4CH,Y_pred)
     else:
         # save entire 4-channel prediction cube (NOT subcubes):
         print('>>> Saving entire cube 4-channel predictions to disk...')
-        FILE_PRED_4CH = FILE_PRED + MODEL_NAME + '-pred-4ch_full.npy'
+        FILE_PRED_4CH = FILE_PRED + PRED_NAME + '-pred-4ch_full.npy'
         Y_pred_cube = nets.assemble_cube_multichannel(Y_pred,GRID,SUBGRID,OFF,4)
         np.save(FILE_PRED_4CH,Y_pred_cube)
     print(f'>>> Saved an entire cube of 4-channel predictions to {FILE_PRED_4CH}')
@@ -261,7 +266,8 @@ print('>>> Plotting slices from training data...')
 nets.save_scores_from_model(FILE_DEN, FILE_MSK, FILE_OUT+MODEL_NAME, FIG_OUT,
                             FILE_PRED, GRID=GRID, SUBGRID=SUBGRID, OFF=OFF,
                             BOXSIZE=BoxSize, BOLSHOI_FLAG=BOLSHOI_FLAG, 
-                            TRAIN_SCORE=False, COMPILE=False, BINARY=BINARY_FLAG)
+                            TRAIN_SCORE=False, COMPILE=False, BINARY=BINARY_FLAG,
+                            PRED_NAME_SUFFIX=PRED_SUFFIX)
 #===============================================================================
 # rotate training data (delta, mask) by 45 degrees and score again. 
 # ORTHO_FLAG = False.... VAL_FLAG = False

@@ -116,6 +116,7 @@ opt_group.add_argument('--REGULARIZE_FLAG', action='store_true', help='If set, u
 opt_group.add_argument('--PICOTTE_FLAG', action='store_true', help='If set, set up for sbatch run on Picotte.')
 opt_group.add_argument('--TENSORBOARD_FLAG', action='store_true', help='If set, use tensorboard.')
 opt_group.add_argument('--BINARY_MASK', action='store_true', help='If set, use binary mask.')
+opt_group.add_argument('--BOUNDARY_MASK', type=str, default=None, help='If set, model training does not count out of bounds voxels in the loss calculation.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 SIM = args.SIM
@@ -143,6 +144,7 @@ REGULARIZE_FLAG = args.REGULARIZE_FLAG
 PICOTTE_FLAG = args.PICOTTE_FLAG
 TENSORBOARD_FLAG = args.TENSORBOARD_FLAG
 BINARY_MASK = args.BINARY_MASK
+BOUNDARY_MASK = args.BOUNDARY_MASK
 print('#############################################')
 print('>>> Running DV_MULTI_TRAIN.py')
 print('>>> Root directory:',ROOT_DIR)
@@ -172,6 +174,8 @@ print(f'Multiprocessing: {bool(MULTI_FLAG)}')
 print(f'Picotte flag: {bool(PICOTTE_FLAG)}')
 print(f'Tensorboard: {bool(TENSORBOARD_FLAG)}')
 print(f'Using binary mask: {bool(BINARY_MASK)}')
+if BOUNDARY_MASK is not None:
+  print(f'Using boundary mask: {BOUNDARY_MASK}')
 print('#############################################')
 #===============================================================
 # set paths
@@ -302,6 +306,10 @@ if LOAD_INTO_MEM:
     features, labels = nets.load_dataset_all_overlap(FILE_DEN,FILE_MASK,SUBGRID,OFF)
   print('>>> Data loaded!'); print('Features shape:',features.shape)
   print('Labels shape:',labels.shape)
+  if BOUNDARY_MASK is not None:
+    print('>>> Loading boundary mask:',BOUNDARY_MASK)
+    boundary = nets.chunk_array(BOUNDARY_MASK, SUBGRID)
+    print('>>> Boundary mask loaded!'); print('Boundary shape:',boundary.shape)
   # split into training and validation sets:
   # X_train is the density subcubes used to train the model
   # Y_train is the corresponding mask subcubes
@@ -312,6 +320,11 @@ if LOAD_INTO_MEM:
   X_train, X_test, Y_train, Y_test = nets.train_test_split(X_index,labels,
                                                           test_size=test_size,
                                                           random_state=seed)
+  if BOUNDARY_MASK is not None:
+    boundary_train = boundary[X_train]; boundary_test = boundary[X_test]
+    print('>>> Boundary mask split into training and test sets')
+    print('Boundary train shape:',boundary_train.shape)
+    print('Boundary test shape:',boundary_test.shape)
   X_train = features[X_train]; X_test = features[X_test]
   del features; del labels # memory purposes
   if BINARY_MASK:
@@ -368,8 +381,12 @@ if LOAD_INTO_MEM:
   #===============================================================
   # Make tf.data.Dataset
   #===============================================================
-  train_dataset = tf.data.Dataset.from_tensor_slices((X_train,Y_train))
-  test_dataset = tf.data.Dataset.from_tensor_slices((X_test,Y_test))
+  if BOUNDARY_MASK is not None:
+    train_dataset = tf.data.Dataset.from_tensor_slices((X_train, Y_train, boundary_train))
+    test_dataset = tf.data.Dataset.from_tensor_slices((X_test, Y_test, boundary_test))
+  else:
+    train_dataset = tf.data.Dataset.from_tensor_slices((X_train, Y_train))
+    test_dataset = tf.data.Dataset.from_tensor_slices((X_test, Y_test))
 else:
   print('>>> Loading train, val data into tf.data.Dataset from memmapped .npy files')
   print('>>> Loading X_train, Y_train, X_test, Y_test from .npy files')
@@ -465,6 +482,8 @@ hp_dict['GRID'] = GRID
 hp_dict['SUBGRID'] = SUBGRID
 hp_dict['OFF'] = OFF
 hp_dict['UNIFORM_FLAG'] = UNIFORM_FLAG
+if BOUNDARY_MASK is not None:
+  hp_dict['BOUNDARY_MASK'] = BOUNDARY_MASK
 print('#############################################')
 print('>>> Model Hyperparameters:')
 for key in hp_dict.keys():
@@ -592,8 +611,10 @@ if TENSORBOARD_FLAG:
 #===============================================================
 # Train model
 #===============================================================
-history = model.fit(train_dataset, epochs=epochs, validation_data=test_dataset, verbose=2,
-                    callbacks=callbacks)
+history = model.fit(
+  train_dataset, epochs=epochs, validation_data=test_dataset, verbose=2,
+  callbacks=callbacks
+)
 #===============================================================
 # Check if figs directory exists, if not, create it:
 #===============================================================
