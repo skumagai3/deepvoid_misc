@@ -25,7 +25,7 @@ from tensorflow.keras.optimizers import Adam # type: ignore
 #from tensorflow.keras.utils.layer_utils import count_params # doesnt work?
 from tensorflow.python.keras.utils import layer_utils
 from keras.utils import to_categorical
-from keras.layers import Input, Conv3D, MaxPooling3D, Conv3DTranspose, UpSampling3D, Concatenate, BatchNormalization, Activation, Dropout
+from keras.layers import Input, Conv3D, MaxPooling3D, Conv3DTranspose, UpSampling3D, Concatenate, BatchNormalization, Activation, Dropout, Lambda, Layer
 from keras import backend as K
 from keras.losses import CategoricalCrossentropy, SparseCategoricalCrossentropy, BinaryCrossentropy
 #from keras.losses import CategoricalFocalCrossentropy # not available in tf 2.10.0!!!
@@ -57,7 +57,7 @@ def summary(array):
 # Regularization options: minmax and standardize
 #---------------------------------------------------------
 def minmax(a):
-    return (a-np.min(a))/(np.max(a)-np.min(a))
+  return (a-np.min(a))/(np.max(a)-np.min(a))
 def standardize(a):
   return (a-np.mean(a))/(np.std(a))
 #---------------------------------------------------------
@@ -508,7 +508,7 @@ def SCCE_Dice_loss(y_true, y_pred, cce_weight=1.0, dice_weight=1.0):
   # Weighted average of SCCE loss and dice score
   return cce_weight * scce_loss + dice_weight * (1 - dice_score)
 #---------------------------------------------------------
-# U-Net creator
+# U-Net creation functions
 #---------------------------------------------------------
 def conv_block(input_tensor, filters, name, activation='relu', batch_normalization=True, dropout_rate=None, BN_scheme='last', DROP_scheme='last', kernel_regularizer=None, kernel_initializer='he_normal'):
   '''
@@ -551,6 +551,51 @@ def conv_block(input_tensor, filters, name, activation='relu', batch_normalizati
   if DROP_scheme == 'all' or DROP_scheme == 'last':
     x = Dropout(dropout_rate/2.0)(x) # only half the dropout rate here????
   return x
+#---------------------------------------------------------
+# Partial convolution block for U-Net
+#---------------------------------------------------------
+class PartialConv3D(Layer):
+  def __init__(self, filters, kernel_size=(3,3,3), strides=(1,1,1), 
+    padding='same', dilation_rate=(1,1,1), kernel_initializer='he_normal',
+    kernel_regularizer=None, bias_initializer='zeros', use_bias=True,
+    bias_regularizer=None, **kwargs):
+    super(PartialConv3D, self).__init__(**kwargs)
+    self.conv3d = Conv3D(
+      filters=filters, kernel_size=kernel_size, strides=strides,
+      padding=padding, dilation_rate=dilation_rate, use_bias=use_bias,
+      kernel_initializer=kernel_initializer, kernel_regularizer=kernel_regularizer,
+      bias_initializer=bias_initializer, bias_regularizer=bias_regularizer
+    )
+    # store kernel size for normalization
+    self.kernel_size = kernel_size if isinstance(kernel_size, tuple) else (kernel_size, kernel_size, kernel_size)
+    self.use_bias = use_bias
+
+    def call(self, inputs, mask=None):
+      if mask is None:
+        print('Warning: No mask provided to PartialConv3D. Using default mask of ones.')
+        mask = tf.ones_like(inputs)
+      masked_input = inputs * mask
+
+      # count valid voxels in conv window:
+      with tf.name_scope('valid_voxels_count'):
+        mask_output = self.conv3d(mask)
+        update_mask = tf.where(mask_output > 0, tf.ones_like(mask_output), tf.zeros_like(mask_output))
+      
+      # convolution over masked input:
+      with tf.name_scope('masked_conv'):
+        raw_output = self.conv3d(masked_input)
+      
+      # normalize output by valid voxel count:
+      with tf.name_scope('normalization'):
+        mask_output = tf.clip_by_value(mask_output, 1e-8, tf.reduce_max(mask_output)) # avoid division by zero
+        normalized_output = raw_output / mask_output
+      return normalized_output * update_mask, update_mask
+    
+    def compute_output_shape(self, input_shape):
+      conv_output_shape = self.conv3d.compute_output_shape(input_shape)
+      return [conv_output_shape, conv_output_shape]
+
+
 #---------------------------------------------------------
 def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation='relu', last_activation='softmax', batch_normalization=False, BN_scheme='last', dropout_rate=None, DROP_scheme='last', REG_FLAG = False, model_name='3D_U_Net', report_params=False):
   '''
@@ -1680,7 +1725,7 @@ def run_predict_model(model, X_test, batch_size, output_argmax=True, BINARY=Fals
       # use 0.5 threshold for binary classification
       Y_pred = np.where(Y_pred > 0.5, 1, 0)
   return Y_pred
-def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, GRID=512, SUBGRID=128, OFF=64, BOXSIZE=205, BOLSHOI_FLAG=False, TRAIN_SCORE=False, COMPILE=False, LATEX=False, BINARY=False, PRED_NAME_SUFFIX=''):
+def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, GRID=512, SUBGRID=128, OFF=64, BOXSIZE=205, BOLSHOI_FLAG=False, TRAIN_SCORE=False, COMPILE=False, LATEX=False, BINARY=False, PRED_NAME_SUFFIX='', EXTRA_INPUTS=None):
   '''
   Save image of density, mask, and predicted mask. Using save_scores_from_fvol,
   saves F1 scores, confusion matrix to MODEL_NAME_hps.txt and plots confusion matrix.
@@ -1717,6 +1762,11 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
       model = load_model(FILE_MODEL, compile=False)
 
   X_test = load_dataset(FILE_DEN,SUBGRID,OFF,preproc='mm')
+  if EXTRA_INPUTS is not None:
+    # if we have an extra input, load it and concatenate it to X_test
+    X_extra = load_dataset(EXTRA_INPUTS,SUBGRID,OFF,preproc='mm')
+    X_test = np.concatenate([X_test, X_extra], axis=-1)
+    print(f'Concatenated extra input {EXTRA_INPUTS} to X_test. New shape: {X_test.shape}')
   Y_pred = run_predict_model(model, X_test, BATCH_SIZE, BINARY=BINARY)
   Y_pred = assemble_cube2(Y_pred,GRID,SUBGRID,OFF)
 
@@ -2096,7 +2146,7 @@ def create_mask_slab(mask, height, slab_height):
   boundary_cube[:, :, height:height+slab_height] = 1
   return masked_cube, boundary_cube
 
-def chunk_array(arr_path, SUBGRID):
+def chunk_array(arr_path, SUBGRID, scale=False):
   '''
   Chunk and augment a single 3D array (e.g., a bitwise mask) into subcubes with rotations.
   The chunking and augmentation is identical to load_dataset_all().
@@ -2125,4 +2175,8 @@ def chunk_array(arr_path, SUBGRID):
         # 270 deg
         out[cont, :, :, :, 0] = volumes.rotate_cube(sub, 0)
         cont += 1
+  if scale:
+    # scale to [0,1] range
+    out = out.astype(np.float32)
+    out = minmax(out)
   return out

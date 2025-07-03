@@ -95,6 +95,8 @@ opt_group.add_argument('--LEARNING_RATE',type=float, default=3e-3, help='Learnin
 opt_group.add_argument('--LEARNING_RATE_PATIENCE',type=int, default=10, help='Patience for learning rate reduction. Default is 10.')
 opt_group.add_argument('--PATIENCE',type=int, default=25, help='Patience for early stopping. Default is 25.')
 opt_group.add_argument('--BINARY_FLAG',action='store_true',help='If set, will use binary mask for training.')
+opt_group.add_argument('--EXTRA_INPUTS', type=str, default=None, help='If set, use extra inputs for the model. Should be a filename of a .fvol file.')
+opt_group.add_argument('--UNIFORM_FLAG', type=int, default=1, help='If set to 1, will use uniform mass subsampling.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 MODEL_NAME = args.MODEL_NAME
@@ -110,6 +112,12 @@ LR = args.LEARNING_RATE
 lr_patience = args.LEARNING_RATE_PATIENCE
 patience = args.PATIENCE
 BINARY_MASK = args.BINARY_FLAG
+UNIFORM_FLAG = args.UNIFORM_FLAG
+EXTRA_INPUTS = args.EXTRA_INPUTS
+if EXTRA_INPUTS is not None:
+  print(f'Using extra input: {EXTRA_INPUTS}')
+  N_CHANNELS = 2 # density + color fields NOTE can adjust later if we want to add more fields
+print('#############################################')
 #===============================================================
 # hp dict is the old model, hp_dict_model is the new model
 #===============================================================
@@ -122,7 +130,7 @@ LAMBDA_TH = hp_dict['LAMBDA_TH']
 SIGMA = hp_dict['SIGMA']
 BATCHNORM = hp_dict['BN']
 DROP = hp_dict['DROP']
-UNIFORM_FLAG = hp_dict['UNIFORM_FLAG']
+#UNIFORM_FLAG = hp_dict['UNIFORM_FLAG'] # i dont want to reset this
 LOSS = hp_dict['LOSS'] # this messes w/ binary models, axe for now
 if BINARY_MASK:
   LOSS = 'BCE'
@@ -280,6 +288,10 @@ if LOAD_INTO_MEM:
     features, labels = nets.load_dataset_all(FILE_DEN,FILE_MASK,SUBGRID)
   else:
     features, labels = nets.load_dataset_all_overlap(FILE_DEN,FILE_MASK,SUBGRID,OFF)
+  if EXTRA_INPUTS is not None:
+    print('>>> Loading extra inputs:',EXTRA_INPUTS)
+    extra_input = nets.chunk_array(EXTRA_INPUTS, SUBGRID, scale=True)
+    print('>>> Extra inputs loaded!'); print('Extra input shape:',extra_input.shape)
   print('>>> Data loaded!')
   print('Features shape:',features.shape)
   print('Labels shape:',labels.shape)
@@ -289,7 +301,19 @@ if LOAD_INTO_MEM:
   X_train, X_test, Y_train, Y_test = nets.train_test_split(X_index,labels,
                                                           test_size=test_size,
                                                           random_state=seed)
+  if EXTRA_INPUTS is not None:
+    extra_train = extra_input[X_train]; extra_test = extra_input[X_test]
+    print('>>> Extra inputs split into training and validation sets')
+    print('Extra train shape:',extra_train.shape)
+    print('Extra test shape:',extra_test.shape)
   X_train = features[X_train]; X_test = features[X_test]
+  if EXTRA_INPUTS is not None:
+    print('>>> Concatenating extra inputs to training and validation sets')
+    X_train = np.concatenate((X_train,extra_train),axis=-1)
+    X_test = np.concatenate((X_test,extra_test),axis=-1)
+  print('>>> Training and validation sets created')
+  print('X_train shape: ',X_train.shape); print('Y_train shape: ',Y_train.shape)
+  print('X_test shape: ',X_test.shape); print('Y_test shape: ',Y_test.shape)
   del features; del labels # memory purposes
   if BINARY_MASK:
     Y_train = nets.convert_to_binary_mask(Y_train)

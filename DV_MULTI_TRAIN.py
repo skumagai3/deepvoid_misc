@@ -117,6 +117,7 @@ opt_group.add_argument('--PICOTTE_FLAG', action='store_true', help='If set, set 
 opt_group.add_argument('--TENSORBOARD_FLAG', action='store_true', help='If set, use tensorboard.')
 opt_group.add_argument('--BINARY_MASK', action='store_true', help='If set, use binary mask.')
 opt_group.add_argument('--BOUNDARY_MASK', type=str, default=None, help='If set, model training does not count out of bounds voxels in the loss calculation.')
+opt_group.add_argument('--EXTRA_INPUTS', type=str, default=None, help='If set, use extra inputs for the model. Should be a filename of a .fvol file.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 SIM = args.SIM
@@ -145,6 +146,7 @@ PICOTTE_FLAG = args.PICOTTE_FLAG
 TENSORBOARD_FLAG = args.TENSORBOARD_FLAG
 BINARY_MASK = args.BINARY_MASK
 BOUNDARY_MASK = args.BOUNDARY_MASK
+EXTRA_INPUTS = args.EXTRA_INPUTS
 print('#############################################')
 print('>>> Running DV_MULTI_TRAIN.py')
 print('>>> Root directory:',ROOT_DIR)
@@ -176,6 +178,9 @@ print(f'Tensorboard: {bool(TENSORBOARD_FLAG)}')
 print(f'Using binary mask: {bool(BINARY_MASK)}')
 if BOUNDARY_MASK is not None:
   print(f'Using boundary mask: {BOUNDARY_MASK}')
+if EXTRA_INPUTS is not None:
+  print(f'Using extra input: {EXTRA_INPUTS}')
+  N_CHANNELS = 2 # density + color fields
 print('#############################################')
 #===============================================================
 # set paths
@@ -310,6 +315,10 @@ if LOAD_INTO_MEM:
     print('>>> Loading boundary mask:',BOUNDARY_MASK)
     boundary = nets.chunk_array(BOUNDARY_MASK, SUBGRID)
     print('>>> Boundary mask loaded!'); print('Boundary shape:',boundary.shape)
+  if EXTRA_INPUTS is not None:
+    print('>>> Loading extra inputs:',EXTRA_INPUTS)
+    extra_input = nets.chunk_array(EXTRA_INPUTS, SUBGRID, scale=True)
+    print('>>> Extra inputs loaded!'); print('Extra input shape:',extra_input.shape)
   # split into training and validation sets:
   # X_train is the density subcubes used to train the model
   # Y_train is the corresponding mask subcubes
@@ -325,7 +334,18 @@ if LOAD_INTO_MEM:
     print('>>> Boundary mask split into training and test sets')
     print('Boundary train shape:',boundary_train.shape)
     print('Boundary test shape:',boundary_test.shape)
+  if EXTRA_INPUTS is not None:
+    extra_train = extra_input[X_train]; extra_test = extra_input[X_test]
+    print('>>> Extra inputs split into training and test sets')
+    print('Extra train shape:',extra_train.shape)
+    print('Extra test shape:',extra_test.shape)
   X_train = features[X_train]; X_test = features[X_test]
+  if EXTRA_INPUTS is not None:
+    X_train = np.concatenate((X_train, extra_train), axis=-1)
+    X_test = np.concatenate((X_test, extra_test), axis=-1)
+    print('>>> Extra inputs concatenated to features')
+    print('X_train shape:',X_train.shape)
+    print('X_test shape:',X_test.shape)
   del features; del labels # memory purposes
   if BINARY_MASK:
     Y_train = nets.convert_to_binary_mask(Y_train)
@@ -538,6 +558,9 @@ if BINARY_MASK:
   N_CLASSES = 1 # just for unet_3d() call
 last_activation = 'softmax' if N_CLASSES > 1 else 'sigmoid'
 print('>>> Last activation function:',last_activation)
+input_shape = (None, None, None, 1) # default input shape for 3D U-Net
+if EXTRA_INPUTS is not None:
+  input_shape = (None, None, None, N_CHANNELS)
 if MULTI_FLAG:
   strategy = tf.distribute.MirroredStrategy()
   print('Number of devices: {}'.format(strategy.num_replicas_in_sync))
@@ -549,7 +572,7 @@ if MULTI_FLAG:
       model = nets.load_model(FILE_OUT+MODEL_NAME)
       model.set_weights(model.get_weights())
     else:
-      model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
+      model = nets.unet_3d(input_shape,N_CLASSES,FILTERS,DEPTH,
                            last_activation=last_activation,
                            batch_normalization=BATCHNORM,
                            dropout_rate=DROPOUT,
@@ -564,7 +587,7 @@ else:
     model = nets.load_model(FILE_OUT+MODEL_NAME)
     model.set_weights(model.get_weights())
   else:
-    model = nets.unet_3d((None,None,None,1),N_CLASSES,FILTERS,DEPTH,
+    model = nets.unet_3d(input_shape,N_CLASSES,FILTERS,DEPTH,
                          last_activation=last_activation,
                          batch_normalization=BATCHNORM,
                          dropout_rate=DROPOUT,
@@ -656,6 +679,8 @@ scores['VAL_ACC'] = history.history['val_accuracy'][-1]
 if LOSS == 'FOCAL_CCE':
   scores['FOCAL_ALPHA'] = alpha
   scores['FOCAL_GAMMA'] = gamma
+if EXTRA_INPUTS is not None:
+  scores['EXTRA_INPUTS'] = EXTRA_INPUTS
 #===============================================================
 # Predict, record metrics, and plot metrics on TEST DATA
 #===============================================================
@@ -709,11 +734,11 @@ print('>>> Predicting on training data and plotting slices')
 if SIM == 'TNG':
   nets.save_scores_from_model(FILE_DEN, FILE_MASK, FILE_OUT+MODEL_NAME, FIG_DIR, FILE_PRED,
                               GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,TRAIN_SCORE=False,
-                              BINARY=BINARY_MASK)
+                              BINARY=BINARY_MASK,EXTRA_INPUTS=EXTRA_INPUTS)
 elif SIM == 'BOL':
   nets.save_scores_from_model(FILE_DEN, FILE_MASK, FILE_OUT+MODEL_NAME, FIG_DIR, FILE_PRED,
                               GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,BOXSIZE=256,BOLSHOI_FLAG=True,
-                              TRAIN_SCORE=False,BINARY=BINARY_MASK)
+                              TRAIN_SCORE=False,BINARY=BINARY_MASK,EXTRA_INPUTS=EXTRA_INPUTS)
 print('>>> Finished predicting on training data')
 #===============================================================
 print('Finished training!')
