@@ -118,6 +118,8 @@ opt_group.add_argument('--TENSORBOARD_FLAG', action='store_true', help='If set, 
 opt_group.add_argument('--BINARY_MASK', action='store_true', help='If set, use binary mask.')
 opt_group.add_argument('--BOUNDARY_MASK', type=str, default=None, help='If set, model training does not count out of bounds voxels in the loss calculation.')
 opt_group.add_argument('--EXTRA_INPUTS', type=str, default=None, help='If set, use extra inputs for the model. Should be a filename of a .fvol file.')
+opt_group.add_argument('--ADD_RSD', action='store_true', help='If set, add RSD perturbation to the density field. This is only for TNG300-3-Dark (so far).')
+opt_group.add_argument('--USE_PCONV', action='store_true', help='If set, use PartialConv3D instead of Conv3D.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 SIM = args.SIM
@@ -147,6 +149,9 @@ TENSORBOARD_FLAG = args.TENSORBOARD_FLAG
 BINARY_MASK = args.BINARY_MASK
 BOUNDARY_MASK = args.BOUNDARY_MASK
 EXTRA_INPUTS = args.EXTRA_INPUTS
+ADD_RSD = args.ADD_RSD
+USE_PCONV = args.USE_PCONV
+print('#############################################')
 print('#############################################')
 print('>>> Running DV_MULTI_TRAIN.py')
 print('>>> Root directory:',ROOT_DIR)
@@ -181,6 +186,15 @@ if BOUNDARY_MASK is not None:
 if EXTRA_INPUTS is not None:
   print(f'Using extra input: {EXTRA_INPUTS}')
   N_CHANNELS = 2 # density + color fields
+if ADD_RSD:
+  print('>>> Adding RSD perturbation to the density field')
+  if SIM != 'TNG':
+    sys.exit('ERROR: RSD perturbation only implemented for TNG300 base density (so far).') #NOTE
+if USE_PCONV:
+  print('>>> Using PartialConv3D instead of Conv3D')
+  if EXTRA_INPUTS is None:
+    print('>>> Using PartialConv3D without any mask input')
+print('#############################################')
 print('#############################################')
 #===============================================================
 # set paths
@@ -238,10 +252,17 @@ if SIM == 'TNG':
   ### TNG Density field:
   # FULL (L=0.33 Mpc/h)
   FILE_DEN_FULL = path_to_TNG + f'DM_DEN_snap99_Nm={GRID}.fvol'
+  if ADD_RSD and L == 0.33:
+    print('>>> Using RSD perturbed density field')
+    FILE_DEN_FULL = path_to_TNG + 'DM_DEN_snap99_perturbed_Nm=512.fvol'
   if UNIFORM_FLAG == True:
     FILE_DEN_SUBS = path_to_TNG + f'subs1_mass_Nm{GRID}_L{L}_d_None_smooth_uniform.fvol'
   if UNIFORM_FLAG == False:
     FILE_DEN_SUBS = path_to_TNG + f'subs1_mass_Nm{GRID}_L{L}_d_None_smooth.fvol'
+  if ADD_RSD and L > 0.33:
+    # as of 7/21/25, there are no uniform mass RSD perturbed subhalo density fields
+    print('>>> Using RSD perturbed subhalo density field')
+    FILE_DEN_SUBS = path_to_TNG + f'subs1_mass_Nm{int(GRID)}_L{L}_RSD.fvol'
   if L == 0.33:
     FILE_DEN = FILE_DEN_FULL
     L = 0.33 # full DM interparticle separation for TNG300-3-Dark
@@ -306,9 +327,20 @@ print('Mask field:',FILE_MASK)
 if LOAD_INTO_MEM:
   print('>>> Loading full train, val data into memory')
   if LOW_MEM_FLAG:
-    features, labels = nets.load_dataset_all(FILE_DEN,FILE_MASK,SUBGRID)
+    try: 
+      features, labels = nets.load_dataset_all(FILE_DEN,FILE_MASK,SUBGRID)
+    except FileNotFoundError:
+      print('>>> File not found, trying with _RSD suffix')
+      features, labels = nets.load_dataset_all(FILE_DEN.replace('.fvol','_RSD.fvol'),FILE_MASK,SUBGRID)
   else:
     features, labels = nets.load_dataset_all_overlap(FILE_DEN,FILE_MASK,SUBGRID,OFF)
+  # CHECK FOR NANs
+  if np.isnan(features).any():
+    print('>>> WARNING: NaNs found in features, replacing with 0')
+    features = np.nan_to_num(features)
+  if np.isnan(labels).any():
+    print('>>> WARNING: NaNs found in labels, replacing with 0')
+    labels = np.nan_to_num(labels)
   print('>>> Data loaded!'); print('Features shape:',features.shape)
   print('Labels shape:',labels.shape)
   if BOUNDARY_MASK is not None:
@@ -502,6 +534,8 @@ hp_dict['GRID'] = GRID
 hp_dict['SUBGRID'] = SUBGRID
 hp_dict['OFF'] = OFF
 hp_dict['UNIFORM_FLAG'] = UNIFORM_FLAG
+hp_dict['ADD_RSD'] = ADD_RSD
+hp_dict['PARTIAL_CONV'] = USE_PCONV
 if BOUNDARY_MASK is not None:
   hp_dict['BOUNDARY_MASK'] = BOUNDARY_MASK
 print('#############################################')
@@ -572,12 +606,18 @@ if MULTI_FLAG:
       model = nets.load_model(FILE_OUT+MODEL_NAME)
       model.set_weights(model.get_weights())
     else:
-      model = nets.unet_3d(input_shape,N_CLASSES,FILTERS,DEPTH,
-                           last_activation=last_activation,
-                           batch_normalization=BATCHNORM,
-                           dropout_rate=DROPOUT,
-                           model_name=MODEL_NAME,
-                           REG_FLAG=REGULARIZE_FLAG)
+      if not USE_PCONV: 
+        model = nets.unet_3d(input_shape,N_CLASSES,FILTERS,DEPTH,
+                            last_activation=last_activation,
+                            batch_normalization=BATCHNORM,
+                            dropout_rate=DROPOUT,
+                            model_name=MODEL_NAME,
+                            REG_FLAG=REGULARIZE_FLAG)
+      else:
+        model = nets.unet_partial_conv_3d_with_survey_mask(
+          input_shape, initial_filters=FILTERS, depth=DEPTH,
+          last_activation=last_activation
+        )
       model.compile(optimizer=nets.Adam(learning_rate=LR),
                                         loss=loss,
                                         metrics=metrics)
@@ -587,12 +627,18 @@ else:
     model = nets.load_model(FILE_OUT+MODEL_NAME)
     model.set_weights(model.get_weights())
   else:
-    model = nets.unet_3d(input_shape,N_CLASSES,FILTERS,DEPTH,
-                         last_activation=last_activation,
-                         batch_normalization=BATCHNORM,
-                         dropout_rate=DROPOUT,
-                         model_name=MODEL_NAME,
-                         REG_FLAG=REGULARIZE_FLAG)
+    if not USE_PCONV:
+      model = nets.unet_3d(input_shape,N_CLASSES,FILTERS,DEPTH,
+                          last_activation=last_activation,
+                          batch_normalization=BATCHNORM,
+                          dropout_rate=DROPOUT,
+                          model_name=MODEL_NAME,
+                          REG_FLAG=REGULARIZE_FLAG)
+    else:
+      model = nets.unet_partial_conv_3d_with_survey_mask(
+        input_shape, initial_filters=FILTERS, depth=DEPTH,
+        last_activation=last_activation
+      )
     model.compile(optimizer=nets.Adam(learning_rate=LR),
                                           loss=loss,
                                           metrics=metrics)

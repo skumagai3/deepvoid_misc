@@ -559,126 +559,178 @@ def conv_block(input_tensor, filters, name, activation='relu', batch_normalizati
 #---------------------------------------------------------
 class PartialConv3D(Layer):
   def __init__(self, filters, kernel_size=(3,3,3), strides=(1,1,1), 
-    padding='same', dilation_rate=(1,1,1), kernel_initializer='he_normal',
-    kernel_regularizer=None, bias_initializer='zeros', use_bias=True,
-    bias_regularizer=None, **kwargs):
-    super(PartialConv3D, self).__init__(**kwargs)
-    self.conv3d = Conv3D(
-      filters=filters, kernel_size=kernel_size, strides=strides,
-      padding=padding, dilation_rate=dilation_rate, use_bias=use_bias,
-      kernel_initializer=kernel_initializer, kernel_regularizer=kernel_regularizer,
-      bias_initializer=bias_initializer, bias_regularizer=bias_regularizer
-    )
-    # store kernel size for normalization
-    self.kernel_size = kernel_size if isinstance(kernel_size, tuple) else (kernel_size, kernel_size, kernel_size)
-    self.use_bias = use_bias
+              padding='same', dilation_rate=(1,1,1), kernel_initializer='he_normal',
+              kernel_regularizer=None, bias_initializer='zeros', use_bias=True,
+              bias_regularizer=None, return_mask=True, **kwargs):
+      super(PartialConv3D, self).__init__(**kwargs)
+      self.conv3d = Conv3D(
+          filters=filters, kernel_size=kernel_size, strides=strides,
+          padding=padding, dilation_rate=dilation_rate, use_bias=use_bias,
+          kernel_initializer=kernel_initializer, kernel_regularizer=kernel_regularizer,
+          bias_initializer=bias_initializer, bias_regularizer=bias_regularizer
+      )
+      self.kernel_size = kernel_size if isinstance(kernel_size, tuple) else (kernel_size, kernel_size, kernel_size)
+      self.use_bias = use_bias
+      self.return_mask = return_mask
 
-    def call(self, inputs, mask=None):
-      if mask is None:
-        print('Warning: No mask provided to PartialConv3D. Using default mask of ones.')
-        mask = tf.ones_like(inputs)
-      masked_input = inputs * mask
+  def build(self, input_shape):
+    super(PartialConv3D, self).build(input_shape)
+    self.kernel_size = self.kernel_size if isinstance(self.kernel_size, tuple) else (self.kernel_size, self.kernel_size, self.kernel_size)
+    self.mask_kernel_size = tf.ones(shape=self.kernel_size + (1,1), dtype=tf.float32)
 
-      # count valid voxels in conv window:
-      with tf.name_scope('valid_voxels_count'):
-        mask_output = self.conv3d(mask)
-        update_mask = tf.where(mask_output > 0, tf.ones_like(mask_output), tf.zeros_like(mask_output))
+  def call(self, inputs):
+      # Expect inputs to be [features, mask]
+      if isinstance(inputs, list) and len(inputs) == 2:
+          features, mask = inputs
+      else:
+          # If no mask provided, assume all valid
+          features = inputs
+          mask = tf.ones_like(features)
       
-      # convolution over masked input:
-      with tf.name_scope('masked_conv'):
-        raw_output = self.conv3d(masked_input)
+      # Apply mask to input
+      masked_input = features * mask
       
-      # normalize output by valid voxel count:
-      with tf.name_scope('normalization'):
-        mask_output = tf.clip_by_value(mask_output, 1e-8, tf.reduce_max(mask_output)) # avoid division by zero
-        normalized_output = raw_output / mask_output
-      return normalized_output * update_mask, update_mask
-    
-    def compute_output_shape(self, input_shape):
-      conv_output_shape = self.conv3d.compute_output_shape(input_shape)
+      # Convolve the masked input
+      raw_output = self.conv3d(masked_input)
+      
+      # Convolve the mask to get normalization factor
+      #mask_output = self.conv3d(mask) # do we want to use the same conv for the mask?
+      strides = [1, *self.conv3d.strides, 1]
+      padding = self.conv3d.padding.upper()
+      mask_output = tf.nn.conv3d(mask, self.mask_kernel_size, strides=strides,
+                                 padding=padding)
+
+      # Create update mask (where we have valid outputs)
+      update_mask = tf.where(mask_output > 0, tf.ones_like(mask_output), tf.zeros_like(mask_output))
+      
+      # Normalize by number of valid pixels in receptive field
+      #mask_output = tf.clip_by_value(mask_output, 1e-8, tf.reduce_max(mask_output))
+      mask_output = tf.clip_by_value(mask_output, 1e-8, tf.float32.max)
+      normalized_output = raw_output / mask_output
+      
+      return [normalized_output * update_mask, update_mask] if self.return_mask else normalized_output
+
+  def compute_output_shape(self, input_shape):
+      if isinstance(input_shape, list):
+          feature_shape = input_shape[0]
+      else:
+          feature_shape = input_shape
+      conv_output_shape = self.conv3d.compute_output_shape(feature_shape)
       return [conv_output_shape, conv_output_shape]
-def partial_conv_block(input_tensor, filters, name, activation='relu', batch_normalization=True, dropout_rate=None, kernel_regularizer=None, kernel_initializer='he_normal'):
+  def get_config(self):
+      config = super(PartialConv3D, self).get_config()
+      config.update({
+          'filters': self.conv3d.filters,
+          'kernel_size': self.kernel_size,
+          'strides': self.conv3d.strides,
+          'padding': self.conv3d.padding,
+          'dilation_rate': self.conv3d.dilation_rate,
+          'kernel_initializer': self.conv3d.kernel_initializer,
+          'kernel_regularizer': self.conv3d.kernel_regularizer,
+          'bias_initializer': self.conv3d.bias_initializer,
+          'use_bias': self.use_bias
+      })
+      return config
+
+def partial_conv_block(inputs, filters, name, activation='relu', batch_normalization=True, dropout_rate=None, kernel_regularizer=None, kernel_initializer='he_normal'):
   '''
   Partial convolution block for U-Net. NOTE that this only has one convolutional layer.
   '''
-  x = PartialConv3D(filters, kernel_size=(3, 3, 3), padding='same',
-                    name=name, kernel_regularizer=kernel_regularizer,
-                    kernel_initializer=kernel_initializer)(input_tensor)
+  # Handle input unpacking
+  if isinstance(inputs, list) and len(inputs) == 2:
+    features, mask = inputs
+  else:
+    features = inputs
+    mask = None
+  
+  # Apply partial convolution
+  if mask is not None:
+    x, mask_out = PartialConv3D(filters, kernel_size=(3, 3, 3), padding='same',
+                               name=name, kernel_regularizer=kernel_regularizer,
+                               kernel_initializer=kernel_initializer)([features, mask])
+  else:
+    x, mask_out = PartialConv3D(filters, kernel_size=(3, 3, 3), padding='same',
+                               name=name, kernel_regularizer=kernel_regularizer,
+                               kernel_initializer=kernel_initializer)(features)
+  
   x = Activation(activation)(x)
   if batch_normalization:
     x = BatchNormalization()(x)
   if dropout_rate is not None:
     x = Dropout(dropout_rate)(x)
-  return x
-#---------------------------------------------------------
-# U-net with partial convolutions everywhere but the bottleneck
-#---------------------------------------------------------
-def unet_partial_conv_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation='relu', last_activation='softmax', BN_scheme='last', dropout_rate=None, kernel_regularizer=None, kernel_initializer='he_normal', model_name='Partial_Conv_3D_U_Net', report_params=False):
-  '''
-  Constructs a 3D U-Net model with partial convolutions for semantic segmentation.
   
-  Parameters:
-  - input_shape (tuple): The shape of the input tensor (excluding batch dimension). i.e. (None, None, None, 1)
-  - num_classes (int): The number of output classes. Default is 4 (void, wall, filament, halo).
-  - initial_filters (int): The number of filters in the first convolutional layer. Default is 16.
-  - depth (int): The depth of the U-Net architecture. Default is 4.
-  - activation (str): The activation function to use in the convolutional layers. Default is 'relu'.
-  - last_activation (str): The activation function to use in the output layer. Default is 'softmax'.
-  - BN_scheme (str): The batch normalization scheme to use. 'all' = after each conv layer, 'last' = after last conv layer, 'none' = no batch normalization. Default is 'last'.
-  - dropout_rate (float): The dropout rate to use after each convolutional layer. Default is None.
-  - kernel_regularizer: float regularizer for kernel weights. Default is None. Only L2 regularization is supported.
-  - kernel_initializer: str initializer for kernel weights. Default is 'he_normal'. Options are 'he_normal', 'he_uniform', 'glorot_normal', 'glorot_uniform', 'lecun_normal', 'lecun_uniform'.
-  - model_name (str): The name of the model. Default is 'Partial_Conv_3D_U_Net'.
-  - report_params (bool): Whether to return the number of trainable and non-trainable parameters. Default is False.
+  return [x, mask_out]
 
-  Returns:
-  - model (tf.keras.Model): The constructed 3D U-Net model.
-  - trainable_ps (int): The number of trainable parameters in the model (if report_params=True).
-  - nontrainable_ps (int): The number of non-trainable parameters in the model (if report_params=True).
+def unet_partial_conv_3d_with_survey_mask(input_shape, mask_input_shape=None, num_classes=4, initial_filters=16, depth=4, activation='relu', last_activation='softmax', BN_scheme='last', dropout_rate=None, kernel_regularizer=None, kernel_initializer='he_normal', model_name='Partial_Conv_3D_U_Net', report_params=False):
+  '''
+  U-Net with partial convolutions that takes a survey mask as input.
+  The mask indicates which regions are inside the survey boundary.
   '''
   
-  inputs = Input(shape=input_shape)
+  # Two inputs: density field and survey mask
+  density_input = Input(shape=input_shape, name='density')
+  mask_input = Input(shape=mask_input_shape or input_shape, name='survey_mask')
   
   # Encoder
-  x = inputs
+  x = density_input
+  mask = mask_input  # Start with survey boundary mask
   skips = []
   
   for i in range(depth):
     filters = initial_filters * (2 ** i)
-    x = partial_conv_block(x, filters, name=f'encoder_conv_{i+1}', activation=activation,
-                           batch_normalization=(BN_scheme != 'none'),
-                           dropout_rate=dropout_rate if i < depth - 1 else None,
-                           kernel_regularizer=kernel_regularizer, kernel_initializer=kernel_initializer)
-    skips.append(x)
+    x, mask = partial_conv_block([x, mask], filters, name=f'encoder_conv_{i+1}', 
+                                activation=activation,
+                                batch_normalization=(BN_scheme != 'none'),
+                                dropout_rate=dropout_rate if i < depth - 1 else None,
+                                kernel_regularizer=kernel_regularizer, 
+                                kernel_initializer=kernel_initializer)
+    skips.append([x, mask])
     if i < depth - 1:
       x = MaxPooling3D(pool_size=(2, 2, 2), name=f'encoder_pool_{i+1}')(x)
+      mask = MaxPooling3D(pool_size=(2, 2, 2), name=f'encoder_pool_mask_{i+1}')(mask)
+  
   # Bottleneck
   filters = initial_filters * (2 ** depth)
   x = conv_block(x, filters, name='bottleneck_conv', activation=activation,
                  batch_normalization=(BN_scheme != 'none'),
                  dropout_rate=dropout_rate, BN_scheme=BN_scheme, DROP_scheme='none',
                  kernel_regularizer=kernel_regularizer, kernel_initializer=kernel_initializer)
+  
   # Decoder
   for i in reversed(range(depth)):
     filters = initial_filters * (2 ** i)
     x = UpSampling3D(size=(2, 2, 2), name=f'decoder_upsample_{i+1}')(x)
-    x = Concatenate(axis=-1, name=f'decoder_concat_{i+1}')([x, skips[i]])
-    x = partial_conv_block(x, filters, name=f'decoder_conv_{i+1}', activation=activation,
-                           batch_normalization=(BN_scheme != 'none'),
-                           dropout_rate=dropout_rate if i > 0 else None,
-                           kernel_regularizer=kernel_regularizer, kernel_initializer=kernel_initializer)
+    
+    skip_features, skip_mask = skips[i]
+    x = Concatenate(axis=-1, name=f'decoder_concat_{i+1}')([x, skip_features])
+    mask = Concatenate(axis=-1, name=f'decoder_concat_mask_{i+1}')([mask, skip_mask])
+    '''
+    if mask.shape[-1] != x.shape[-1]:
+      # If the mask has different channels, we need to adjust it
+      mask = Conv3D(filters=x.shape[-1], kernel_size=(1, 1, 1), padding='same',
+                    name=f'decoder_mask_adjust_{i+1}', kernel_initializer=kernel_initializer)(mask)
+    '''
+    x, _ = partial_conv_block([x, mask], filters, name=f'decoder_conv_{i+1}', 
+                             activation=activation,
+                             batch_normalization=(BN_scheme != 'none'),
+                             dropout_rate=dropout_rate if i > 0 else None,
+                             kernel_regularizer=kernel_regularizer, 
+                             kernel_initializer=kernel_initializer)
+  
   # Output layer
   outputs = Conv3D(num_classes, kernel_size=(1, 1, 1), name='output_conv')(x)
   if last_activation is not None:
     outputs = Activation(last_activation)(outputs)
-  model = Model(inputs=inputs, outputs=outputs, name=model_name)
-  # calculate number of parameters:
+  
+  model = Model(inputs=[density_input, mask_input], outputs=outputs, name=model_name)
+  
   trainable_ps = layer_utils.count_params(model.trainable_weights)
   nontrainable_ps = layer_utils.count_params(model.non_trainable_weights)
   print(f'Total params: {trainable_ps + nontrainable_ps}')
   print(f'Trainable params: {trainable_ps}')
   print(f'Non-trainable params: {nontrainable_ps}')
-  if report_params == True:
+  
+  if report_params:
     return model, trainable_ps, nontrainable_ps
   return model
 #---------------------------------------------------------

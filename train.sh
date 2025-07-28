@@ -81,6 +81,7 @@ REG_FLAG=0; echo "Regularization: $REG_FLAG";
 PICOTTE_FLAG=0; echo "Picotte: $PICOTTE_FLAG";
 TENSORBOARD=1; echo "TensorBoard: $TENSORBOARD";
 BINARY_MASK=1; echo "Binary Mask: $BINARY_MASK";
+ADD_RSD=0; echo "Add RSD: $ADD_RSD";
 
 # Constructing command line arguments dynamically
 CMD_ARGS="$ROOT_DIR $SIM $L $D $F $LOSS $GRID"

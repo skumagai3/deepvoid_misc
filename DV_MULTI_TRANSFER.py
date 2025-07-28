@@ -639,11 +639,11 @@ nets.save_scores_to_csv_small(scores,ROOT_DIR+'model_scores_summary.csv')
 if SIM == 'TNG':
   nets.save_scores_from_model(FILE_DEN, FILE_MASK, MODEL_PATH+CLONE_NAME, CLONE_FIG_DIR, PRED_PATH,
                               GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,TRAIN_SCORE=False,
-                              BINARY=BINARY_MASK)
+                              BINARY=BINARY_MASK,EXTRA_INPUTS=EXTRA_INPUTS)
 elif SIM == 'BOL':
   nets.save_scores_from_model(FILE_DEN, FILE_MASK, MODEL_PATH+CLONE_NAME, CLONE_FIG_DIR, PRED_PATH,
                               GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,BOXSIZE=256,BOLSHOI_FLAG=True,
-                              TRAIN_SCORE=False,BINARY=BINARY_MASK)
+                              TRAIN_SCORE=False,BINARY=BINARY_MASK, EXTRA_INPUTS=EXTRA_INPUTS)
 print('>>> Finished predicting on training data')
 #===============================================================
 print('Finished training!')
