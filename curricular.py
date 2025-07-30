@@ -40,7 +40,7 @@ required.add_argument('DEPTH', type=int, default=3,
                       help='Depth of the model. Default is 3.')
 required.add_argument('FILTERS', type=int, default=32,
                       help='Number of filters in the model. Default is 32.')
-required.add_argument('LOSS', type=str, choices=['DISCCE', 'FOCAL_CCE', 'SCCE'],
+required.add_argument('LOSS', type=str, choices=['CCE', 'DISCCE', 'FOCAL_CCE', 'SCCE'],
                       help='Loss function to use for training.')
 optional = parser.add_argument_group('optional arguments')
 optional.add_argument('--UNIFORM_FLAG', action='store_true',
@@ -71,7 +71,7 @@ print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS},
 # Set paths (according to Picotte data structure)
 #================================================================
 DATA_PATH = ROOT_DIR + 'data/TNG/'
-FIG_PATH = ROOT_DIR + 'figs/'
+FIG_PATH = ROOT_DIR + 'figs/TNG/'
 MODEL_PATH = ROOT_DIR + 'models/'
 PRED_PATH = ROOT_DIR + 'preds/'
 if not os.path.exists(FIG_PATH):
@@ -141,7 +141,7 @@ def load_data(inter_sep, extra_inputs=None):
         )
     print(f'Features shape: {features.shape}, Labels shape: {labels.shape}')
     return features, labels, extra_input if extra_inputs else None
-def make_dataset(delta, tij_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot=True):
+def make_dataset(delta, tij_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot=False):
     '''
     Create a TensorFlow dataset from the features and labels.
     Args:
@@ -153,8 +153,16 @@ def make_dataset(delta, tij_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot
     Returns:
         tf.data.Dataset: A TensorFlow dataset.
     '''
+    print(f'Creating dataset with {len(delta)} samples...')
+    print(f'Features shape: {delta.shape}, Labels shape: {tij_labels.shape}')
     if one_hot:
         tij_labels = tf.keras.utils.to_categorical(tij_labels, num_classes=N_CLASSES)
+        print(f'One-hot encoding applied. Labels shape: {tij_labels.shape}')
+    # Check for NaN values in delta and tij_labels
+    if np.any(np.isnan(delta)):
+        raise ValueError('NaN values found in delta array.')
+    if np.any(np.isnan(tij_labels)):
+        raise ValueError('NaN values found in tij_labels array.')
     # Ensure delta is a float32 tensor
     delta = tf.convert_to_tensor(delta, dtype=tf.float32)
     # Ensure tij_labels is a float32 tensor
@@ -171,10 +179,13 @@ def make_dataset(delta, tij_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot
 # Make fixed validation set (since we are interested in L=10 Mpc/h)
 #================================================================
 print('Loading validation data for interparticle separation L=10 Mpc/h...')
+L_VAL = '10'
+if L_VAL not in inter_seps:
+    raise ValueError(f'Invalid interparticle separation for validation: {L_VAL}. Must be one of {inter_seps}.')
 if EXTRA_INPUTS:
-    val_features, val_labels, val_extra_input = load_data('10', extra_inputs=EXTRA_INPUTS)
+    val_features, val_labels, val_extra_input = load_data(L_VAL, extra_inputs=EXTRA_INPUTS)
 else:
-    val_features, val_labels, val_extra_input = load_data('10')
+    val_features, val_labels, val_extra_input = load_data(L_VAL)
 val_dataset = make_dataset(val_features, val_labels, batch_size=BATCH_SIZE, shuffle=False)
 if EXTRA_INPUTS:
     val_extra_input = tf.data.Dataset.from_tensor_slices(val_extra_input).batch(BATCH_SIZE)
@@ -196,6 +207,7 @@ last_activation = 'softmax' # NOTE implement changing later
 input_shape = (None, None, None, 1)
 if EXTRA_INPUTS:
     input_shape = (None, None, None, 1 + len(EXTRA_INPUTS.split(','))) # Adjust for extra inputs
+print(f'Input shape: {input_shape}')
 #================================================================
 # Set loss function and metrics
 #================================================================
@@ -205,14 +217,18 @@ if LOSS == 'CCE':
 elif LOSS == 'DISCCE':
     loss_fn = [nets.SCCE_Dice_loss]
 elif LOSS == 'FOCAL_CCE':
-    loss_fn = [nets.categorical_focal_loss(alpha=0.25, gamma=2.0)] # NOTE can be changed later
+    alpha = [0.4, 0.4, 0.15, 0.05]
+    gamma = 2.0
+    loss_fn = [nets.categorical_focal_loss(alpha=alpha, gamma=gamma)]
+    print(f'Using Focal Loss with alpha={alpha} and gamma={gamma}')
 elif LOSS == 'SCCE':
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
 #================================================================
 # Create the model
 #================================================================
 print(f'Creating model with depth={DEPTH}, filters={FILTERS}, loss={LOSS}, uniform={UNIFORM_FLAG}, RSD={ADD_RSD}...')
-strategy = tf.distribute.MirroredStrategy()
+#strategy = tf.distribute.MirroredStrategy()
+strategy = tf.distribute.get_strategy()
 print('Number of devices:', strategy.num_replicas_in_sync)
 with strategy.scope():
     model = nets.unet_3d(
@@ -233,6 +249,13 @@ print(model.summary())
 #================================================================
 # Training loop
 #================================================================
+if 'SCCE' in LOSS or 'DISCCE' in LOSS:
+    ONE_HOT = False
+else:
+    ONE_HOT = True
+print(f'ONE_HOT encoding: {ONE_HOT}')
+print('>>> Starting curricular training...')
+N_EPOCHS_PER_INTER_SEP = 2  # Number of epochs per interparticle separation
 for inter_sep in inter_seps:
     print(f'Starting training for interparticle separation L={inter_sep} Mpc/h...')
     if EXTRA_INPUTS:
@@ -241,7 +264,7 @@ for inter_sep in inter_seps:
         train_features, train_labels, train_extra_input = load_data(inter_sep)
     
     # Create the training dataset
-    train_dataset = make_dataset(train_features, train_labels, batch_size=BATCH_SIZE)
+    train_dataset = make_dataset(train_features, train_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot=ONE_HOT)
 
     # Callbacks:
     callbacks = [
@@ -265,7 +288,7 @@ for inter_sep in inter_seps:
     history = model.fit(
         train_dataset,
         validation_data=val_dataset,
-        epochs=15,  # Set a reasonable number of epochs
+        epochs=N_EPOCHS_PER_INTER_SEP,  # Set a reasonable number of epochs
         callbacks=callbacks,
         verbose=2
     )
@@ -279,3 +302,36 @@ for inter_sep in inter_seps:
 print('Evaluating final model on validation set...')
 val_loss, val_accuracy = model.evaluate(val_dataset, verbose=2)
 print(f'Validation loss: {val_loss}, Validation accuracy: {val_accuracy}')
+#================================================================
+# Plot training history
+#================================================================
+print('>>> Plotting training history...')
+MODEL_FIG_PATH = FIG_PATH + MODEL_NAME + '/'
+if not os.path.exists(MODEL_FIG_PATH):
+    os.makedirs(MODEL_FIG_PATH)
+FILE_METRICS = MODEL_FIG_PATH + '_metrics.png'
+plotter.plot_training_metrics_all(history, FILE_METRICS,savefig=True)
+print(f'Training history plot saved to {FILE_METRICS}')
+#================================================================
+# Predictions on validation set and slice plots
+#================================================================
+scores = {}
+scores['val_loss'] = val_loss; scores['val_accuracy'] = val_accuracy
+print('>>> Making predictions on validation set...')
+predictions = model.predict(val_dataset, verbose=2, batch_size=BATCH_SIZE)
+if EXTRA_INPUTS:
+    val_extra_input = tf.concat([val_features, val_extra_input], axis=-1)
+FILE_PRED = MODEL_FIG_PATH + 'predictions_L10.png'
+nets.save_scores_from_fvol(
+    val_labels, predictions, MODEL_PATH + MODEL_NAME + '_L10.h5',
+    MODEL_FIG_PATH, scores, N_CLASSES, VAL_FLAG = True)
+# Save slice plots:
+nets.save_scores_from_model(DATA_PATH + data_info['10'], FILE_MASK,
+                           MODEL_PATH + MODEL_NAME + '_L10.h5',
+                           MODEL_FIG_PATH, FILE_PRED,
+                           GRID=GRID, SUBGRID=SUBGRID, OFF=OFF,
+                           TRAIN_SCORE=False, EXTRA_INPUTS=EXTRA_INPUTS)
+print('>>> Curricular training completed successfully.')
+print('>>> Model and predictions saved in:', MODEL_FIG_PATH)
+print('>>> Predictions saved in:', FILE_PRED)
+print('>>> Training history plot saved in:', FILE_METRICS)
