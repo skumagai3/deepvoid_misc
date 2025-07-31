@@ -947,15 +947,15 @@ def precision_micro_keras(num_classes=4, int_labels=True):
     Returns: micro precision. tf.Tensor.
     '''
     if not int_labels:
-      y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.argmax(y_true, axis=-1)
       y_true = tf.expand_dims(y_true, axis=-1)
-    y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.argmax(y_pred, axis=-1)
     y_pred = tf.expand_dims(y_pred, axis=-1)
-    y_true = K.cast(y_true, 'float32')
-    y_pred = K.cast(y_pred, 'float32')
-    TP = K.sum(y_true * y_pred)
-    FP = K.sum((1-y_true) * y_pred)
-    precision = TP / (TP + FP + K.epsilon())
+    y_true = tf.cast(y_true, 'float32')
+    y_pred = tf.cast(y_pred, 'float32')
+    TP = tf.reduce_sum(y_true * y_pred)
+    FP = tf.reduce_sum((1-y_true) * y_pred)
+    precision = TP / (TP + FP + tf.keras.backend.epsilon())
     return precision
   return precision_micro
 def recall_micro_keras(num_classes=4, int_labels=True):
@@ -969,15 +969,15 @@ def recall_micro_keras(num_classes=4, int_labels=True):
     Returns: micro recall. tf.Tensor.
     '''
     if not int_labels:
-      y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.argmax(y_true, axis=-1)
       y_true = tf.expand_dims(y_true, axis=-1)
-    y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.argmax(y_pred, axis=-1)
     y_pred = tf.expand_dims(y_pred, axis=-1)
-    y_true = K.cast(y_true, 'float32')
-    y_pred = K.cast(y_pred, 'float32')
-    TP = K.sum(y_true * y_pred)
-    FN = K.sum(y_true * (1-y_pred))
-    recall = TP / (TP + FN + K.epsilon())
+    y_true = tf.cast(y_true, 'float32')
+    y_pred = tf.cast(y_pred, 'float32')
+    TP = tf.reduce_sum(y_true * y_pred)
+    FN = tf.reduce_sum(y_true * (1-y_pred))
+    recall = TP / (TP + FN + tf.keras.backend.epsilon())
     return recall
   return recall_micro
 def F1_micro_keras(num_classes=4, int_labels=True):
