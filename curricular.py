@@ -17,7 +17,7 @@ import NETS_LITE as nets
 import absl.logging
 import plotter
 import datetime
-from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau
+from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, TensorBoard, EarlyStopping
 absl.logging.set_verbosity(absl.logging.ERROR)
 print('TensorFlow version:', tf.__version__)
 print('CUDA?', tf.test.is_built_with_cuda())
@@ -214,7 +214,15 @@ print(f'Input shape: {input_shape}')
 #================================================================
 # Set loss function and metrics
 #================================================================
+if 'SCCE' in LOSS or 'DISCCE' in LOSS:
+    ONE_HOT = False
+else:
+    ONE_HOT = True
+print(f'ONE_HOT encoding: {ONE_HOT}')
 metrics = ['accuracy']
+metrics += [nets.MCC_keras(int_labels=not ONE_HOT),
+            nets.F1_micro_keras(int_labels=not ONE_HOT),
+            nets.void_F1_keras(int_labels=not ONE_HOT)]
 if LOSS == 'CCE':
     loss_fn = tf.keras.losses.CategoricalCrossentropy()
 elif LOSS == 'DISCCE':
@@ -226,6 +234,9 @@ elif LOSS == 'FOCAL_CCE':
     print(f'Using Focal Loss with alpha={alpha} and gamma={gamma}')
 elif LOSS == 'SCCE':
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
+# Make tensorboard directory
+log_dir = ROOT_DIR + 'logs/fit/' + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") + '/'
+os.makedirs(log_dir, exist_ok=True)
 #================================================================
 # Create the model
 #================================================================
@@ -252,14 +263,26 @@ print(model.summary())
 #================================================================
 # Training loop
 #================================================================
-if 'SCCE' in LOSS or 'DISCCE' in LOSS:
-    ONE_HOT = False
-else:
-    ONE_HOT = True
-print(f'ONE_HOT encoding: {ONE_HOT}')
 print('>>> Starting curricular training...')
-N_EPOCHS_PER_INTER_SEP = 20  # Number of epochs per interparticle separation
-for inter_sep in inter_seps:
+N_EPOCHS_PER_INTER_SEP = 50  # Number of epochs per interparticle separation
+EARLY_STOPPING_PATIENCE = 5  # Patience for early stopping
+reduce_LR = ReduceLROnPlateau(
+            patience=LEARNING_RATE_PATIENCE,
+            factor=0.5,
+            monitor='val_loss',
+            mode='min',
+            verbose=1,
+            min_lr=1e-6
+)
+# set freezing scheme:
+density_to_freeze_map = {
+    '0.33': 0,  # No freezing for the lowest interparticle separation
+    '3': 1,     # Freeze first block for L=3 Mpc/h
+    '5': 2,     # Freeze first two blocks for L=5 Mpc/h
+    '7': 3,     # Freeze first three blocks for L=7 Mpc/h
+    '10': 4     # Freeze first four blocks for L=10 Mpc/h
+}
+for i, inter_sep in enumerate(inter_seps):
     print(f'Starting training for interparticle separation L={inter_sep} Mpc/h...')
     if EXTRA_INPUTS:
         train_features, train_labels, train_extra_input = load_data(inter_sep, extra_inputs=EXTRA_INPUTS)
@@ -268,8 +291,27 @@ for inter_sep in inter_seps:
     
     # Create the training dataset
     train_dataset = make_dataset(train_features, train_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot=ONE_HOT)
-
+    # freeze layers based on interparticle separation. freeze more layers for larger interparticle separations:
+    nets.freeze_encoder_blocks(
+        model,
+        density_to_freeze_map[inter_sep],
+    )
+    if inter_sep != '0.33':
+        # recompile the model after freezing layers
+        model.compile(
+            optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
+            loss=loss_fn,
+            metrics=metrics
+    )
+        print(f'Model recompiled after freezing layers for interparticle separation L={inter_sep}')
     # Callbacks:
+    early_stop = EarlyStopping(
+        monitor='val_loss',
+        patience=EARLY_STOPPING_PATIENCE,
+        mode='min',
+        verbose=1,
+        restore_best_weights=True
+    )
     callbacks = [
         ModelCheckpoint(
             filepath=MODEL_PATH + MODEL_NAME + f'_L{inter_sep}.h5',
@@ -277,15 +319,22 @@ for inter_sep in inter_seps:
             save_best_only=True,
             mode='min'
         ),
-        ReduceLROnPlateau(
-            patience=LEARNING_RATE_PATIENCE,
-            factor=0.5,
-            monitor='val_loss',
-            mode='min',
-            verbose=1,
-            min_lr=1e-6
-        )
+        TensorBoard(
+            log_dir=log_dir,
+            histogram_freq=1,
+            write_graph=False,
+            update_freq='epoch',
+        ),
+        reduce_LR,
+        early_stop
     ]
+    # add printing # of parameters:
+    total_params = model.count_params()
+    print(f'Total number of parameters in the model: {total_params}')
+    trainable_params = np.sum([np.prod(v.get_shape()) for v in model.trainable_variables])
+    print(f'Trainable parameters: {trainable_params}')
+    non_trainable_params = total_params - trainable_params
+    print(f'Non-trainable parameters: {non_trainable_params}')
     
     # Train the model
     history = model.fit(
@@ -295,10 +344,18 @@ for inter_sep in inter_seps:
         callbacks=callbacks,
         verbose=2
     )
+
+    if early_stop.stopped_epoch > 0:
+        print(f'Early stopping triggered after {early_stop.stopped_epoch} epochs.')
+    
+    if i == len(inter_seps) - 1:
+        print('Reached the last interparticle separation. Ending training loop.')
+        break
     
     # Save the model after each interparticle separation
     model.save(MODEL_PATH + MODEL_NAME + f'_L{inter_sep}.h5')
     print(f'Model saved for interparticle separation L={inter_sep} Mpc/h.')
+    print('Proceeding to next interparticle separation...\n')
 #================================================================
 # Final evaluation on the validation set
 #================================================================

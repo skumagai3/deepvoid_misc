@@ -2204,6 +2204,7 @@ def parse_model_name(MODEL_NAME):
     'base_L': base_L,
     'tran_L': tran_L
   }
+# CL FREEZING FUNCTIONS:
 # adding fxn that gets layer index from its name, for freezing purposes:
 def get_layer_index(model, layer_name):
   '''
@@ -2214,6 +2215,26 @@ def get_layer_index(model, layer_name):
     if layer.name == layer_name:
       return i
   return None
+def freeze_encoder_blocks(model, num_blocks_to_freeze):
+    """
+    Freezes the first `num_blocks_to_freeze` encoder stages in the model.
+    For a 3-block encoder (D0, D1, D2), valid values are 0 through 3.
+    """
+    block_prefixes = ['encoder_block_D0', 'encoder_block_D1', 'encoder_block_D2']
+
+    if num_blocks_to_freeze < 0 or num_blocks_to_freeze > len(block_prefixes):
+        raise ValueError(f"num_blocks_to_freeze must be in range [0, {len(block_prefixes)}]")
+
+    frozen_layer_names = []
+    for i in range(num_blocks_to_freeze):
+        prefix = block_prefixes[i]
+        for layer in model.layers:
+            if layer.name.startswith(prefix) or layer.name.startswith(f'batch_normalization_{i}') or layer.name.startswith(f'activation_{i}'):
+                layer.trainable = False
+                frozen_layer_names.append(layer.name)
+
+    print(f"Frozen encoder blocks: {block_prefixes[:num_blocks_to_freeze]}")
+    print(f"Frozen layers: {frozen_layer_names}")
 
 # adding a function that already existed i think?
 def load_dict_from_text(file_path,string_break='total_params'):
