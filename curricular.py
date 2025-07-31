@@ -258,7 +258,7 @@ else:
     ONE_HOT = True
 print(f'ONE_HOT encoding: {ONE_HOT}')
 print('>>> Starting curricular training...')
-N_EPOCHS_PER_INTER_SEP = 2  # Number of epochs per interparticle separation
+N_EPOCHS_PER_INTER_SEP = 20  # Number of epochs per interparticle separation
 for inter_sep in inter_seps:
     print(f'Starting training for interparticle separation L={inter_sep} Mpc/h...')
     if EXTRA_INPUTS:
@@ -312,7 +312,7 @@ print('>>> Plotting training history...')
 MODEL_FIG_PATH = FIG_PATH + MODEL_NAME + '/'
 if not os.path.exists(MODEL_FIG_PATH):
     os.makedirs(MODEL_FIG_PATH)
-FILE_METRICS = MODEL_FIG_PATH + '_metrics.png'
+FILE_METRICS = MODEL_FIG_PATH + MODEL_NAME + '_metrics.png'
 plotter.plot_training_metrics_all(history, FILE_METRICS,savefig=True)
 print(f'Training history plot saved to {FILE_METRICS}')
 #================================================================
