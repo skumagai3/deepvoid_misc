@@ -25,8 +25,8 @@ print('CUDA?', tf.test.is_built_with_cuda())
 gpus = tf.config.list_physical_devices('GPU')
 print('GPUs available:', gpus)
 nets.K.set_image_data_format('channels_last')
-from tensorflow.keras import mixed_precision
-mixed_precision.set_global_policy('mixed_float16')
+#from tensorflow.keras import mixed_precision
+#mixed_precision.set_global_policy('mixed_float16')
 #===============================================================
 # Set random seed
 #===============================================================
