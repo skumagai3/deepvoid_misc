@@ -267,7 +267,7 @@ print(model.summary())
 #================================================================
 print('>>> Starting curricular training...')
 N_EPOCHS_PER_INTER_SEP = 50  # Number of epochs per interparticle separation
-EARLY_STOPPING_PATIENCE = 5  # Patience for early stopping
+EARLY_STOPPING_PATIENCE = 10  # Patience for early stopping
 reduce_LR = ReduceLROnPlateau(
             patience=LEARNING_RATE_PATIENCE,
             factor=0.5,
