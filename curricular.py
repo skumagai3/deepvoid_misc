@@ -367,8 +367,8 @@ for i, inter_sep in enumerate(inter_seps):
 # Final evaluation on the validation set
 #================================================================
 print('Evaluating final model on validation set...')
-val_loss, val_accuracy = model.evaluate(val_dataset, verbose=2)
-print(f'Validation loss: {val_loss}, Validation accuracy: {val_accuracy}')
+results = model.evaluate(val_dataset, verbose=2)
+print('Final evaluation results:', results)
 #================================================================
 # Plot training history
 #================================================================
@@ -383,7 +383,6 @@ print(f'Training history plot saved to {FILE_METRICS}')
 # Predictions on validation set and slice plots
 #================================================================
 scores = {}
-scores['val_loss'] = val_loss; scores['val_accuracy'] = val_accuracy
 print('>>> Making predictions on validation set...')
 predictions = model.predict(val_dataset, verbose=2, batch_size=BATCH_SIZE)
 if EXTRA_INPUTS:
