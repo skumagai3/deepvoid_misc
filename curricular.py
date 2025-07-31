@@ -331,7 +331,7 @@ for i, inter_sep in enumerate(inter_seps):
     # add printing # of parameters:
     total_params = model.count_params()
     print(f'Total number of parameters in the model: {total_params}')
-    trainable_params = np.sum([np.prod(v.get_shape()) for v in model.trainable_variables])
+    trainable_params = np.sum([np.prod(v.shape) for v in model.trainable_variables])
     print(f'Trainable parameters: {trainable_params}')
     non_trainable_params = total_params - trainable_params
     print(f'Non-trainable parameters: {non_trainable_params}')
