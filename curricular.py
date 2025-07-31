@@ -43,7 +43,7 @@ required.add_argument('DEPTH', type=int, default=3,
                       help='Depth of the model. Default is 3.')
 required.add_argument('FILTERS', type=int, default=32,
                       help='Number of filters in the model. Default is 32.')
-required.add_argument('LOSS', type=str, choices=['CCE', 'DISCCE', 'FOCAL_CCE', 'SCCE'],
+required.add_argument('LOSS', type=str, choices=['CCE', 'DISCCE', 'FOCAL_CCE', 'SCCE', 'SCCE_Void_Penalty'],
                       help='Loss function to use for training.')
 optional = parser.add_argument_group('optional arguments')
 optional.add_argument('--UNIFORM_FLAG', action='store_true',
@@ -234,6 +234,8 @@ elif LOSS == 'FOCAL_CCE':
     print(f'Using Focal Loss with alpha={alpha} and gamma={gamma}')
 elif LOSS == 'SCCE':
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
+elif LOSS == 'SCCE_Void_Penalty':
+    loss_fn = [nets.SCCE_void_penalty]
 # Make tensorboard directory
 log_dir = ROOT_DIR + 'logs/fit/' + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") + '/'
 os.makedirs(log_dir, exist_ok=True)
@@ -277,10 +279,10 @@ reduce_LR = ReduceLROnPlateau(
 # set freezing scheme:
 density_to_freeze_map = {
     '0.33': 0,  # No freezing for the lowest interparticle separation
-    '3': 1,     # Freeze first block for L=3 Mpc/h
-    '5': 2,     # Freeze first two blocks for L=5 Mpc/h
-    '7': 3,     # Freeze first three blocks for L=7 Mpc/h
-    '10': 4     # Freeze first four blocks for L=10 Mpc/h
+    '3': 0,     # Freeze first block for L=3 Mpc/h
+    '5': 1,     # Freeze first two blocks for L=5 Mpc/h
+    '7': 2,     # Freeze first three blocks for L=7 Mpc/h
+    '10': 3     # Freeze first four blocks for L=10 Mpc/h
 }
 for i, inter_sep in enumerate(inter_seps):
     print(f'Starting training for interparticle separation L={inter_sep} Mpc/h...')
@@ -312,6 +314,10 @@ for i, inter_sep in enumerate(inter_seps):
         verbose=1,
         restore_best_weights=True
     )
+    void_fraction_monitor = nets.VoidFractionMonitor(
+        val_dataset=val_dataset,
+        max_batches=10
+    )
     callbacks = [
         ModelCheckpoint(
             filepath=MODEL_PATH + MODEL_NAME + f'_L{inter_sep}.h5',
@@ -326,7 +332,8 @@ for i, inter_sep in enumerate(inter_seps):
             update_freq='epoch',
         ),
         reduce_LR,
-        early_stop
+        early_stop,
+        void_fraction_monitor
     ]
     # add printing # of parameters:
     total_params = model.count_params()

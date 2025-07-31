@@ -508,6 +508,59 @@ def SCCE_Dice_loss(y_true, y_pred, cce_weight=1.0, dice_weight=1.0):
   # Weighted average of SCCE loss and dice score
   return cce_weight * scce_loss + dice_weight * (1 - dice_score)
 #---------------------------------------------------------
+# Custom SCCE loss that penalizes for predicting too many voids
+#---------------------------------------------------------
+def SCCE_void_penalty(y_true, y_pred, max_void_fraction=0.7, weight=0.1):
+  void_preds = y_pred[..., 0]
+  void_fraction = tf.reduce_mean(void_preds)
+  penalty = tf.nn.relu(void_fraction - max_void_fraction)
+  scce_loss = tf.keras.losses.sparse_categorical_crossentropy(y_true, y_pred)
+  return scce_loss + weight * penalty
+#---------------------------------------------------------
+# Custom class callback to monitor void fraction in training
+#---------------------------------------------------------
+class VoidFractionMonitor(Callback):
+    def __init__(self, val_dataset, void_class=0, max_batches=None):
+        """
+        val_dataset: tf.data.Dataset yielding (X, y) pairs.
+        void_class: int, the class index representing voids.
+        max_batches: optional int to limit how many batches to check (for speed).
+        """
+        super().__init__()
+        self.val_dataset = val_dataset
+        self.void_class = void_class
+        self.max_batches = max_batches
+
+    def on_epoch_end(self, epoch, logs=None):
+        pred_classes = []
+        true_classes = []
+
+        for i, (x_batch, y_batch) in enumerate(self.val_dataset):
+            if self.max_batches and i >= self.max_batches:
+                break
+
+            y_pred = self.model.predict(x_batch, verbose=0)
+            y_pred_cls = np.argmax(y_pred, axis=-1)
+
+            if y_batch.shape[-1] > 1:
+                y_true_cls = np.argmax(y_batch, axis=-1)
+            else:
+                y_true_cls = y_batch.numpy()
+
+            pred_classes.append(y_pred_cls.flatten())
+            true_classes.append(y_true_cls.flatten())
+
+        y_pred_all = np.concatenate(pred_classes)
+        y_true_all = np.concatenate(true_classes)
+
+        pred_void_frac = np.mean(y_pred_all == self.void_class)
+        true_void_frac = np.mean(y_true_all == self.void_class)
+
+        print(
+            f"[Epoch {epoch+1}] Predicted void fraction: {pred_void_frac:.4f} | "
+            f"True void fraction: {true_void_frac:.4f}"
+        )
+#---------------------------------------------------------
 # U-Net creation functions
 #----------------------------------------------------------
 #---------------------------------------------------------
