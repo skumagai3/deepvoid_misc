@@ -992,7 +992,7 @@ def F1_micro_keras(num_classes=4, int_labels=True):
     '''
     precision = precision_micro_keras(num_classes, int_labels)(y_true, y_pred)
     recall = recall_micro_keras(num_classes, int_labels)(y_true, y_pred)
-    f1 = 2 * precision * recall / (precision + recall + K.epsilon())
+    f1 = 2 * precision * recall / (precision + recall + tf.keras.backend.epsilon())
     return f1
   return F1_micro
 def MCC_keras(num_classes=4, int_labels=True):
@@ -1006,19 +1006,19 @@ def MCC_keras(num_classes=4, int_labels=True):
     int_labels: bool whether or not labels are integer or one-hot. def True.
     Returns: Matthews correlation coefficient.
     '''
-    y_pred = K.cast(K.argmax(y_pred, axis=-1), 'int32')
+    y_pred = tf.cast(tf.argmax(y_pred, axis=-1), 'int32')
     # if last shape is 4, argmax it.
     if y_true.shape[-1] == 4:
-      y_true = K.cast(K.argmax(y_true, axis=-1), 'int32')
+      y_true = tf.cast(tf.argmax(y_true, axis=-1), 'int32')
     else:
-      y_true = K.cast(K.squeeze(y_true, axis=-1), 'int32')
+      y_true = tf.cast(tf.squeeze(y_true, axis=-1), 'int32')
     #if not int_labels:
     #  y_true = K.cast(K.argmax(y_true, axis=-1), 'int32')
     #else:
     #  y_true = K.cast(K.squeeze(y_true, axis=-1), 'int32')
     # reshape y_true and y_pred to 1D tensors.
-    y_true = K.flatten(y_true)
-    y_pred = K.flatten(y_pred)
+    y_true = tf.reshape(y_true, [-1])
+    y_pred = tf.reshape(y_pred, [-1])
     # calculate confusion matrix.
     C = tf.math.confusion_matrix(
       labels=y_true,
@@ -1028,17 +1028,17 @@ def MCC_keras(num_classes=4, int_labels=True):
       weights=None,
     )
     # cast confusion matrix to float32.
-    t_sum = K.cast(tf.reduce_sum(C,axis=1), 'float32')
-    p_sum = K.cast(tf.reduce_sum(C,axis=0), 'float32')
-    n_correct = K.cast(tf.linalg.trace(C), 'float32')
-    n_samples = K.cast(tf.reduce_sum(p_sum), 'float32')
+    t_sum = tf.cast(tf.reduce_sum(C,axis=1), 'float32')
+    p_sum = tf.cast(tf.reduce_sum(C,axis=0), 'float32')
+    n_correct = tf.cast(tf.linalg.trace(C), 'float32')
+    n_samples = tf.cast(tf.reduce_sum(p_sum), 'float32')
     # calculate MCC.
     cov_ytyp = n_correct * n_samples - tf.tensordot(t_sum, p_sum, axes=1)
     cov_ypyp = n_samples**2 - tf.tensordot(p_sum, p_sum, axes=1)
     cov_ytyt = n_samples**2 - tf.tensordot(t_sum, t_sum, axes=1)
-    mcc_value = cov_ytyp / K.sqrt(cov_ytyt * cov_ypyp + K.epsilon())
+    mcc_value = cov_ytyp / tf.sqrt(cov_ytyt * cov_ypyp + tf.keras.backend.epsilon())
     # handle NaN:
-    mcc_value = K.switch(tf.math.is_nan(mcc_value), K.zeros_like(mcc_value), mcc_value)
+    mcc_value = tf.where(tf.math.is_nan(mcc_value), tf.zeros_like(mcc_value), mcc_value)
     return mcc_value
   return MCC
 def balanced_accuracy_keras(num_classes=4, int_labels=True):
@@ -1101,18 +1101,18 @@ def void_F1_keras(num_classes=4, int_labels=True):
     Returns: F1 score for the void class.
     '''
     if not int_labels:
-      y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.argmax(y_true, axis=-1)
       y_true = tf.expand_dims(y_true, axis=-1)
-    y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.argmax(y_pred, axis=-1)
     y_pred = tf.expand_dims(y_pred, axis=-1)
-    void_true = K.cast(K.equal(y_true, 0), 'float')
-    void_pred = K.cast(K.equal(y_pred, 0), 'float')
-    TP = K.sum(void_true * void_pred)
-    FP = K.sum((1-void_true) * void_pred)
-    FN = K.sum(void_true * (1-void_pred))
-    precision = TP / (TP + FP + K.epsilon())
-    recall = TP / (TP + FN + K.epsilon())
-    f1 = 2 * precision * recall / (precision + recall + K.epsilon())
+    void_true = tf.cast(tf.equal(y_true, 0), 'float')
+    void_pred = tf.cast(tf.equal(y_pred, 0), 'float')
+    TP = tf.reduce_sum(void_true * void_pred)
+    FP = tf.reduce_sum((1-void_true) * void_pred)
+    FN = tf.reduce_sum(void_true * (1-void_pred))
+    precision = TP / (TP + FP + tf.keras.backend.epsilon())
+    recall = TP / (TP + FN + tf.keras.backend.epsilon())
+    f1 = 2 * precision * recall / (precision + recall + tf.keras.backend.epsilon())
     return f1
   return void_F1
 def true_wall_pred_as_void_keras(num_classes=4, int_labels=True):
