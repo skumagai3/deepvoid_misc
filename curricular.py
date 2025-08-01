@@ -284,6 +284,25 @@ density_to_freeze_map = {
     '7': 2,     # Freeze first three blocks for L=7 Mpc/h
     '10': 3     # Freeze first four blocks for L=10 Mpc/h
 }
+# create combined history object to store metrics for all interparticle separations
+combined_history = {
+    'loss': [],
+    'val_loss': [],
+    'accuracy': [],
+    'val_accuracy': [],
+    'f1_micro': [],
+    'val_f1_micro': [],
+    'mcc': [],
+    'val_mcc': [],
+    'void_f1': [],
+    'val_void_f1': []
+    'void_fraction': [],
+    'val_void_fraction': []
+}
+#================================================================
+# Training loop over interparticle separations
+#================================================================
+print('>>> Starting training loop over interparticle separations...')
 for i, inter_sep in enumerate(inter_seps):
     print(f'Starting training for interparticle separation L={inter_sep} Mpc/h...')
     if EXTRA_INPUTS:
@@ -316,7 +335,7 @@ for i, inter_sep in enumerate(inter_seps):
     )
     void_fraction_monitor = nets.VoidFractionMonitor(
         val_dataset=val_dataset,
-        max_batches=10
+        max_batches=16
     )
     callbacks = [
         ModelCheckpoint(
@@ -352,11 +371,18 @@ for i, inter_sep in enumerate(inter_seps):
         verbose=2
     )
 
+    # Append the history to the combined history
+    for key in combined_history.keys():
+        if key in history.history:
+            combined_history[key].extend(history.history[key])
+    print(f'Combined history now has {len(combined_history["loss"])} total epochs')
+    
+
     if early_stop.stopped_epoch > 0:
         print(f'Early stopping triggered after {early_stop.stopped_epoch} epochs.')
     
     if i == len(inter_seps) - 1:
-        print('Reached the last interparticle separation. Ending training loop.')
+        print('>>> Reached the last interparticle separation. Ending training loop.')
         break
     
     # Save the model after each interparticle separation
@@ -372,12 +398,16 @@ print('Final evaluation results:', results)
 #================================================================
 # Plot training history
 #================================================================
+class CombinedHistory:
+    def __init__(self, history_dict):
+        self.history = history_dict
+final_history = CombinedHistory(combined_history)
 print('>>> Plotting training history...')
 MODEL_FIG_PATH = FIG_PATH + MODEL_NAME + '/'
 if not os.path.exists(MODEL_FIG_PATH):
     os.makedirs(MODEL_FIG_PATH)
 FILE_METRICS = MODEL_FIG_PATH + MODEL_NAME + '_metrics.png'
-plotter.plot_training_metrics_all(history, FILE_METRICS,savefig=True)
+plotter.plot_training_metrics_all(final_history, FILE_METRICS,savefig=True)
 print(f'Training history plot saved to {FILE_METRICS}')
 #================================================================
 # Predictions on validation set and slice plots
