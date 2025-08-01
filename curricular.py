@@ -295,7 +295,7 @@ combined_history = {
     'mcc': [],
     'val_mcc': [],
     'void_f1': [],
-    'val_void_f1': []
+    'val_void_f1': [],
     'void_fraction': [],
     'val_void_fraction': []
 }
