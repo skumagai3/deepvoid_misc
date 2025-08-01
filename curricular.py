@@ -303,6 +303,12 @@ combined_history = {
     'lr': [],
     'epoch': []
 }
+tensor_board_callback = TensorBoard(
+    log_dir=log_dir,
+    histogram_freq=1,
+    write_graph=False,
+    update_freq='epoch',
+)
 #================================================================
 # Training loop over interparticle separations
 #================================================================
@@ -352,12 +358,7 @@ for i, inter_sep in enumerate(inter_seps):
             mode='min',
             verbose=1
         ),
-        TensorBoard(
-            log_dir=log_dir,
-            histogram_freq=1,
-            write_graph=False,
-            update_freq='epoch',
-        ),
+        tensor_board_callback,
         reduce_LR,
         early_stop,
         void_fraction_monitor
