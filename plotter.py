@@ -643,12 +643,14 @@ def plot_training_metric_to_ax(ax,history,metric,GRID=True,CSV_FLAG=False,**kwar
     '''
     if not CSV_FLAG:
         metric_dict = history.history
-        epochs = len(history.epoch)
+        #epochs = len(history.epoch) # this breaks when no epoch 
         if metric not in history.history.keys():
             raise ValueError(f'{metric} not found in history.history.keys()')
+        epochs = len(history.history[metric])
     else:
         metric_dict = history
-        epochs = len(history['epoch'])
+        #epochs = len(history['epoch'])
+        epochs = len(metric_dict[metric])
         if metric not in history.keys():
             raise ValueError(f'{metric} not found in dict.keys()')
     full_epochs = np.arange(0,epochs)
