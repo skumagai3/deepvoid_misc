@@ -342,12 +342,15 @@ for i, inter_sep in enumerate(inter_seps):
         val_dataset=val_dataset,
         max_batches=16
     )
+    checkpt_path = MODEL_PATH + MODEL_NAME + f'_L{inter_sep}.h5'
     callbacks = [
         ModelCheckpoint(
-            filepath=MODEL_PATH + MODEL_NAME + f'_L{inter_sep}.h5',
+            filepath=checkpt_path,
             monitor='val_loss',
             save_best_only=True,
-            mode='min'
+            save_weights_only=False,
+            mode='min',
+            verbose=1
         ),
         TensorBoard(
             log_dir=log_dir,
@@ -375,6 +378,22 @@ for i, inter_sep in enumerate(inter_seps):
         callbacks=callbacks,
         verbose=2
     )
+
+    # always load the best model weights after training
+    if os.path.exists(checkpt_path):
+        print(f'Loading best model from {checkpt_path}')
+        best_model = tf.keras.models.load_model(checkpt_path, custom_objects={
+            'MCC_keras': nets.MCC_keras,
+            'F1_micro_keras': nets.F1_micro_keras,
+            'void_F1_keras': nets.void_F1_keras,
+            'SCCE_Dice_loss': nets.SCCE_Dice_loss,
+            'categorical_focal_loss': nets.categorical_focal_loss,
+            'SCCE_void_penalty': nets.SCCE_void_penalty,
+            'categorical_focal_loss': nets.categorical_focal_loss,
+            'VoidFractionMonitor': nets.VoidFractionMonitor
+        })
+        model.set_weights(best_model.get_weights())
+        print('Best model weights loaded.')
 
     # Append the history to the combined history
     for key in combined_history.keys():
@@ -428,9 +447,11 @@ print(f'Training history plot saved to {FILE_METRICS}')
 scores = {}
 print('>>> Making predictions on validation set...')
 predictions = model.predict(val_dataset, verbose=2, batch_size=BATCH_SIZE)
+print('>>> Predictions made on validation set.')
+print('Predictions shape:', predictions.shape)
 if EXTRA_INPUTS:
     val_extra_input = tf.concat([val_features, val_extra_input], axis=-1)
-FILE_PRED = MODEL_FIG_PATH + 'predictions_L10.png'
+FILE_PRED = PRED_PATH+ MODEL_NAME + 'predictions_L10.fvol'
 nets.save_scores_from_fvol(
     val_labels, predictions, MODEL_PATH + MODEL_NAME + '_L10.h5',
     MODEL_FIG_PATH, scores, N_CLASSES, VAL_FLAG = True)
