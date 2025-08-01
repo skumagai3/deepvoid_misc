@@ -299,7 +299,9 @@ combined_history = {
     'void_f1': [],
     'val_void_f1': [],
     'void_fraction': [],
-    'val_void_fraction': []
+    'val_void_fraction': [],
+    'lr': [],
+    'epoch': []
 }
 #================================================================
 # Training loop over interparticle separations
