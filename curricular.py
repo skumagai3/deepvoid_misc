@@ -307,6 +307,7 @@ combined_history = {
 # Training loop over interparticle separations
 #================================================================
 print('>>> Starting training loop over interparticle separations...')
+epoch_offset = 0
 for i, inter_sep in enumerate(inter_seps):
     print(f'Starting training for interparticle separation L={inter_sep} Mpc/h...')
     if EXTRA_INPUTS:
@@ -380,6 +381,14 @@ for i, inter_sep in enumerate(inter_seps):
         if key in history.history:
             combined_history[key].extend(history.history[key])
     print(f'Combined history now has {len(combined_history["loss"])} total epochs')
+
+    # update epochs
+    actual_epochs = len(history.history['loss'])
+    epoch_numbers = list((range(epoch_offset, epoch_offset + actual_epochs)))
+    combined_history['epoch'].extend(epoch_numbers)
+    epoch_offset += actual_epochs
+    print(f'Combined history now has {len(combined_history["epoch"])} total epochs')
+    print(f'Current epoch range: {epoch_numbers[0]} to {epoch_numbers[-1]}')
     
 
     if early_stop.stopped_epoch > 0:
