@@ -54,6 +54,8 @@ optional.add_argument('--LEARNING_RATE', type=float, default=1e-4,
                       help='Learning rate for the optimizer.')
 optional.add_argument('--LEARNING_RATE_PATIENCE', type=int, default=10,
                       help='Patience for learning rate reduction.')
+optional.add_argument('--EARLY_STOP_PATIENCE', type=int, default=10,
+                      help='Patience for early stopping.')
 optional.add_argument('--EXTRA_INPUTS', type=str, default=None,
                       help='Additional inputs for the model such as color or fluxes.')
 optional.add_argument('--ADD_RSD', action='store_true',
@@ -67,6 +69,7 @@ UNIFORM_FLAG = args.UNIFORM_FLAG
 BATCH_SIZE = args.BATCH_SIZE
 LEARNING_RATE = args.LEARNING_RATE
 LEARNING_RATE_PATIENCE = args.LEARNING_RATE_PATIENCE
+EARLY_STOP_PATIENCE = args.EARLY_STOP_PATIENCE
 EXTRA_INPUTS = args.EXTRA_INPUTS
 ADD_RSD = args.ADD_RSD
 print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}')
@@ -267,7 +270,6 @@ print(model.summary())
 #================================================================
 print('>>> Starting curricular training...')
 N_EPOCHS_PER_INTER_SEP = 50  # Number of epochs per interparticle separation
-EARLY_STOPPING_PATIENCE = 10  # Patience for early stopping
 reduce_LR = ReduceLROnPlateau(
             patience=LEARNING_RATE_PATIENCE,
             factor=0.5,
@@ -328,7 +330,7 @@ for i, inter_sep in enumerate(inter_seps):
     # Callbacks:
     early_stop = EarlyStopping(
         monitor='val_loss',
-        patience=EARLY_STOPPING_PATIENCE,
+        patience=EARLY_STOP_PATIENCE,
         mode='min',
         verbose=1,
         restore_best_weights=True
