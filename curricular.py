@@ -43,7 +43,7 @@ required.add_argument('DEPTH', type=int, default=3,
                       help='Depth of the model. Default is 3.')
 required.add_argument('FILTERS', type=int, default=32,
                       help='Number of filters in the model. Default is 32.')
-required.add_argument('LOSS', type=str, choices=['CCE', 'DISCCE', 'FOCAL_CCE', 'SCCE', 'SCCE_Void_Penalty'],
+required.add_argument('LOSS', type=str, choices=['CCE', 'DISCCE', 'FOCAL_CCE', 'SCCE', 'SCCE_Void_Penalty', 'SCCE_Class_Penalty'],
                       help='Loss function to use for training.')
 optional = parser.add_argument_group('optional arguments')
 optional.add_argument('--UNIFORM_FLAG', action='store_true',
@@ -246,6 +246,14 @@ elif LOSS == 'SCCE':
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
 elif LOSS == 'SCCE_Void_Penalty':
     loss_fn = [nets.SCCE_void_penalty]
+elif LOSS == 'SCCE_Class_Penalty':
+    target_props = [0.65, 0.25, 0.05, 0.05]  # Example target proportions for void, wall, filament, halo
+    penalty_weights = [1.0, 0.9, 0.3, 0.1]
+    penalty_type = 'mse'  # Mean Squared Error for penalty
+    loss_fn = lambda y_true, y_pred: nets.SCCE_class_proportion_penalty(
+        y_true, y_pred, target_props=target_props,
+        weights=penalty_weights, penalty_type=penalty_type
+    )
 # Make tensorboard directory
 log_dir = ROOT_DIR + 'logs/fit/' + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") + '/'
 os.makedirs(log_dir, exist_ok=True)

@@ -517,6 +517,63 @@ def SCCE_void_penalty(y_true, y_pred, max_void_fraction=0.7, weight=0.1):
   scce_loss = tf.keras.losses.sparse_categorical_crossentropy(y_true, y_pred)
   return scce_loss + weight * penalty
 #---------------------------------------------------------
+# custom SCCE loss that penalizes for missing the class distribution
+#---------------------------------------------------------
+def SCCE_class_proportion_penalty(y_true, y_pred, target_proportions=None, weights=None, penalty_type='mse'):
+    """
+    SCCE loss with penalties for deviating from target class proportions.
+    
+    Args:
+        y_true: true labels (sparse format)
+        y_pred: predicted probabilities (softmax output)
+        target_proportions: dict or list of target proportions for each class
+                          e.g., [0.65, 0.25, 0.05, 0.05] for [void, wall, filament, halo]
+                          If None, uses proportions from y_true
+        weights: list of penalty weights per class. If None, uses equal weights
+        penalty_type: 'mse', 'mae', or 'huber' for different penalty functions
+    """
+    if target_proportions is None:
+        # Calculate target proportions from true labels
+        y_true_flat = tf.reshape(y_true, [-1])
+        n_samples = tf.cast(tf.size(y_true_flat), tf.float32)
+        target_proportions = []
+        for class_idx in range(y_pred.shape[-1]):
+            class_count = tf.reduce_sum(tf.cast(tf.equal(y_true_flat, class_idx), tf.float32))
+            target_proportions.append(class_count / n_samples)
+    else:
+        target_proportions = tf.constant(target_proportions, dtype=tf.float32)
+    
+    if weights is None:
+        weights = tf.ones(y_pred.shape[-1], dtype=tf.float32)
+    else:
+        weights = tf.constant(weights, dtype=tf.float32)
+    
+    # Calculate predicted proportions
+    pred_proportions = tf.reduce_mean(y_pred, axis=[0, 1, 2, 3])  # Average over all spatial dimensions
+    
+    # Calculate penalties based on deviation from target proportions
+    if penalty_type == 'mse':
+        penalties = tf.square(pred_proportions - target_proportions)
+    elif penalty_type == 'mae':
+        penalties = tf.abs(pred_proportions - target_proportions)
+    elif penalty_type == 'huber':
+        delta = 0.1  # Huber delta parameter
+        diff = pred_proportions - target_proportions
+        penalties = tf.where(
+            tf.abs(diff) <= delta,
+            0.5 * tf.square(diff),
+            delta * tf.abs(diff) - 0.5 * tf.square(delta)
+        )
+    
+    # Weight the penalties
+    weighted_penalties = weights * penalties
+    total_penalty = tf.reduce_sum(weighted_penalties)
+    
+    # Base SCCE loss
+    scce_loss = tf.keras.losses.sparse_categorical_crossentropy(y_true, y_pred)
+    
+    return scce_loss + total_penalty
+#---------------------------------------------------------
 # Custom class callback to monitor void fraction in training
 #---------------------------------------------------------
 class VoidFractionMonitor(Callback):
