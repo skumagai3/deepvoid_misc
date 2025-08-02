@@ -25,7 +25,7 @@ from tensorflow.keras.optimizers import Adam # type: ignore
 #from tensorflow.keras.utils.layer_utils import count_params # doesnt work?
 from tensorflow.python.keras.utils import layer_utils
 from keras.utils import to_categorical
-from keras.layers import Input, Conv3D, MaxPooling3D, Conv3DTranspose, UpSampling3D, Concatenate, BatchNormalization, Activation, Dropout, Lambda, Layer
+from keras.layers import Input, Conv3D, MaxPooling3D, Conv3DTranspose, UpSampling3D, Concatenate, BatchNormalization, Activation, Dropout, Lambda, Layer, Add, Multiply
 from keras import backend as K
 from keras.losses import CategoricalCrossentropy, SparseCategoricalCrossentropy, BinaryCrossentropy
 #from keras.losses import CategoricalFocalCrossentropy # not available in tf 2.10.0!!!
@@ -864,6 +864,78 @@ def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation=
   print(f'Trainable params: {trainable_ps}')
   print(f'Non-trainable params: {nontrainable_ps}')
   if report_params == True:
+    return model, trainable_ps, nontrainable_ps
+  return model
+#---------------------------------------------------------
+# Attention U-Net creation function
+#---------------------------------------------------------
+def attention_unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation='relu',
+                      last_activation='softmax', batch_normalization=False, BN_scheme='last',
+                      dropout_rate=None, DROP_scheme='last', REG_FLAG=False,
+                      model_name='Attention_3D_U_Net', report_params=False):
+  """
+  Constructs a 3D Attention U-Net model for semantic segmentation.
+  """
+
+  def attention_gate(x, g, inter_channels):
+    theta_x = Conv3D(inter_channels, (1, 1, 1), padding='same')(x)
+    phi_g = Conv3D(inter_channels, (1, 1, 1), padding='same')(g)
+    add = Add()([theta_x, phi_g])
+    act = Activation('relu')(add)
+    psi = Conv3D(1, (1, 1, 1), activation='sigmoid', padding='same')(act)
+    return Multiply()([x, psi])
+
+  if dropout_rate == 0.0 or dropout_rate is None:
+    DROP_scheme = 'none'
+  if not batch_normalization:
+    BN_scheme = 'none'
+  if not REG_FLAG:
+    REG_FLAG = None
+
+  inputs = Input(input_shape)
+  encoder_outputs = []
+  x = inputs
+
+  # Encoder path
+  for d in range(depth):
+    filters = initial_filters * (2 ** d)
+    block_name = f'encoder_block_D{d}'
+    x = conv_block(x, filters, block_name, activation, batch_normalization,
+                   dropout_rate, BN_scheme, DROP_scheme, REG_FLAG)
+    encoder_outputs.append(x)
+    x = MaxPooling3D(pool_size=(2, 2, 2), name=block_name + '_maxpool')(x)
+
+  # Bottleneck
+  filters = initial_filters * (2 ** depth)
+  x = conv_block(x, filters, 'bottleneck', activation, batch_normalization,
+                 dropout_rate, BN_scheme, DROP_scheme, REG_FLAG)
+
+  # Decoder path with attention
+  for d in reversed(range(depth)):
+    filters = initial_filters * (2 ** d)
+    block_name = f'decoder_block_D{d}'
+    x = UpSampling3D(size=(2, 2, 2), name=block_name + '_upsample')(x)
+    skip = encoder_outputs[d]
+    gated_skip = attention_gate(skip, x, inter_channels=filters // 2)
+    x = Concatenate(axis=-1, name=block_name + '_concat')([x, gated_skip])
+    x = conv_block(x, filters, block_name, activation, batch_normalization,
+                   dropout_rate, BN_scheme, DROP_scheme, REG_FLAG)
+
+  # Output layer
+  outputs = Conv3D(num_classes, kernel_size=(1, 1, 1), name='output_conv')(x)
+  if last_activation is not None:
+    outputs = Activation(last_activation)(outputs)
+
+  model = Model(inputs=inputs, outputs=outputs, name=model_name)
+
+  # Report parameter count
+  trainable_ps = layer_utils.count_params(model.trainable_weights)
+  nontrainable_ps = layer_utils.count_params(model.non_trainable_weights)
+  print(f'Total params: {trainable_ps + nontrainable_ps}')
+  print(f'Trainable params: {trainable_ps}')
+  print(f'Non-trainable params: {nontrainable_ps}')
+
+  if report_params:
     return model, trainable_ps, nontrainable_ps
   return model
 #---------------------------------------------------------
