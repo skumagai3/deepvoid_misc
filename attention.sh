@@ -38,8 +38,8 @@ END_COMMENT
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
 current_time=$(date +"%Y%m%d-%H%M"); echo "Current time: $current_time";
 mem_report="logs/GPU_usage/train_gpu_mem_usage_${current_time}.txt";
-output="logs/stdout/train_output_${current_time}.txt";
-error="logs/stderr/train_error_${current_time}.txt";
+output="logs/stdout/att_train_out_${current_time}.txt";
+error="logs/stderr/att_train_err_${current_time}.txt";
 mem_report_fn="${ROOT_DIR}${mem_report}";
 output_fn="${ROOT_DIR}${output}";
 error_fn="${ROOT_DIR}${error}";
