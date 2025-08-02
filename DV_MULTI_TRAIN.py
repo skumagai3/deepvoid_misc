@@ -93,7 +93,7 @@ req_group.add_argument('L', type=lambda x: float(x) if x in ['0.33', '0.122'] el
                        help='Interparticle separation in Mpc/h. TNG full DM 0.33, BOL full DM 0.122, 3,5,7,10.')
 req_group.add_argument('DEPTH', type=int, default=3, help='Depth of the U-Net.')
 req_group.add_argument('FILTERS', type=int, default=32, help='Number of filters in the first layer.')
-req_group.add_argument('LOSS', type=str, default='CCE', help='Loss function to use: CCE, SCCE, FOCAL_CCE, DISCCE.')
+req_group.add_argument('LOSS', type=str, default='CCE', help='Loss function to use: CCE, SCCE, FOCAL_CCE, DISCCE, SCCE_Void_Penalty.')
 req_group.add_argument('GRID', type=int, help='Size of the density and mask fields on a side. For TNG, GRID=512, for Bolshoi, GRID=640.')
 # optional args: UNIFORM_FLAG, BATCHNORM, DROPOUT, MULTI_FLAG, LOW_MEM_FLAG
 opt_group = parser.add_argument_group('optional arguments')
@@ -561,6 +561,8 @@ elif LOSS == 'BCE':
   loss = nets.BinaryCrossentropy()
   if not BINARY_MASK:
     sys.exit('ERROR: Binary crossentropy loss only compatible with binary mask')
+elif LOSS == 'SCCE_Void_Penalty':
+  loss_fn = [nets.SCCE_void_penalty]
 elif LOSS == 'DICE_VOID':
   # implement dice loss with void class
   pass

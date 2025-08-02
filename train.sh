@@ -11,7 +11,14 @@ Parameters:
   for BOL full DM use '0.122'. Other valid values are '3', '5', '7', '10'. 
   D: Depth of the model. Default is 3.
   F: Number of filters in the model. Default is 32.
-  LOSS: Loss function to be used. CCE, FOCAL_CCE, SCCE, DISCCE, or BCE. Default is CCE.
+  LOSS: Loss function to be used. Default is CCE.
+    Implemented losses:
+      CCE: Categorical Crossentropy,
+      FOCAL_CCE: Focal Categorical Crossentropy,
+      SCCE: Sparse Categorical Crossentropy,
+      DISCCE: Combo Dice and SCCE loss,
+      SCCE_Void_Penalty: SCCE with a penalty for guessing the wrong proportion of voids,
+      BCE: Binary Crossentropy.
   GRID: Desired cube size on a side in voxels. For TNG use 512, for BOL use 640.
 
 Optional Flags:
