@@ -60,6 +60,10 @@ optional.add_argument('--EXTRA_INPUTS', type=str, default=None,
                       help='Additional inputs for the model such as color or fluxes.')
 optional.add_argument('--ADD_RSD', action='store_true',
                       help='Add RSD (Redshift Space Distortion) to the inputs.')
+optional.add_argument('--L_VAL', type=str, default='10',
+                      help='Interparticle separation for validation dataset. Default is 10.')
+optional.add_argument('--USE_ATTENTION', action='store_true',
+                      help='Use attention U-Net architecture instead of standard U-Net.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 DEPTH = args.DEPTH
@@ -72,7 +76,9 @@ LEARNING_RATE_PATIENCE = args.LEARNING_RATE_PATIENCE
 EARLY_STOP_PATIENCE = args.EARLY_STOP_PATIENCE
 EXTRA_INPUTS = args.EXTRA_INPUTS
 ADD_RSD = args.ADD_RSD
-print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}')
+L_VAL = args.L_VAL
+USE_ATTENTION = args.USE_ATTENTION
+print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, L_VAL={L_VAL}, USE_ATTENTION={USE_ATTENTION}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}')
 #================================================================
 # Set paths (according to Picotte data structure)
 #================================================================
@@ -184,8 +190,7 @@ def make_dataset(delta, tij_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot
 #================================================================
 # Make fixed validation set (since we are interested in L=10 Mpc/h)
 #================================================================
-print('Loading validation data for interparticle separation L=10 Mpc/h...')
-L_VAL = '10'
+print(f'Loading validation data for interparticle separation L={L_VAL} Mpc/h...')
 if L_VAL not in inter_seps:
     raise ValueError(f'Invalid interparticle separation for validation: {L_VAL}. Must be one of {inter_seps}.')
 if EXTRA_INPUTS:
@@ -204,6 +209,8 @@ if UNIFORM_FLAG:
     MODEL_NAME += '_uniform'
 if ADD_RSD:
     MODEL_NAME += '_RSD'
+if USE_ATTENTION:
+    MODEL_NAME += '_attention'
 if EXTRA_INPUTS:
     pass # Add logic for handling extra inputs later
 DATE = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
@@ -245,20 +252,31 @@ os.makedirs(log_dir, exist_ok=True)
 #================================================================
 # Create the model
 #================================================================
-print(f'Creating model with depth={DEPTH}, filters={FILTERS}, loss={LOSS}, uniform={UNIFORM_FLAG}, RSD={ADD_RSD}...')
+print(f'Creating model with depth={DEPTH}, filters={FILTERS}, loss={LOSS}, uniform={UNIFORM_FLAG}, RSD={ADD_RSD}, attention={USE_ATTENTION}...')
 #strategy = tf.distribute.MirroredStrategy()
 strategy = tf.distribute.get_strategy()
 print('Number of devices:', strategy.num_replicas_in_sync)
 with strategy.scope():
-    model = nets.unet_3d(
-        input_shape=input_shape,
-        num_classes=N_CLASSES,
-        initial_filters=FILTERS,
-        depth=DEPTH,
-        last_activation=last_activation,
-        batch_normalization=True,
-        model_name=MODEL_NAME
-    )
+    if USE_ATTENTION:
+        model = nets.attention_unet_3d(
+            input_shape=input_shape,
+            num_classes=N_CLASSES,
+            initial_filters=FILTERS,
+            depth=DEPTH,
+            last_activation=last_activation,
+            batch_normalization=True,
+            model_name=MODEL_NAME
+        )
+    else:
+        model = nets.unet_3d(
+            input_shape=input_shape,
+            num_classes=N_CLASSES,
+            initial_filters=FILTERS,
+            depth=DEPTH,
+            last_activation=last_activation,
+            batch_normalization=True,
+            model_name=MODEL_NAME
+        )
     model.compile(
         optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
         loss=loss_fn,
@@ -452,13 +470,13 @@ print('>>> Predictions made on validation set.')
 print('Predictions shape:', predictions.shape)
 if EXTRA_INPUTS:
     val_extra_input = tf.concat([val_features, val_extra_input], axis=-1)
-FILE_PRED = PRED_PATH+ MODEL_NAME + 'predictions_L10.fvol'
+FILE_PRED = PRED_PATH+ MODEL_NAME + f'_predictions_L{L_VAL}.fvol'
 nets.save_scores_from_fvol(
-    val_labels, predictions, MODEL_PATH + MODEL_NAME + '_L10.h5',
+    val_labels, predictions, MODEL_PATH + MODEL_NAME + f'_L{L_VAL}.h5',
     MODEL_FIG_PATH, scores, N_CLASSES, VAL_FLAG = True)
 # Save slice plots:
-nets.save_scores_from_model(DATA_PATH + data_info['10'], FILE_MASK,
-                           MODEL_PATH + MODEL_NAME + '_L10.h5',
+nets.save_scores_from_model(DATA_PATH + data_info[L_VAL], FILE_MASK,
+                           MODEL_PATH + MODEL_NAME + f'_L{L_VAL}.h5',
                            MODEL_FIG_PATH, FILE_PRED,
                            GRID=GRID, SUBGRID=SUBGRID, OFF=OFF,
                            TRAIN_SCORE=False, EXTRA_INPUTS=EXTRA_INPUTS)
