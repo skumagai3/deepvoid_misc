@@ -425,7 +425,8 @@ for i, inter_sep in enumerate(inter_seps):
             'SCCE_void_penalty': nets.SCCE_void_penalty,
             'categorical_focal_loss': nets.categorical_focal_loss,
             'VoidFractionMonitor': nets.VoidFractionMonitor
-        })
+        },
+        compile=False)
         model.set_weights(best_model.get_weights())
         print('Best model weights loaded.')
 
