@@ -247,11 +247,12 @@ elif LOSS == 'SCCE':
 elif LOSS == 'SCCE_Void_Penalty':
     loss_fn = [nets.SCCE_void_penalty]
 elif LOSS == 'SCCE_Class_Penalty':
-    target_props = [0.65, 0.25, 0.05, 0.05]  # Example target proportions for void, wall, filament, halo
+    #target_props = [0.65, 0.25, 0.05, 0.05]  # Example target proportions for void, wall, filament, halo
+    target_props = None
     penalty_weights = [1.0, 0.9, 0.3, 0.1]
     penalty_type = 'mse'  # Mean Squared Error for penalty
     loss_fn = lambda y_true, y_pred: nets.SCCE_class_proportion_penalty(
-        y_true, y_pred, target_props=target_props,
+        y_true, y_pred, target_proportions=target_props,
         weights=penalty_weights, penalty_type=penalty_type
     )
 # Make tensorboard directory
