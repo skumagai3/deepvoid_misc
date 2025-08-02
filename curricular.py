@@ -24,7 +24,13 @@ print('CUDA?', tf.test.is_built_with_cuda())
 # get the GPU devices
 gpus = tf.config.list_physical_devices('GPU')
 print('GPUs available:', gpus)
+for gpu in gpus:
+    tf.config.experimental.set_memory_growth(gpu, True)
 nets.K.set_image_data_format('channels_last')
+# NOTE turning off XLA JIT compilation for now, as it can cause issues with some models
+tf.config.optimizer.set_jit(False)  # if you're using XLA
+os.environ["TF_DISABLE_CUDNN_AUTOTUNE"] = "1"
+tf.config.experimental.enable_op_determinism()
 #from tensorflow.keras import mixed_precision
 #mixed_precision.set_global_policy('mixed_float16')
 #===============================================================
