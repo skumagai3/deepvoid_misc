@@ -31,8 +31,8 @@ nets.K.set_image_data_format('channels_last')
 tf.config.optimizer.set_jit(False)  # if you're using XLA
 os.environ["TF_DISABLE_CUDNN_AUTOTUNE"] = "1"
 tf.config.experimental.enable_op_determinism()
-#from tensorflow.keras import mixed_precision
-#mixed_precision.set_global_policy('mixed_float16')
+from tensorflow.keras import mixed_precision
+mixed_precision.set_global_policy('mixed_float16')
 #===============================================================
 # Set random seed
 #===============================================================
