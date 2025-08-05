@@ -816,6 +816,8 @@ else:
   Y_test = np.concatenate(Y_test_list,axis=0)
 # save Y_pred as is:
 if LAMBDA_CONDITIONING:
+  if isinstance(Y_pred, list) and hasattr(model, 'output_names'):
+    Y_pred = dict(zip(model.output_names, Y_pred))
   for key, value in Y_pred.items():
     np.save(FILE_OUT + MODEL_NAME + f'_Y_pred_{key}.npy', value, allow_pickle=True)
 else:
