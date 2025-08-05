@@ -442,7 +442,7 @@ for i, inter_sep in enumerate(inter_seps):
         val_dataset=val_dataset,
         max_batches=16
     )
-    checkpt_path = MODEL_PATH + MODEL_NAME + f'_L{inter_sep}.h5'
+    checkpt_path = MODEL_PATH + MODEL_NAME + f'_L{inter_sep}.keras'
     callbacks = [
         ModelCheckpoint(
             filepath=checkpt_path,
