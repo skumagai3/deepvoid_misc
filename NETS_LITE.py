@@ -2117,7 +2117,10 @@ def run_predict_model(model, X_test, batch_size, output_argmax=True, BINARY=Fals
       Y_pred = np.where(Y_pred > 0.5, 1, 0)
 
   return Y_pred
-def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, GRID=512, SUBGRID=128, OFF=64, BOXSIZE=205, BOLSHOI_FLAG=False, TRAIN_SCORE=False, COMPILE=False, LATEX=False, BINARY=False, PRED_NAME_SUFFIX='', EXTRA_INPUTS=None):
+def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED,
+                           GRID=512, SUBGRID=128, OFF=64, BOXSIZE=205, BOLSHOI_FLAG=False, 
+                           TRAIN_SCORE=False, COMPILE=False, LATEX=False, BINARY=False, 
+                           PRED_NAME_SUFFIX='', EXTRA_INPUTS=None, lambda_value=None):
   '''
   Save image of density, mask, and predicted mask. Using save_scores_from_fvol,
   saves F1 scores, confusion matrix to MODEL_NAME_hps.txt and plots confusion matrix.
@@ -2159,7 +2162,15 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, 
     X_extra = load_dataset(EXTRA_INPUTS,SUBGRID,OFF,preproc='mm')
     X_test = np.concatenate([X_test, X_extra], axis=-1)
     print(f'Concatenated extra input {EXTRA_INPUTS} to X_test. New shape: {X_test.shape}')
-  Y_pred = run_predict_model(model, X_test, BATCH_SIZE, BINARY=BINARY)
+  if lambda_value is not None:
+    lambda_array = np.full((X_test.shape[0], 1), lambda_value, dtype=np.float32)
+    inputs = {'density_input': X_test, 'lambda_input': lambda_array}
+  else:
+    inputs = X_test
+  Y_pred = run_predict_model(model, inputs, BATCH_SIZE, BINARY=BINARY)
+  if isinstance(Y_pred, dict):
+    # If model has named outputs, use the first one (usually the main output)
+    Y_pred = Y_pred['output_conv']
   Y_pred = assemble_cube2(Y_pred,GRID,SUBGRID,OFF)
 
   ### write out prediction

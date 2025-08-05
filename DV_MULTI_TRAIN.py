@@ -815,7 +815,11 @@ else:
   Y_pred = np.concatenate(Y_pred_list,axis=0)
   Y_test = np.concatenate(Y_test_list,axis=0)
 # save Y_pred as is:
-np.save(FILE_OUT+MODEL_NAME+'_Y_pred.npy',Y_pred,allow_pickle=True)
+if LAMBDA_CONDITIONING:
+  for key, value in Y_pred.items():
+    np.save(FILE_OUT + MODEL_NAME + f'_Y_pred_{key}.npy', value, allow_pickle=True)
+else:
+  np.save(FILE_OUT+MODEL_NAME+'_Y_pred.npy',Y_pred,allow_pickle=True)
 # adjust Y_test shape to be [N_samples,SUBGRID,SUBGRID,SUBGRID,1]:
 if (LOSS != 'SCCE' and LOSS != 'DISCCE'):
   if not BINARY_MASK:
@@ -830,11 +834,18 @@ print('Y_test shape:',Y_test.shape)
 print('>>> Calculating scores on validation data')
 if BINARY_MASK:
   N_CLASSES = 2 # janky fix for save_scores_from_fvol
-nets.save_scores_from_fvol(Y_test,Y_pred,
-                           FILE_OUT+MODEL_NAME,FIG_DIR,
-                           scores,
-                           N_CLASSES=N_CLASSES,
-                           VAL_FLAG=VAL_FLAG)
+if LAMBDA_CONDITIONING:
+  nets.save_scores_from_fvol(
+    Y_test, Y_pred[model.output_names[0]],
+    FILE_OUT + MODEL_NAME, FIG_DIR,
+    scores, N_CLASSES=N_CLASSES,
+    VAL_FLAG=VAL_FLAG)
+else:
+  nets.save_scores_from_fvol(Y_test,Y_pred,
+                            FILE_OUT+MODEL_NAME,FIG_DIR,
+                            scores,
+                            N_CLASSES=N_CLASSES,
+                            VAL_FLAG=VAL_FLAG)
 # save score_dict by appending to the end of the csv.
 # csv will be at ROOT_DIR/model_scores.csv
 print(f'>>> Saving all scores to {ROOT_DIR}/model_scores.csv')
