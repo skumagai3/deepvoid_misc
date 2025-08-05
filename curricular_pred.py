@@ -582,11 +582,11 @@ def main():
     os.makedirs(MODEL_FIG_PATH, exist_ok=True)
     
     # Save model temporarily for scoring functions that require a model file
-    temp_model_path = MODEL_PATH + MODEL_NAME + f'_temp_L{L_PRED}.h5'
+    temp_model_path = MODEL_PATH + MODEL_NAME + f'_temp_L{L_PRED}.keras'
     print(f'Temporarily saving model for scoring functions...')
     
     try:
-        # Save the recreated model temporarily
+        # Save the recreated model temporarily in Keras format
         model.save(temp_model_path)
         print(f'Model temporarily saved to {temp_model_path}')
         
