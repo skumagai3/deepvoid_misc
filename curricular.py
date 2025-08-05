@@ -73,6 +73,10 @@ EARLY_STOP_PATIENCE = args.EARLY_STOP_PATIENCE
 EXTRA_INPUTS = args.EXTRA_INPUTS
 ADD_RSD = args.ADD_RSD
 print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}')
+# use mixed precision if on Picotte
+if ROOT_DIR.startswith('/ifs/groups/vogeleyGrp/'):
+    from tensorflow.keras import mixed_precision
+    mixed_precision.set_global_policy('mixed_float16')
 #================================================================
 # Set paths (according to Picotte data structure)
 #================================================================
@@ -260,7 +264,10 @@ with strategy.scope():
         model_name=MODEL_NAME
     )
     model.compile(
-        optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
+        optimizer=tf.keras.optimizers.Adam(
+            learning_rate=LEARNING_RATE,
+            clipnorm=1.0  # Gradient clipping to prevent exploding gradients
+            ),
         loss=loss_fn,
         metrics=metrics
     )
