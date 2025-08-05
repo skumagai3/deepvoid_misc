@@ -572,6 +572,13 @@ for i, inter_sep in enumerate(inter_seps):
     except Exception as e:
         print(f'Warning: Failed to save full model: {e}, but weights were saved.')
     
+    # Clean up training data to free memory for next iteration
+    if i < len(inter_seps) - 1:  # Don't delete on last iteration
+        del train_features, train_labels, train_dataset
+        import gc
+        gc.collect()
+        print('Training data cleaned up for memory management.')
+    
     print('Proceeding to next interparticle separation...\n')
 #================================================================
 # Final evaluation on the validation set
@@ -579,6 +586,12 @@ for i, inter_sep in enumerate(inter_seps):
 print('Evaluating final model on validation set...')
 results = model.evaluate(val_dataset, verbose=2)
 print('Final evaluation results:', results)
+
+# Clean up validation data and model to free memory before plotting
+del val_features, val_labels, val_dataset
+import gc
+gc.collect()
+print('Validation data cleaned up.')
 #================================================================
 # Plot training history
 #================================================================
