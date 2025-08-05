@@ -927,7 +927,7 @@ def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation=
   # Output
   outputs = Conv3D(num_classes, kernel_size=(1, 1, 1), name='output_conv')(x)
   if last_activation is not None:
-    outputs = Activation(last_activation)(outputs)
+    outputs = Activation(last_activation, name='last_activation')(outputs)
   if lambda_conditioning and lambda_input is not None:
     model = Model(inputs=[inputs, lambda_input], outputs=[outputs, lambda_output], name=model_name)
   else:
@@ -1011,7 +1011,7 @@ def attention_unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, a
   # Output layer
   outputs = Conv3D(num_classes, kernel_size=(1, 1, 1), name='output_conv')(x)
   if last_activation is not None:
-    outputs = Activation(last_activation)(outputs)
+    outputs = Activation(last_activation, name='last_activation')(outputs)
   if lambda_conditioning and lambda_input is not None:
     model = Model(inputs=[inputs, lambda_input], outputs=[outputs, lambda_output], name=model_name)
   else:
