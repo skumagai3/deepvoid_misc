@@ -25,7 +25,7 @@ from tensorflow.keras.optimizers import Adam # type: ignore
 #from tensorflow.keras.utils.layer_utils import count_params # doesnt work?
 from tensorflow.python.keras.utils import layer_utils
 from keras.utils import to_categorical
-from keras.layers import Input, Conv3D, MaxPooling3D, Conv3DTranspose, UpSampling3D, Concatenate, BatchNormalization, Activation, Dropout, Lambda, Layer
+from keras.layers import Input, Conv3D, MaxPooling3D, Conv3DTranspose, UpSampling3D, Concatenate, BatchNormalization, Activation, Dropout, Lambda, Layer, Add, Multiply, Dense, Reshape, GlobalAveragePooling3D
 from keras import backend as K
 from keras.losses import CategoricalCrossentropy, SparseCategoricalCrossentropy, BinaryCrossentropy
 #from keras.losses import CategoricalFocalCrossentropy # not available in tf 2.10.0!!!
@@ -517,6 +517,63 @@ def SCCE_void_penalty(y_true, y_pred, max_void_fraction=0.7, weight=0.1):
   scce_loss = tf.keras.losses.sparse_categorical_crossentropy(y_true, y_pred)
   return scce_loss + weight * penalty
 #---------------------------------------------------------
+# custom SCCE loss that penalizes for missing the class distribution
+#---------------------------------------------------------
+def SCCE_class_proportion_penalty(y_true, y_pred, target_proportions=None, weights=None, penalty_type='mse'):
+    """
+    SCCE loss with penalties for deviating from target class proportions.
+    
+    Args:
+        y_true: true labels (sparse format)
+        y_pred: predicted probabilities (softmax output)
+        target_proportions: dict or list of target proportions for each class
+                          e.g., [0.65, 0.25, 0.05, 0.05] for [void, wall, filament, halo]
+                          If None, uses proportions from y_true
+        weights: list of penalty weights per class. If None, uses equal weights
+        penalty_type: 'mse', 'mae', or 'huber' for different penalty functions
+    """
+    if target_proportions is None:
+        # Calculate target proportions from true labels
+        y_true_flat = tf.reshape(y_true, [-1])
+        n_samples = tf.cast(tf.size(y_true_flat), tf.float32)
+        target_proportions = []
+        for class_idx in range(y_pred.shape[-1]):
+            class_count = tf.reduce_sum(tf.cast(tf.equal(y_true_flat, class_idx), tf.float32))
+            target_proportions.append(class_count / n_samples)
+    else:
+        target_proportions = tf.constant(target_proportions, dtype=tf.float32)
+    
+    if weights is None:
+        weights = tf.ones(y_pred.shape[-1], dtype=tf.float32)
+    else:
+        weights = tf.constant(weights, dtype=tf.float32)
+    
+    # Calculate predicted proportions
+    pred_proportions = tf.reduce_mean(y_pred, axis=[0, 1, 2, 3])  # Average over all spatial dimensions
+    
+    # Calculate penalties based on deviation from target proportions
+    if penalty_type == 'mse':
+        penalties = tf.square(pred_proportions - target_proportions)
+    elif penalty_type == 'mae':
+        penalties = tf.abs(pred_proportions - target_proportions)
+    elif penalty_type == 'huber':
+        delta = 0.1  # Huber delta parameter
+        diff = pred_proportions - target_proportions
+        penalties = tf.where(
+            tf.abs(diff) <= delta,
+            0.5 * tf.square(diff),
+            delta * tf.abs(diff) - 0.5 * tf.square(delta)
+        )
+    
+    # Weight the penalties
+    weighted_penalties = weights * penalties
+    total_penalty = tf.reduce_sum(weighted_penalties)
+    
+    # Base SCCE loss
+    scce_loss = tf.keras.losses.sparse_categorical_crossentropy(y_true, y_pred)
+    
+    return scce_loss + total_penalty
+#---------------------------------------------------------
 # Custom class callback to monitor void fraction in training
 #---------------------------------------------------------
 class VoidFractionMonitor(Callback):
@@ -789,7 +846,10 @@ def unet_partial_conv_3d_with_survey_mask(input_shape, mask_input_shape=None, nu
 #---------------------------------------------------------
 # Function to create a 3D U-Net model
 #---------------------------------------------------------
-def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation='relu', last_activation='softmax', batch_normalization=False, BN_scheme='last', dropout_rate=None, DROP_scheme='last', REG_FLAG = False, model_name='3D_U_Net', report_params=False):
+def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation='relu', 
+            last_activation='softmax', batch_normalization=False, BN_scheme='last', 
+            dropout_rate=None, DROP_scheme='last', REG_FLAG = False, model_name='3D_U_Net', 
+            report_params=False, lambda_conditioning=False):
   '''
   Constructs a 3D U-Net model for semantic segmentation.
 
@@ -823,7 +883,8 @@ def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation=
   if REG_FLAG == False:
     REG_FLAG = None
   # Input
-  inputs = Input(input_shape)
+  inputs = Input(input_shape, name='density_input')
+  lambda_input = Input(shape=(1,), name='lambda_conditioning_input') if lambda_conditioning else None
   
   # Encoder path
   encoder_outputs = []
@@ -840,6 +901,17 @@ def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation=
   x = conv_block(x, initial_filters * (2 ** depth), 'bottleneck', activation,
                  batch_normalization, dropout_rate, BN_scheme, DROP_scheme,
                  REG_FLAG)
+  # FiLM layer for lambda conditioning
+  if lambda_conditioning and lambda_input is not None:
+    n_filters = x.shape[-1]
+    gamma = Dense(n_filters, activation='linear', name='gamma_dense')(lambda_input)
+    beta = Dense(n_filters, activation='linear', name='beta_dense')(lambda_input)
+    gamma = Reshape((1, 1, 1, n_filters))(gamma)
+    beta = Reshape((1, 1, 1, n_filters))(beta)
+    x = Multiply()([x, gamma])
+    x = Add()([x, beta])
+    x_gap = GlobalAveragePooling3D()(x)
+    lambda_output = Dense(1, activation='linear', name='lambda_output')(x_gap)
   
   # Decoder path
   for d in reversed(range(depth)):
@@ -855,8 +927,10 @@ def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation=
   outputs = Conv3D(num_classes, kernel_size=(1, 1, 1), name='output_conv')(x)
   if last_activation is not None:
     outputs = Activation(last_activation)(outputs)
-  
-  model = Model(inputs=inputs, outputs=outputs, name=model_name)
+  if lambda_conditioning and lambda_input is not None:
+    model = Model(inputs=[inputs, lambda_input], outputs=[outputs, lambda_output], name=model_name)
+  else:
+    model = Model(inputs=inputs, outputs=outputs, name=model_name)
   # calculate number of parameters:
   trainable_ps = layer_utils.count_params(model.trainable_weights)
   nontrainable_ps = layer_utils.count_params(model.non_trainable_weights)
@@ -864,6 +938,92 @@ def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation=
   print(f'Trainable params: {trainable_ps}')
   print(f'Non-trainable params: {nontrainable_ps}')
   if report_params == True:
+    return model, trainable_ps, nontrainable_ps
+  return model
+#---------------------------------------------------------
+# Attention U-Net creation function
+#---------------------------------------------------------
+def attention_unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation='relu',
+                      last_activation='softmax', batch_normalization=False, BN_scheme='last',
+                      dropout_rate=None, DROP_scheme='last', REG_FLAG=False,
+                      model_name='Attention_3D_U_Net', report_params=False,
+                      lambda_conditioning=False):
+  """
+  Constructs a 3D Attention U-Net model for semantic segmentation.
+  """
+
+  def attention_gate(x, g, inter_channels):
+    theta_x = Conv3D(inter_channels, (1, 1, 1), padding='same')(x)
+    phi_g = Conv3D(inter_channels, (1, 1, 1), padding='same')(g)
+    add = Add()([theta_x, phi_g])
+    act = Activation('relu')(add)
+    psi = Conv3D(1, (1, 1, 1), activation='sigmoid', padding='same')(act)
+    return Multiply()([x, psi])
+
+  if dropout_rate == 0.0 or dropout_rate is None:
+    DROP_scheme = 'none'
+  if not batch_normalization:
+    BN_scheme = 'none'
+  if not REG_FLAG:
+    REG_FLAG = None
+
+  inputs = Input(input_shape, name='density_input')
+  lambda_input = Input(shape=(1,), name='lambda_conditioning_input') if lambda_conditioning else None
+  encoder_outputs = []
+  x = inputs
+
+  # Encoder path
+  for d in range(depth):
+    filters = initial_filters * (2 ** d)
+    block_name = f'encoder_block_D{d}'
+    x = conv_block(x, filters, block_name, activation, batch_normalization,
+                   dropout_rate, BN_scheme, DROP_scheme, REG_FLAG)
+    encoder_outputs.append(x)
+    x = MaxPooling3D(pool_size=(2, 2, 2), name=block_name + '_maxpool')(x)
+
+  # Bottleneck
+  filters = initial_filters * (2 ** depth)
+  x = conv_block(x, filters, 'bottleneck', activation, batch_normalization,
+                 dropout_rate, BN_scheme, DROP_scheme, REG_FLAG)
+  if lambda_conditioning and lambda_input is not None:
+    n_filters = x.shape[-1]
+    gamma = Dense(n_filters, activation='linear', name='gamma_dense')(lambda_input)
+    beta = Dense(n_filters, activation='linear', name='beta_dense')(lambda_input)
+    gamma = Reshape((1, 1, 1, n_filters))(gamma)
+    beta = Reshape((1, 1, 1, n_filters))(beta)
+    x = Multiply()([x, gamma])
+    x = Add()([x, beta])
+    x_gap = GlobalAveragePooling3D()(x)
+    lambda_output = Dense(1, activation='linear', name='lambda_output')(x_gap)
+
+  # Decoder path with attention
+  for d in reversed(range(depth)):
+    filters = initial_filters * (2 ** d)
+    block_name = f'decoder_block_D{d}'
+    x = UpSampling3D(size=(2, 2, 2), name=block_name + '_upsample')(x)
+    skip = encoder_outputs[d]
+    gated_skip = attention_gate(skip, x, inter_channels=filters // 2)
+    x = Concatenate(axis=-1, name=block_name + '_concat')([x, gated_skip])
+    x = conv_block(x, filters, block_name, activation, batch_normalization,
+                   dropout_rate, BN_scheme, DROP_scheme, REG_FLAG)
+
+  # Output layer
+  outputs = Conv3D(num_classes, kernel_size=(1, 1, 1), name='output_conv')(x)
+  if last_activation is not None:
+    outputs = Activation(last_activation)(outputs)
+  if lambda_conditioning and lambda_input is not None:
+    model = Model(inputs=[inputs, lambda_input], outputs=[outputs, lambda_output], name=model_name)
+  else:
+    model = Model(inputs=inputs, outputs=outputs, name=model_name)
+
+  # Report parameter count
+  trainable_ps = layer_utils.count_params(model.trainable_weights)
+  nontrainable_ps = layer_utils.count_params(model.non_trainable_weights)
+  print(f'Total params: {trainable_ps + nontrainable_ps}')
+  print(f'Trainable params: {trainable_ps}')
+  print(f'Non-trainable params: {nontrainable_ps}')
+
+  if report_params:
     return model, trainable_ps, nontrainable_ps
   return model
 #---------------------------------------------------------

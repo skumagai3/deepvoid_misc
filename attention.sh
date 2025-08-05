@@ -2,7 +2,7 @@
 : <<'END_COMMENT'
 Usage: ./train.sh
 
-This script runs the DV_MULTI_TRAIN.py script.
+This script runs the attention_test.py script.
 
 Parameters:
   ROOT_DIR: Root directory where data, models, figures, etc. are stored.
@@ -45,8 +45,8 @@ END_COMMENT
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
 current_time=$(date +"%Y%m%d-%H%M"); echo "Current time: $current_time";
 mem_report="logs/GPU_usage/train_gpu_mem_usage_${current_time}.txt";
-output="logs/stdout/train_output_${current_time}.txt";
-error="logs/stderr/train_error_${current_time}.txt";
+output="logs/stdout/att_train_out_${current_time}.txt";
+error="logs/stderr/att_train_err_${current_time}.txt";
 mem_report_fn="${ROOT_DIR}${mem_report}";
 output_fn="${ROOT_DIR}${output}";
 error_fn="${ROOT_DIR}${error}";
@@ -60,7 +60,7 @@ SIM="TNG"; echo "Simulation: $SIM"; # TNG/BOL
 L=0.33; echo "Lambda: $L";
 D=3; echo "Depth: $D";
 F=32;  echo "Filters: $F";
-LOSS="BCE"; echo "Loss: $LOSS";
+LOSS="SCCE"; echo "Loss: $LOSS";
 if [ "$SIM" = "TNG" ]; then
   GRID=512
 elif [ "$SIM" = "BOL" ] || [ "$SIM" = "Bolshoi"]; then
@@ -75,14 +75,14 @@ MULTIPROCESSING_ENABLED=0; echo "Multiprocessing: $MULTIPROCESSING_ENABLED";
 HIGH_MEM_ENABLED=0; echo "High memory usage: $HIGH_MEM_ENABLED";
 FOCAL_ALPHA=(0.5 0.5 0.2 0.2); echo "Focal Alpha: ${FOCAL_ALPHA[@]}";
 FOCAL_GAMMA=2.0; echo "Focal Gamma: $FOCAL_GAMMA";
-MODEL_NAME_SUFFIX="BIN"; echo "Model Name Suffix: $MODEL_NAME_SUFFIX";
+MODEL_NAME_SUFFIX="ATT"; echo "Model Name Suffix: $MODEL_NAME_SUFFIX";
 UNIFORM_FLAG=0; echo "Uniform Flag: $UNIFORM_FLAG";
 LOAD_MODEL=0; echo "Load Model: $LOAD_MODEL";
 LOAD_INTO_MEM=1; echo "Load into memory: $LOAD_INTO_MEM";
-BATCH_SIZE=4; echo "Batch Size: $BATCH_SIZE";
-EPOCHS=500; echo "Epochs: $EPOCHS";
+BATCH_SIZE=8; echo "Batch Size: $BATCH_SIZE";
+EPOCHS=200; echo "Epochs: $EPOCHS";
 LEARNING_RATE=0.0001; echo "Learning Rate: $LEARNING_RATE";
-LEARNING_RATE_PATIENCE=10; echo "Learning Rate Patience: $LEARNING_RATE_PATIENCE";
+LEARNING_RATE_PATIENCE=8; echo "Learning Rate Patience: $LEARNING_RATE_PATIENCE";
 PATIENCE=25; echo "Patience: $PATIENCE";
 REG_FLAG=0; echo "Regularization: $REG_FLAG";
 PICOTTE_FLAG=0; echo "Picotte: $PICOTTE_FLAG";
@@ -113,5 +113,5 @@ CMD_ARGS+=" --PATIENCE $PATIENCE"
 echo "Command line arguments: $CMD_ARGS";
 
 # Running the Python script with dynamically constructed arguments
-python3 ./deepvoid_misc/DV_MULTI_TRAIN.py $CMD_ARGS > ${output_fn} 2> ${error_fn};
+python3 ./deepvoid_misc/attention_test.py $CMD_ARGS > ${output_fn} 2> ${error_fn};
 kill $NVIDIA_SMI_PID
