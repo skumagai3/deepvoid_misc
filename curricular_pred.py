@@ -19,6 +19,7 @@ import tensorflow as tf
 import datetime
 import gc
 from pathlib import Path
+from tensorflow.keras import mixed_precision
 
 # Import your custom modules
 sys.path.append('.')
@@ -151,6 +152,7 @@ if ADD_RSD:
     data_info['10'] = 'subs1_mass_Nm512_L10_RSD.fvol'
 
 # Extra inputs mapping
+EXTRA_INPUTS_INFO = {}
 if EXTRA_INPUTS == 'g-r':
     EXTRA_INPUTS_INFO = {
         '0.33': 'subs1_g-r_Nm512_L3.fvol',
@@ -269,15 +271,134 @@ def load_curricular_model(model_name, l_pred):
     # If full model loading fails, try to recreate model and load weights
     print('Full model loading failed. Attempting to recreate model and load weights...')
     
-    # You might need to recreate the model architecture here
-    # This is a simplified example - you may need to parse the model name to get architecture details
-    print('Note: Model recreation not implemented. You may need to provide model architecture details.')
+    # Parse model name to extract architecture details
+    try:
+        model_info = parse_model_name_for_recreation(model_name)
+        print(f'Parsed model info: {model_info}')
+        
+        # Recreate model architecture
+        model = recreate_model_architecture(model_info)
+        
+        if model is not None:
+            # Try to load weights
+            for weights_path in weights_paths:
+                if os.path.exists(weights_path):
+                    print(f'Attempting to load weights from {weights_path}...')
+                    try:
+                        model.load_weights(weights_path)
+                        print(f'Successfully loaded weights from {weights_path}')
+                        return model
+                    except Exception as e:
+                        print(f'Failed to load weights from {weights_path}: {e}')
+                        continue
+        
+    except Exception as e:
+        print(f'Model recreation failed: {e}')
+    
     print('Available weight files:')
     for weights_path in weights_paths:
         if os.path.exists(weights_path):
             print(f'  - {weights_path}')
     
     return None
+
+def parse_model_name_for_recreation(model_name):
+    """
+    Parse model name to extract architecture parameters.
+    Example: TNG_curricular_SCCE_Class_Penalty_D3_F8_RSD_attention_2025-08-05_21-27-59
+    """
+    parts = model_name.split('_')
+    
+    model_info = {
+        'depth': 3,  # default
+        'filters': 32,  # default
+        'use_attention': False,
+        'add_rsd': False,
+        'lambda_conditioning': LAMBDA_CONDITIONING,
+        'extra_inputs': EXTRA_INPUTS,
+        'loss': 'SCCE'
+    }
+    
+    for i, part in enumerate(parts):
+        if part.startswith('D') and len(part) > 1:
+            try:
+                model_info['depth'] = int(part[1:])
+            except ValueError:
+                pass
+        elif part.startswith('F') and len(part) > 1:
+            try:
+                model_info['filters'] = int(part[1:])
+            except ValueError:
+                pass
+        elif part == 'attention':
+            model_info['use_attention'] = True
+        elif part == 'RSD':
+            model_info['add_rsd'] = True
+        elif part in ['SCCE', 'CCE', 'FOCAL_CCE', 'SCCE_Class_Penalty', 'SCCE_Void_Penalty']:
+            model_info['loss'] = part
+    
+    return model_info
+
+def recreate_model_architecture(model_info):
+    """
+    Recreate the model architecture based on parsed information.
+    """
+    try:
+        # Determine input shape
+        input_shape = (None, None, None, 1)
+        if model_info['extra_inputs']:
+            input_shape = (None, None, None, 2)  # Add channel for extra inputs
+        
+        print(f"Recreating model with input_shape={input_shape}")
+        print(f"Depth={model_info['depth']}, Filters={model_info['filters']}")
+        print(f"Attention={model_info['use_attention']}, Lambda conditioning={model_info['lambda_conditioning']}")
+        
+        # Create model based on architecture
+        if model_info['use_attention']:
+            model = nets.attention_unet_3d(
+                input_shape=input_shape,
+                num_classes=N_CLASSES,
+                initial_filters=model_info['filters'],
+                depth=model_info['depth'],
+                activation='relu',
+                last_activation='softmax',
+                batch_normalization=True,
+                BN_scheme='last',
+                dropout_rate=None,
+                DROP_scheme='last',
+                REG_FLAG=False,
+                model_name='Recreated_Attention_3D_U_Net',
+                report_params=False,
+                lambda_conditioning=model_info['lambda_conditioning']
+            )
+        else:
+            model = nets.unet_3d(
+                input_shape=input_shape,
+                num_classes=N_CLASSES,
+                initial_filters=model_info['filters'],
+                depth=model_info['depth'],
+                activation='relu',
+                last_activation='softmax',
+                batch_normalization=True,
+                BN_scheme='last',
+                dropout_rate=None,
+                DROP_scheme='last',
+                REG_FLAG=False,
+                model_name='Recreated_3D_U_Net',
+                report_params=False,
+                lambda_conditioning=model_info['lambda_conditioning']
+            )
+        
+        if model is not None:
+            print('Model architecture recreated successfully')
+            return model
+        else:
+            print('Failed to recreate model architecture')
+            return None
+            
+    except Exception as e:
+        print(f'Error recreating model architecture: {e}')
+        return None
 
 #================================================================
 # Memory-efficient prediction function
@@ -438,7 +559,7 @@ def main():
                 MODEL_FIG_PATH, FILE_PRED,
                 GRID=GRID, SUBGRID=SUBGRID, OFF=OFF,
                 TRAIN_SCORE=False,
-                EXTRA_INPUTS=EXTRA_INPUTS_INFO[L_PRED] if EXTRA_INPUTS else None
+                EXTRA_INPUTS=EXTRA_INPUTS_INFO.get(L_PRED) if EXTRA_INPUTS and EXTRA_INPUTS_INFO else None
             )
             print('Slice plots generated successfully.')
             
