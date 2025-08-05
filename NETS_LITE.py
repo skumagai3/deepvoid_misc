@@ -884,7 +884,7 @@ def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation=
     REG_FLAG = None
   # Input
   inputs = Input(input_shape, name='density_input')
-  lambda_input = Input(shape=(1,), name='lambda_conditioning_input') if lambda_conditioning else None
+  lambda_input = Input(shape=(1,), name='lambda_input') if lambda_conditioning else None
   
   # Encoder path
   encoder_outputs = []
@@ -968,7 +968,7 @@ def attention_unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, a
     REG_FLAG = None
 
   inputs = Input(input_shape, name='density_input')
-  lambda_input = Input(shape=(1,), name='lambda_conditioning_input') if lambda_conditioning else None
+  lambda_input = Input(shape=(1,), name='lambda_input') if lambda_conditioning else None
   encoder_outputs = []
   x = inputs
 
