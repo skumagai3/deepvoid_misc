@@ -604,13 +604,17 @@ class VoidFractionMonitor(Callback):
               y_pred_main = y_pred[0]
             else:
               y_pred_main = y_pred
-              
+
             y_pred_cls = np.argmax(y_pred_main, axis=-1)
 
-            if y_batch.shape[-1] > 1:
-                y_true_cls = np.argmax(y_batch, axis=-1)
+            if isinstance(y_batch, dict):
+              y_batch_main = y_batch.get('last_activation')
             else:
-                y_true_cls = y_batch.numpy()
+              y_batch_main = y_batch
+            if y_batch_main.shape[-1] > 1:
+                y_true_cls = np.argmax(y_batch_main, axis=-1)
+            else:
+                y_true_cls = y_batch_main.numpy()
 
             pred_classes.append(y_pred_cls.flatten())
             true_classes.append(y_true_cls.flatten())
