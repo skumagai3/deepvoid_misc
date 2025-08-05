@@ -787,7 +787,12 @@ if EXTRA_INPUTS is not None:
 #===============================================================
 if LOAD_INTO_MEM:
   print('>>> Predicting on test data')
-  Y_pred = nets.run_predict_model(model,X_test,batch_size,output_argmax=False)
+  if LAMBDA_CONDITIONING:
+    lambda_array_test = np.full((X_test.shape[0], 1), L, dtype=np.float32)
+    inputs = {'density_input': X_test, 'lambda_input': lambda_array_test}
+  else:
+    inputs = X_test
+  Y_pred = nets.run_predict_model(model,inputs,batch_size,output_argmax=False)
   # since output argmax = False, Y_pred shape = [N_samples,SUBGRID,SUBGRID,SUBGRID,N_CLASSES]
 else:
   print('>>> Predicting on test data, loading in batches')
