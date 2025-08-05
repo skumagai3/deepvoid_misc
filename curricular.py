@@ -499,7 +499,8 @@ for i, inter_sep in enumerate(inter_seps):
     )
 
     # Always load the best model weights after training
-    weights_path = MODEL_PATH + MODEL_NAME + f'_L{inter_sep}_weights.h5'
+    weights_path = MODEL_PATH + MODEL_NAME + f'_L{inter_sep}_weights.weights.h5'
+    legacy_weights_path = MODEL_PATH + MODEL_NAME + f'_L{inter_sep}_weights.h5'  # Fallback for older format
     
     # Try weights first (more reliable for complex models with lambda conditioning)
     if os.path.exists(weights_path):
@@ -509,6 +510,14 @@ for i, inter_sep in enumerate(inter_seps):
             print('Best model weights loaded successfully from weights file.')
         except Exception as e:
             print(f'Failed to load weights: {e}')
+            print('Continuing with current model state...')
+    elif os.path.exists(legacy_weights_path):
+        print(f'New weights file not found, trying legacy format: {legacy_weights_path}')
+        try:
+            model.load_weights(legacy_weights_path)
+            print('Best model weights loaded successfully from legacy weights file.')
+        except Exception as e:
+            print(f'Failed to load legacy weights: {e}')
             print('Continuing with current model state...')
     elif os.path.exists(checkpt_path):
         print(f'Weights file not found, attempting to load full model from {checkpt_path}')
@@ -547,7 +556,7 @@ for i, inter_sep in enumerate(inter_seps):
     
     # Save the model after each interparticle separation
     final_model_path = MODEL_PATH + MODEL_NAME + f'_L{inter_sep}.keras'
-    final_weights_path = MODEL_PATH + MODEL_NAME + f'_L{inter_sep}_final_weights.h5'
+    final_weights_path = MODEL_PATH + MODEL_NAME + f'_L{inter_sep}_final.weights.h5'
     
     # Always save weights
     try:

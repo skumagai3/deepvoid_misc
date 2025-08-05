@@ -641,7 +641,16 @@ class RobustModelCheckpoint(tf.keras.callbacks.Callback):
     def __init__(self, model_path, weights_path, monitor='val_loss', save_best_only=True, mode='min', verbose=1):
         super().__init__()
         self.model_path = model_path
-        self.weights_path = weights_path
+        # Ensure weights path ends with .weights.h5 for TensorFlow 2.18+
+        if not weights_path.endswith('.weights.h5'):
+            if weights_path.endswith('.h5'):
+                self.weights_path = weights_path.replace('.h5', '.weights.h5')
+            elif weights_path.endswith('_weights'):
+                self.weights_path = weights_path + '.weights.h5'
+            else:
+                self.weights_path = weights_path + '.weights.h5'
+        else:
+            self.weights_path = weights_path
         self.monitor = monitor
         self.save_best_only = save_best_only
         self.mode = mode
@@ -678,6 +687,18 @@ class RobustModelCheckpoint(tf.keras.callbacks.Callback):
             except Exception as e:
                 if self.verbose:
                     print(f'Warning: Failed to save full model: {e}, but weights were saved successfully')
+                    
+    def restore_best_weights(self):
+        """Restore the best weights saved during training"""
+        try:
+            self.model.load_weights(self.weights_path)
+            if self.verbose:
+                print(f"Restored best weights from {self.weights_path}")
+            return True
+        except Exception as e:
+            if self.verbose:
+                print(f"Failed to restore weights from {self.weights_path}: {e}")
+            return False
 
 #---------------------------------------------------------
 # U-Net creation functions
