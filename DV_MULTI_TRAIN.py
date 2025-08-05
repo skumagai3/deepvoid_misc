@@ -777,10 +777,17 @@ scores['TRAINABLE_PARAMS'] = trainable_ps
 scores['NONTRAINABLE_PARAMS'] = nontrainable_ps
 scores['TOTAL_PARAMS'] = trainable_ps + nontrainable_ps
 SEG_OUT = model.output_names[0] + '_'
-scores['TRAIN_LOSS'] = history.history[SEG_OUT+'loss'][-1]
-scores['VAL_LOSS'] = history.history[SEG_OUT+'val_loss'][-1]
-scores['TRAIN_ACC'] = history.history[SEG_OUT+'accuracy'][-1]
-scores['VAL_ACC'] = history.history[SEG_OUT+'val_accuracy'][-1]
+if LAMBDA_CONDITIONING:
+  SEG_OUT = model.output_names[0]
+  train_key = f'{SEG_OUT}_'
+  val_key = f'val_{SEG_OUT}_'
+else:
+  train_key = ''
+  val_key = ''
+scores['TRAIN_LOSS'] = history.history[train_key+'loss'][-1]
+scores['VAL_LOSS'] = history.history[val_key+'loss'][-1]
+scores['TRAIN_ACC'] = history.history[train_key+'accuracy'][-1]
+scores['VAL_ACC'] = history.history[val_key+'accuracy'][-1]
 if LOSS == 'FOCAL_CCE':
   scores['FOCAL_ALPHA'] = alpha
   scores['FOCAL_GAMMA'] = gamma
