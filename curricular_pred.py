@@ -20,6 +20,7 @@ import datetime
 import gc
 from pathlib import Path
 from tensorflow.keras import mixed_precision
+import psutil
 
 # Import your custom modules
 sys.path.append('.')
@@ -61,8 +62,8 @@ required.add_argument('MODEL_NAME', type=str, help='Name of the trained model (w
 required.add_argument('L_PRED', type=str, help='Interparticle separation for prediction (e.g., "10").')
 
 optional = parser.add_argument_group('optional arguments')
-optional.add_argument('--BATCH_SIZE', type=int, default=4, 
-                      help='Batch size for prediction. Default is 4 (memory efficient).')
+optional.add_argument('--BATCH_SIZE', type=int, default=2, 
+                      help='Batch size for prediction. Default is 2 (very memory efficient).')
 optional.add_argument('--EXTRA_INPUTS', type=str, default=None,
                       choices=['g-r', 'r_flux_density'],
                       help='Name of additional inputs used in training.')
@@ -76,6 +77,8 @@ optional.add_argument('--SKIP_SLICE_PLOTS', action='store_true',
                       help='Skip slice plot generation to save memory.')
 optional.add_argument('--MAX_PRED_BATCHES', type=int, default=None,
                       help='Limit number of prediction batches for memory management.')
+optional.add_argument('--TEST_MODE', action='store_true',
+                      help='Test mode: use only a small subset of data for quick testing.')
 
 args = parser.parse_args()
 
@@ -89,6 +92,7 @@ LAMBDA_CONDITIONING = args.LAMBDA_CONDITIONING
 SAVE_PREDICTIONS = args.SAVE_PREDICTIONS
 SKIP_SLICE_PLOTS = args.SKIP_SLICE_PLOTS
 MAX_PRED_BATCHES = args.MAX_PRED_BATCHES
+TEST_MODE = args.TEST_MODE
 
 print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, MODEL_NAME={MODEL_NAME}, L_PRED={L_PRED}')
 print(f'BATCH_SIZE={BATCH_SIZE}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}')
@@ -176,6 +180,20 @@ if L_PRED not in inter_seps:
     raise ValueError(f'Invalid interparticle separation: {L_PRED}. Must be one of {inter_seps}.')
 
 #================================================================
+# Memory monitoring function
+#================================================================
+def check_memory_usage():
+    """Check current memory usage."""
+    try:
+        process = psutil.Process(os.getpid())
+        memory_mb = process.memory_info().rss / 1024 / 1024
+        print(f'Current memory usage: {memory_mb:.1f} MB')
+        return memory_mb
+    except ImportError:
+        # psutil not available
+        return None
+
+#================================================================
 # Memory-efficient data loading function
 #================================================================
 def load_data_for_prediction(inter_sep, extra_inputs=None, max_samples=None):
@@ -188,11 +206,24 @@ def load_data_for_prediction(inter_sep, extra_inputs=None, max_samples=None):
     data_file = DATA_PATH + data_info[inter_sep]
     print(f'Loading prediction data from {data_file}...')
     
-    features, labels = nets.load_dataset_all(
-        FILE_DEN=data_file,
-        FILE_MASK=FILE_MASK,
-        SUBGRID=SUBGRID
-    )
+    # Check if file exists
+    if not os.path.exists(data_file):
+        raise FileNotFoundError(f'Data file not found: {data_file}')
+    if not os.path.exists(FILE_MASK):
+        raise FileNotFoundError(f'Mask file not found: {FILE_MASK}')
+    
+    print('Files exist, starting data loading...')
+    
+    try:
+        features, labels = nets.load_dataset_all(
+            FILE_DEN=data_file,
+            FILE_MASK=FILE_MASK,
+            SUBGRID=SUBGRID
+        )
+        print(f'Data loading completed successfully.')
+    except Exception as e:
+        print(f'Error during data loading: {e}')
+        raise
     
     if max_samples and features.shape[0] > max_samples:
         print(f'Limiting to {max_samples} samples for memory management...')
@@ -462,6 +493,11 @@ def predict_with_memory_management(model, dataset, max_batches=None):
 def main():
     print(f'Starting prediction for model: {MODEL_NAME}, L={L_PRED}')
     
+    # Initial memory check
+    initial_memory = check_memory_usage()
+    if initial_memory and initial_memory > 8000:  # 8GB warning
+        print(f'WARNING: High initial memory usage ({initial_memory:.1f} MB). Consider restarting kernel.')
+    
     # Load the model
     model = load_curricular_model(MODEL_NAME, L_PRED)
     if model is None:
@@ -469,6 +505,8 @@ def main():
         return
     
     print('Model loaded successfully.')
+    check_memory_usage()
+    
     print(f'Model summary:')
     try:
         model.summary()
@@ -477,13 +515,29 @@ def main():
     
     # Load prediction data
     try:
-        # Limit samples for memory management if needed
-        max_samples = 128 if MAX_PRED_BATCHES else None  # Adjust as needed
+        # Aggressive memory management for Colab
+        if TEST_MODE:
+            max_samples = 16  # Even smaller for testing
+            print('TEST_MODE: Using only 16 samples for quick testing')
+        elif MAX_PRED_BATCHES:
+            max_samples = MAX_PRED_BATCHES * BATCH_SIZE
+            print(f'Limited to {max_samples} samples based on MAX_PRED_BATCHES={MAX_PRED_BATCHES}')
+        else:
+            # Default to a reasonable limit for Colab memory constraints
+            max_samples = 64  # Conservative default for Colab
+            print(f'Using default memory-safe limit of {max_samples} samples')
+            
         pred_features, pred_labels = load_data_for_prediction(
             L_PRED, 
             extra_inputs=EXTRA_INPUTS,
             max_samples=max_samples
         )
+        
+        # Force garbage collection after data loading
+        gc.collect()
+        check_memory_usage()
+        print(f'Memory cleanup completed after data loading')
+        
     except Exception as e:
         print(f'ERROR: Failed to load prediction data: {e}')
         return
@@ -527,44 +581,83 @@ def main():
     MODEL_FIG_PATH = FIG_PATH + MODEL_NAME + '/'
     os.makedirs(MODEL_FIG_PATH, exist_ok=True)
     
+    # Use alternative scoring method (skip functions that need model files)
+    print('Using direct scoring method (model was recreated from weights)...')
     try:
-        # Use the scoring function from NETS_LITE
-        nets.save_scores_from_fvol(
-            true_labels, predictions, 
-            MODEL_PATH + MODEL_NAME + f'_L{L_PRED}.h5',
-            MODEL_FIG_PATH, scores, N_CLASSES, VAL_FLAG=True
-        )
-        print('Scoring completed successfully.')
+        from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+        from sklearn.metrics import f1_score, precision_score, recall_score
+        
+        # Convert predictions to class labels
+        if len(predictions.shape) > 1 and predictions.shape[-1] > 1:
+            pred_labels = np.argmax(predictions, axis=-1)
+        else:
+            pred_labels = predictions
+            
+        # Convert true labels to class labels if needed  
+        if len(true_labels.shape) > 1 and true_labels.shape[-1] > 1:
+            true_labels_flat = np.argmax(true_labels, axis=-1)
+        else:
+            true_labels_flat = true_labels
+            
+        # Flatten for sklearn metrics
+        y_true_flat = true_labels_flat.flatten()
+        y_pred_flat = pred_labels.flatten()
+        
+        # Calculate comprehensive metrics
+        accuracy = accuracy_score(y_true_flat, y_pred_flat)
+        f1_macro = f1_score(y_true_flat, y_pred_flat, average='macro', zero_division=0)
+        f1_micro = f1_score(y_true_flat, y_pred_flat, average='micro', zero_division=0)
+        f1_weighted = f1_score(y_true_flat, y_pred_flat, average='weighted', zero_division=0)
+        
+        # Per-class F1 scores
+        f1_per_class = f1_score(y_true_flat, y_pred_flat, average=None, zero_division=0)
+        
+        # Store in scores dict
+        scores['accuracy'] = accuracy
+        scores['f1_macro'] = f1_macro
+        scores['f1_micro'] = f1_micro
+        scores['f1_weighted'] = f1_weighted
+        for i, class_name in enumerate(class_labels):
+            if i < len(f1_per_class):
+                scores[f'f1_{class_name}'] = f1_per_class[i]
+        
+        print('Direct scoring completed successfully.')
         
         # Print key metrics
-        if scores:
-            print('\n=== Key Metrics ===')
-            for key, value in scores.items():
-                if isinstance(value, (int, float)):
-                    print(f'{key}: {value:.4f}')
-    
+        print('\n=== Key Metrics ===')
+        print(f'Accuracy: {accuracy:.4f}')
+        print(f'F1 Macro: {f1_macro:.4f}')
+        print(f'F1 Micro: {f1_micro:.4f}')
+        print(f'F1 Weighted: {f1_weighted:.4f}')
+        
+        # Per-class F1 scores
+        print('\n=== Per-Class F1 Scores ===')
+        for i, class_name in enumerate(class_labels):
+            if i < len(f1_per_class):
+                print(f'F1 {class_name}: {f1_per_class[i]:.4f}')
+        
+        # Classification report
+        print('\n=== Classification Report ===')
+        print(classification_report(y_true_flat, y_pred_flat, 
+                                   target_names=class_labels, zero_division=0))
+        
+        # Save confusion matrix
+        try:
+            cm = confusion_matrix(y_true_flat, y_pred_flat)
+            cm_file = MODEL_FIG_PATH + f'{MODEL_NAME}_confusion_matrix_L{L_PRED}.npy'
+            np.save(cm_file, cm)
+            print(f'Confusion matrix saved to {cm_file}')
+        except Exception as e:
+            print(f'Warning: Could not save confusion matrix: {e}')
+                                       
     except Exception as e:
-        print(f'Warning: Scoring failed: {e}')
+        print(f'Direct scoring failed: {e}')
+        print('Continuing without detailed metrics...')
     
     # Generate slice plots (if not skipped and plotter is available)
     if not SKIP_SLICE_PLOTS and plotter is not None:
-        print('Generating slice plots...')
-        try:
-            # Save slice plots
-            FILE_PRED = PRED_PATH + MODEL_NAME + f'_predictions_L{L_PRED}.fvol'
-            
-            nets.save_scores_from_model(
-                DATA_PATH + data_info[L_PRED], FILE_MASK,
-                MODEL_PATH + MODEL_NAME + f'_L{L_PRED}.h5',
-                MODEL_FIG_PATH, FILE_PRED,
-                GRID=GRID, SUBGRID=SUBGRID, OFF=OFF,
-                TRAIN_SCORE=False,
-                EXTRA_INPUTS=EXTRA_INPUTS_INFO.get(L_PRED) if EXTRA_INPUTS and EXTRA_INPUTS_INFO else None
-            )
-            print('Slice plots generated successfully.')
-            
-        except Exception as e:
-            print(f'Warning: Slice plot generation failed: {e}')
+        print('Slice plot generation skipped for recreated models.')
+        print('Original model file required for slice plot generation.')
     else:
         if SKIP_SLICE_PLOTS:
             print('Slice plots skipped as requested.')
