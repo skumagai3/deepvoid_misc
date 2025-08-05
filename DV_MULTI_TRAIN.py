@@ -454,11 +454,11 @@ if LOAD_INTO_MEM:
   if LAMBDA_CONDITIONING:
     train_dataset = tf.data.Dataset.from_tensor_slices((
       {'density_input': X_train, 'lambda_input': lambda_array},
-      {'output_conv': Y_train, 'last_activation': lambda_array}
+      {'last_activation': Y_train, 'lambda_output': lambda_array}
     ))
     test_dataset = tf.data.Dataset.from_tensor_slices((
       {'density_input': X_test, 'lambda_input': lambda_array_test},
-      {'output_conv': Y_test, 'last_activation': lambda_array_test}
+      {'last_activation': Y_test, 'lambda_output': lambda_array_test}
     ))
     print('>>> Using lambda conditioning with FiLM')
 else:
@@ -656,9 +656,9 @@ if MULTI_FLAG:
                                        lambda_conditioning=LAMBDA_CONDITIONING)
       if LAMBDA_CONDITIONING:
         model.compile(optimizer=nets.Adam(learning_rate=LR),
-                      loss={'output_conv': loss, 'last_activation': 'mse'},
-                      loss_weights={'output_conv': 1.0, 'last_activation': 0.01},
-                      metrics={'output_conv': metrics, 'last_activation': 'mse'})
+                      loss={'last_activation': loss, 'lambda_output': 'mse'},
+                      loss_weights={'last_activation': 1.0, 'lambda_output': 0.01},
+                      metrics={'last_activation': metrics, 'lambda_output': 'mse'})
       else:
         model.compile(optimizer=nets.Adam(learning_rate=LR),
                                           loss=loss,
@@ -693,9 +693,9 @@ else:
                                      lambda_conditioning=LAMBDA_CONDITIONING)
     if LAMBDA_CONDITIONING:
       model.compile(optimizer=nets.Adam(learning_rate=LR),
-                    loss={'output_conv': loss, 'last_activation': 'mse'},
-                    loss_weights={'output_conv': 1.0, 'last_activation': 0.01},
-                    metrics={'output_conv': metrics, 'last_activation': 'mse'})
+                    loss={'last_activation': loss, 'lambda_output': 'mse'},
+                    loss_weights={'last_activation': 1.0, 'lambda_output': 0.01},
+                    metrics={'last_activation': metrics, 'lambda_output': 'mse'})
     else:
       model.compile(optimizer=nets.Adam(learning_rate=LR),
                                             loss=loss,
