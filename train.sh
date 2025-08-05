@@ -97,7 +97,7 @@ BINARY_MASK=0; echo "Binary Mask: $BINARY_MASK";
 ADD_RSD=0; echo "Add RSD: $ADD_RSD";
 USE_PCONV=0; echo "Use PConv: $USE_PCONV";
 ATTENTION_UNET=0; echo "Attention UNet: $ATTENTION_UNET";
-LAMBDA_CONDITIONING=0; echo "Lambda Conditioning: $LAMBDA_CONDITIONING";
+LAMBDA_CONDITIONING=1; echo "Lambda Conditioning: $LAMBDA_CONDITIONING";
 
 # Constructing command line arguments dynamically
 CMD_ARGS="$ROOT_DIR $SIM $L $D $F $LOSS $GRID"
