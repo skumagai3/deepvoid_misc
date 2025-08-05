@@ -388,8 +388,8 @@ if LOAD_INTO_MEM:
     print('X_test shape:',X_test.shape)
   if LAMBDA_CONDITIONING:
     print('>>> Using lambda conditioning with FiLM')
-    lambda_array = np.full((X_train.shape[0], 1), L)
-    lambda_array_test = np.full((X_test.shape[0], 1), L)
+    lambda_array = np.full((X_train.shape[0], 1), L, dtype=np.float32)
+    lambda_array_test = np.full((X_test.shape[0], 1), L, dtype=np.float32)
   del features; del labels # memory purposes
   if BINARY_MASK:
     Y_train = nets.convert_to_binary_mask(Y_train)
