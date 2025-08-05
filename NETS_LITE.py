@@ -2104,19 +2104,21 @@ def run_predict_model(model, X_test, batch_size, output_argmax=True, BINARY=Fals
   if not BINARY and output_argmax:
     print('Returning argmax of prediction')
     if isinstance(Y_pred, dict):
-      Y_pred['output_conv'] = np.argmax(Y_pred['output_conv'], axis=-1)
-      Y_pred['output_conv'] = np.expand_dims(Y_pred['output_conv'], axis=-1)
+      Y_pred['last_activation'] = np.argmax(Y_pred['last_activation'], axis=-1)
+      Y_pred['last_activation'] = np.expand_dims(Y_pred['last_activation'], axis=-1)
     else:
       Y_pred = np.argmax(Y_pred, axis=-1)
       Y_pred = np.expand_dims(Y_pred, axis=-1)
   elif BINARY and output_argmax:
     print('Thresholding prediction at 0.5')
     if isinstance(Y_pred, dict):
-      Y_pred['output_conv'] = np.where(Y_pred['output_conv'] > 0.5, 1, 0)
+      Y_pred['last_activation'] = np.where(Y_pred['last_activation'] > 0.5, 1, 0)
     else:
       Y_pred = np.where(Y_pred > 0.5, 1, 0)
-
   return Y_pred
+#---------------------------------------------------------
+# Run pred, save scores, make slice plots:
+#---------------------------------------------------------
 def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED,
                            GRID=512, SUBGRID=128, OFF=64, BOXSIZE=205, BOLSHOI_FLAG=False, 
                            TRAIN_SCORE=False, COMPILE=False, LATEX=False, BINARY=False, 
