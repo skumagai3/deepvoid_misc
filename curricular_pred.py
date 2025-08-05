@@ -582,13 +582,13 @@ def main():
     os.makedirs(MODEL_FIG_PATH, exist_ok=True)
     
     # Save model temporarily for scoring functions that require a model file
-    temp_model_path = MODEL_PATH + MODEL_NAME + f'_temp_L{L_PRED}.keras'
+    temp_model_path = MODEL_PATH + MODEL_NAME + f'_temp_L{L_PRED}'
     print(f'Temporarily saving model for scoring functions...')
     
     try:
-        # Save the recreated model temporarily in Keras format
-        model.save(temp_model_path)
-        print(f'Model temporarily saved to {temp_model_path}')
+        # Save the recreated model temporarily (function will add .keras extension)
+        model.save(temp_model_path + '.keras')
+        print(f'Model temporarily saved to {temp_model_path}.keras')
         
         # Use your existing save_scores_from_fvol function (includes MCC)
         print('Using save_scores_from_fvol for comprehensive metrics (including MCC)...')
@@ -715,9 +715,10 @@ def main():
     
     # Clean up temporary model file
     try:
-        if os.path.exists(temp_model_path):
-            os.remove(temp_model_path)
-            print(f'Cleaned up temporary model file: {temp_model_path}')
+        temp_keras_path = temp_model_path + '.keras'
+        if os.path.exists(temp_keras_path):
+            os.remove(temp_keras_path)
+            print(f'Cleaned up temporary model file: {temp_keras_path}')
     except Exception as e:
         print(f'Warning: Could not remove temporary model file: {e}')
     
