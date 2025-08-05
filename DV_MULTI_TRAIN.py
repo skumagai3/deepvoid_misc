@@ -120,6 +120,8 @@ opt_group.add_argument('--BOUNDARY_MASK', type=str, default=None, help='If set, 
 opt_group.add_argument('--EXTRA_INPUTS', type=str, default=None, help='If set, use extra inputs for the model. Should be a filename of a .fvol file.')
 opt_group.add_argument('--ADD_RSD', action='store_true', help='If set, add RSD perturbation to the density field. This is only for TNG300-3-Dark (so far).')
 opt_group.add_argument('--USE_PCONV', action='store_true', help='If set, use PartialConv3D instead of Conv3D.')
+opt_group.add_argument('--ATTENTION_UNET', action='store_true', help='If set, use Attention U-Net instead of U-Net.')
+opt_group.add_argument('--LAMBDA_CONDITIONING', action='store_true', help='If set, use lambda conditioning.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 SIM = args.SIM
@@ -151,6 +153,8 @@ BOUNDARY_MASK = args.BOUNDARY_MASK
 EXTRA_INPUTS = args.EXTRA_INPUTS
 ADD_RSD = args.ADD_RSD
 USE_PCONV = args.USE_PCONV
+ATTENTION_UNET = args.ATTENTION_UNET
+LAMBDA_CONDITIONING = args.LAMBDA_CONDITIONING
 print('#############################################')
 print('#############################################')
 print('>>> Running DV_MULTI_TRAIN.py')
@@ -194,6 +198,10 @@ if USE_PCONV:
   print('>>> Using PartialConv3D instead of Conv3D')
   if EXTRA_INPUTS is None:
     print('>>> Using PartialConv3D without any mask input')
+if ATTENTION_UNET:
+  print('>>> Using Attention U-Net instead of U-Net')
+if LAMBDA_CONDITIONING:
+  print('>>> Using lambda conditioning with FiLM')
 print('#############################################')
 print('#############################################')
 #===============================================================
@@ -378,6 +386,9 @@ if LOAD_INTO_MEM:
     print('>>> Extra inputs concatenated to features')
     print('X_train shape:',X_train.shape)
     print('X_test shape:',X_test.shape)
+  if LAMBDA_CONDITIONING:
+    print('>>> Using lambda conditioning with FiLM')
+    lambda_array = np.full((X_train.shape[0], 1), L)
   del features; del labels # memory purposes
   if BINARY_MASK:
     Y_train = nets.convert_to_binary_mask(Y_train)
@@ -439,6 +450,15 @@ if LOAD_INTO_MEM:
   else:
     train_dataset = tf.data.Dataset.from_tensor_slices((X_train, Y_train))
     test_dataset = tf.data.Dataset.from_tensor_slices((X_test, Y_test))
+  if LAMBDA_CONDITIONING:
+    train_dataset = tf.data.Dataset.from_tensor_slices((
+      {'density_input': X_train, 'lambda_input': lambda_array},
+      {'output_conv': Y_train, 'lambda_output': lambda_array}
+    ))
+    test_dataset = tf.data.Dataset.from_tensor_slices((
+      {'density_input': X_test, 'lambda_input': lambda_array},
+      {'output_conv': Y_test, 'lambda_output': lambda_array}
+    ))
 else:
   print('>>> Loading train, val data into tf.data.Dataset from memmapped .npy files')
   print('>>> Loading X_train, Y_train, X_test, Y_test from .npy files')
@@ -536,6 +556,8 @@ hp_dict['OFF'] = OFF
 hp_dict['UNIFORM_FLAG'] = UNIFORM_FLAG
 hp_dict['ADD_RSD'] = ADD_RSD
 hp_dict['PARTIAL_CONV'] = USE_PCONV
+hp_dict['ATTENTION_UNET'] = ATTENTION_UNET
+hp_dict['LAMBDA_CONDITIONING'] = LAMBDA_CONDITIONING
 if BOUNDARY_MASK is not None:
   hp_dict['BOUNDARY_MASK'] = BOUNDARY_MASK
 print('#############################################')
@@ -614,15 +636,31 @@ if MULTI_FLAG:
                             batch_normalization=BATCHNORM,
                             dropout_rate=DROPOUT,
                             model_name=MODEL_NAME,
-                            REG_FLAG=REGULARIZE_FLAG)
+                            REG_FLAG=REGULARIZE_FLAG,
+                            LAMBDA_CONDITIONING=LAMBDA_CONDITIONING)
       else:
         model = nets.unet_partial_conv_3d_with_survey_mask(
           input_shape, initial_filters=FILTERS, depth=DEPTH,
           last_activation=last_activation
         )
-      model.compile(optimizer=nets.Adam(learning_rate=LR),
-                                        loss=loss,
-                                        metrics=metrics)
+      if ATTENTION_UNET:
+        print('>>> Using Attention U-Net')
+        model = nets.attention_unet_3d(input_shape, N_CLASSES, FILTERS, DEPTH,
+                                       last_activation=last_activation,
+                                       batch_normalization=BATCHNORM,
+                                       dropout_rate=DROPOUT,
+                                       model_name=MODEL_NAME,
+                                       REG_FLAG=REGULARIZE_FLAG,
+                                       LAMBDA_CONDITIONING=LAMBDA_CONDITIONING)
+      if LAMBDA_CONDITIONING:
+        model.compile(optimizer=nets.Adam(learning_rate=LR),
+                      loss={'output_conv': loss, 'lambda_output': 'mse'},
+                      loss_weights={'output_conv': 1.0, 'lambda_output': 0.01},
+                      metrics={'output_conv': metrics, 'lambda_output': 'mse'})
+      else:
+        model.compile(optimizer=nets.Adam(learning_rate=LR),
+                                          loss=loss,
+                                          metrics=metrics)
 else:
   if os.path.exists(FILE_OUT+MODEL_NAME) and LOAD_MODEL_FLAG:
     print('>>> Loaded model:',FILE_OUT+MODEL_NAME)
@@ -635,12 +673,27 @@ else:
                           batch_normalization=BATCHNORM,
                           dropout_rate=DROPOUT,
                           model_name=MODEL_NAME,
-                          REG_FLAG=REGULARIZE_FLAG)
+                          REG_FLAG=REGULARIZE_FLAG,
+                          LAMBDA_CONDITIONING=LAMBDA_CONDITIONING)
     else:
       model = nets.unet_partial_conv_3d_with_survey_mask(
         input_shape, initial_filters=FILTERS, depth=DEPTH,
         last_activation=last_activation
       )
+    if ATTENTION_UNET:
+      print('>>> Using Attention U-Net')
+      model = nets.attention_unet_3d(input_shape, N_CLASSES, FILTERS, DEPTH,
+                                     last_activation=last_activation,
+                                     batch_normalization=BATCHNORM,
+                                     dropout_rate=DROPOUT,
+                                     model_name=MODEL_NAME,
+                                     REG_FLAG=REGULARIZE_FLAG,
+                                     LAMBDA_CONDITIONING=LAMBDA_CONDITIONING)
+    if LAMBDA_CONDITIONING:
+      model.compile(optimizer=nets.Adam(learning_rate=LR),
+                    loss={'output_conv': loss, 'lambda_output': 'mse'},
+                    loss_weights={'output_conv': 1.0, 'lambda_output': 0.01},
+                    metrics={'output_conv': metrics, 'lambda_output': 'mse'})
     model.compile(optimizer=nets.Adam(learning_rate=LR),
                                           loss=loss,
                                           metrics=metrics)

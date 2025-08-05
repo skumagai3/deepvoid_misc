@@ -25,7 +25,7 @@ from tensorflow.keras.optimizers import Adam # type: ignore
 #from tensorflow.keras.utils.layer_utils import count_params # doesnt work?
 from tensorflow.python.keras.utils import layer_utils
 from keras.utils import to_categorical
-from keras.layers import Input, Conv3D, MaxPooling3D, Conv3DTranspose, UpSampling3D, Concatenate, BatchNormalization, Activation, Dropout, Lambda, Layer, Add, Multiply
+from keras.layers import Input, Conv3D, MaxPooling3D, Conv3DTranspose, UpSampling3D, Concatenate, BatchNormalization, Activation, Dropout, Lambda, Layer, Add, Multiply, Dense, Reshape, GlobalAveragePooling3D
 from keras import backend as K
 from keras.losses import CategoricalCrossentropy, SparseCategoricalCrossentropy, BinaryCrossentropy
 #from keras.losses import CategoricalFocalCrossentropy # not available in tf 2.10.0!!!
@@ -846,7 +846,10 @@ def unet_partial_conv_3d_with_survey_mask(input_shape, mask_input_shape=None, nu
 #---------------------------------------------------------
 # Function to create a 3D U-Net model
 #---------------------------------------------------------
-def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation='relu', last_activation='softmax', batch_normalization=False, BN_scheme='last', dropout_rate=None, DROP_scheme='last', REG_FLAG = False, model_name='3D_U_Net', report_params=False):
+def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation='relu', 
+            last_activation='softmax', batch_normalization=False, BN_scheme='last', 
+            dropout_rate=None, DROP_scheme='last', REG_FLAG = False, model_name='3D_U_Net', 
+            report_params=False, lambda_conditioning=False):
   '''
   Constructs a 3D U-Net model for semantic segmentation.
 
@@ -880,7 +883,8 @@ def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation=
   if REG_FLAG == False:
     REG_FLAG = None
   # Input
-  inputs = Input(input_shape)
+  inputs = Input(input_shape, name='density_input')
+  lambda_input = Input(shape=(1,), name='lambda_conditioning_input') if lambda_conditioning else None
   
   # Encoder path
   encoder_outputs = []
@@ -897,6 +901,17 @@ def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation=
   x = conv_block(x, initial_filters * (2 ** depth), 'bottleneck', activation,
                  batch_normalization, dropout_rate, BN_scheme, DROP_scheme,
                  REG_FLAG)
+  # FiLM layer for lambda conditioning
+  if lambda_conditioning and lambda_input is not None:
+    n_filters = x.shape[-1]
+    gamma = Dense(n_filters, activation='linear', name='gamma_dense')(lambda_input)
+    beta = Dense(n_filters, activation='linear', name='beta_dense')(lambda_input)
+    gamma = Reshape((1, 1, 1, n_filters))(gamma)
+    beta = Reshape((1, 1, 1, n_filters))(beta)
+    x = Multiply()([x, gamma])
+    x = Add()([x, beta])
+    x_gap = GlobalAveragePooling3D()(x)
+    lambda_output = Dense(1, activation='linear', name='lambda_output')(x_gap)
   
   # Decoder path
   for d in reversed(range(depth)):
@@ -912,8 +927,10 @@ def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation=
   outputs = Conv3D(num_classes, kernel_size=(1, 1, 1), name='output_conv')(x)
   if last_activation is not None:
     outputs = Activation(last_activation)(outputs)
-  
-  model = Model(inputs=inputs, outputs=outputs, name=model_name)
+  if lambda_conditioning and lambda_input is not None:
+    model = Model(inputs=[inputs, lambda_input], outputs=[outputs, lambda_output], name=model_name)
+  else:
+    model = Model(inputs=inputs, outputs=outputs, name=model_name)
   # calculate number of parameters:
   trainable_ps = layer_utils.count_params(model.trainable_weights)
   nontrainable_ps = layer_utils.count_params(model.non_trainable_weights)
@@ -929,7 +946,8 @@ def unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation=
 def attention_unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, activation='relu',
                       last_activation='softmax', batch_normalization=False, BN_scheme='last',
                       dropout_rate=None, DROP_scheme='last', REG_FLAG=False,
-                      model_name='Attention_3D_U_Net', report_params=False):
+                      model_name='Attention_3D_U_Net', report_params=False,
+                      lambda_conditioning=False):
   """
   Constructs a 3D Attention U-Net model for semantic segmentation.
   """
@@ -949,7 +967,8 @@ def attention_unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, a
   if not REG_FLAG:
     REG_FLAG = None
 
-  inputs = Input(input_shape)
+  inputs = Input(input_shape, name='density_input')
+  lambda_input = Input(shape=(1,), name='lambda_conditioning_input') if lambda_conditioning else None
   encoder_outputs = []
   x = inputs
 
@@ -966,6 +985,16 @@ def attention_unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, a
   filters = initial_filters * (2 ** depth)
   x = conv_block(x, filters, 'bottleneck', activation, batch_normalization,
                  dropout_rate, BN_scheme, DROP_scheme, REG_FLAG)
+  if lambda_conditioning and lambda_input is not None:
+    n_filters = x.shape[-1]
+    gamma = Dense(n_filters, activation='linear', name='gamma_dense')(lambda_input)
+    beta = Dense(n_filters, activation='linear', name='beta_dense')(lambda_input)
+    gamma = Reshape((1, 1, 1, n_filters))(gamma)
+    beta = Reshape((1, 1, 1, n_filters))(beta)
+    x = Multiply()([x, gamma])
+    x = Add()([x, beta])
+    x_gap = GlobalAveragePooling3D()(x)
+    lambda_output = Dense(1, activation='linear', name='lambda_output')(x_gap)
 
   # Decoder path with attention
   for d in reversed(range(depth)):
@@ -982,8 +1011,10 @@ def attention_unet_3d(input_shape, num_classes=4, initial_filters=16, depth=4, a
   outputs = Conv3D(num_classes, kernel_size=(1, 1, 1), name='output_conv')(x)
   if last_activation is not None:
     outputs = Activation(last_activation)(outputs)
-
-  model = Model(inputs=inputs, outputs=outputs, name=model_name)
+  if lambda_conditioning and lambda_input is not None:
+    model = Model(inputs=[inputs, lambda_input], outputs=[outputs, lambda_output], name=model_name)
+  else:
+    model = Model(inputs=inputs, outputs=outputs, name=model_name)
 
   # Report parameter count
   trainable_ps = layer_utils.count_params(model.trainable_weights)

@@ -63,7 +63,8 @@ optional.add_argument('--LEARNING_RATE_PATIENCE', type=int, default=10,
 optional.add_argument('--EARLY_STOP_PATIENCE', type=int, default=10,
                       help='Patience for early stopping.')
 optional.add_argument('--EXTRA_INPUTS', type=str, default=None,
-                      help='Additional inputs for the model such as color or fluxes.')
+                      choices=['g-r', 'r_flux_density'],
+                      help='Name of additional inputs for the model such as color or fluxes.')
 optional.add_argument('--ADD_RSD', action='store_true',
                       help='Add RSD (Redshift Space Distortion) to the inputs.')
 optional.add_argument('--L_VAL', type=str, default='10',
@@ -126,6 +127,26 @@ if UNIFORM_FLAG:
     for key in data_info:
         if key != '0.33': # DM particles are already uniform
             data_info[key] = data_info[key].replace('.fvol', '_uniform.fvol')
+# Add extra input files mapping
+if EXTRA_INPUTS == 'g-r':
+    EXTRA_INPUTS_INFO = {
+        '0.33': 'subs1_g-r_Nm512_L3.fvol',
+        '3': 'subs1_g-r_Nm512_L3.fvol',
+        '5': 'subs1_g-r_Nm512_L5.fvol',
+        '7': 'subs1_g-r_Nm512_L7.fvol',
+        '10': 'subs1_g-r_Nm512_L10.fvol',
+    }
+elif EXTRA_INPUTS == 'r_flux_density':
+    EXTRA_INPUTS_INFO = {
+        '0.33': 'subs1_r_flux_density_Nm512_L3.fvol',
+        '3': 'subs1_r_flux_density_Nm512_L3.fvol',
+        '5': 'subs1_r_flux_density_Nm512_L5.fvol',
+        '7': 'subs1_r_flux_density_Nm512_L7.fvol',
+        '10': 'subs1_r_flux_density_Nm512_L10.fvol',
+    }
+if ADD_RSD and EXTRA_INPUTS is not None:
+    for key in EXTRA_INPUTS_INFO:
+        EXTRA_INPUTS_INFO[key] = EXTRA_INPUTS_INFO[key].replace('.fvol', '_RSD.fvol')
 #================================================================
 # Define loading function
 #================================================================
@@ -150,15 +171,20 @@ def load_data(inter_sep, extra_inputs=None):
         SUBGRID=SUBGRID
     )
     if extra_inputs is not None:
-        print(f'Loading additional inputs from {extra_inputs}...')
-        extra_data_file = DATA_PATH + extra_inputs
+        if inter_sep not in EXTRA_INPUTS_INFO:
+            raise ValueError(f'Invalid interparticle separation for extra inputs: {inter_sep}. Must be one of {list(EXTRA_INPUTS_INFO.keys())}.')
+        extra_input_file = DATA_PATH + EXTRA_INPUTS_INFO[inter_sep]
+        print(f'Loading additional inputs from {extra_input_file}...')
         extra_input = nets.chunk_array(
-            extra_data_file,
+            extra_input_file,
             SUBGRID=SUBGRID,
             scale=True
         )
+        if extra_input.shape[:-1] != features.shape[:-1]:
+            raise ValueError(f'Extra input shape {extra_input.shape} does not match features shape {features.shape}.')
+        features = np.concatenate([features, extra_input], axis=-1)
     print(f'Features shape: {features.shape}, Labels shape: {labels.shape}')
-    return features, labels, extra_input if extra_inputs else None
+    return features, labels
 def make_dataset(delta, tij_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot=False):
     '''
     Create a TensorFlow dataset from the features and labels.
@@ -194,19 +220,6 @@ def make_dataset(delta, tij_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot
     dataset = dataset.prefetch(tf.data.AUTOTUNE)
     return dataset
 #================================================================
-# Make fixed validation set (since we are interested in L=10 Mpc/h)
-#================================================================
-print(f'Loading validation data for interparticle separation L={L_VAL} Mpc/h...')
-if L_VAL not in inter_seps:
-    raise ValueError(f'Invalid interparticle separation for validation: {L_VAL}. Must be one of {inter_seps}.')
-if EXTRA_INPUTS:
-    val_features, val_labels, val_extra_input = load_data(L_VAL, extra_inputs=EXTRA_INPUTS)
-else:
-    val_features, val_labels, val_extra_input = load_data(L_VAL)
-val_dataset = make_dataset(val_features, val_labels, batch_size=BATCH_SIZE, shuffle=False)
-if EXTRA_INPUTS:
-    val_extra_input = tf.data.Dataset.from_tensor_slices(val_extra_input).batch(BATCH_SIZE)
-#================================================================
 # Create model parameters
 #================================================================
 SIM = 'TNG'
@@ -218,23 +231,35 @@ if ADD_RSD:
 if USE_ATTENTION:
     MODEL_NAME += '_attention'
 if EXTRA_INPUTS:
-    pass # Add logic for handling extra inputs later
+    MODEL_NAME += f'_{EXTRA_INPUTS}'
+print(f'Model name stem: {MODEL_NAME}')
 DATE = datetime.datetime.now().strftime('%Y-%m-%d_%H-%M-%S')
 MODEL_NAME += f'_{DATE}'
 print(f'Model name: {MODEL_NAME}')
 last_activation = 'softmax' # NOTE implement changing later 
 input_shape = (None, None, None, 1)
 if EXTRA_INPUTS:
-    input_shape = (None, None, None, 1 + len(EXTRA_INPUTS.split(','))) # Adjust for extra inputs
+    input_shape = (None, None, None, 1 + 1) # Adjust for extra inputs
 print(f'Input shape: {input_shape}')
 #================================================================
-# Set loss function and metrics
+# Make fixed validation set (since we are interested in L=10 Mpc/h)
 #================================================================
 if 'SCCE' in LOSS or 'DISCCE' in LOSS:
     ONE_HOT = False
 else:
     ONE_HOT = True
 print(f'ONE_HOT encoding: {ONE_HOT}')
+print(f'Loading validation data for interparticle separation L={L_VAL} Mpc/h...')
+if L_VAL not in inter_seps:
+    raise ValueError(f'Invalid interparticle separation for validation: {L_VAL}. Must be one of {inter_seps}.')
+if EXTRA_INPUTS:
+    val_features, val_labels = load_data(L_VAL, extra_inputs=EXTRA_INPUTS)
+else:
+    val_features, val_labels = load_data(L_VAL)
+val_dataset = make_dataset(val_features, val_labels, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT)
+#================================================================
+# Set loss function and metrics
+#================================================================
 metrics = ['accuracy']
 metrics += [nets.MCC_keras(int_labels=not ONE_HOT),
             nets.F1_micro_keras(int_labels=not ONE_HOT),
@@ -349,11 +374,11 @@ print('>>> Starting training loop over interparticle separations...')
 epoch_offset = 0
 for i, inter_sep in enumerate(inter_seps):
     print(f'Starting training for interparticle separation L={inter_sep} Mpc/h...')
-    if EXTRA_INPUTS:
-        train_features, train_labels, train_extra_input = load_data(inter_sep, extra_inputs=EXTRA_INPUTS)
+    if EXTRA_INPUTS is not None:
+        train_features, train_labels = load_data(inter_sep, extra_inputs=EXTRA_INPUTS)
     else:
-        train_features, train_labels, train_extra_input = load_data(inter_sep)
-    
+        train_features, train_labels = load_data(inter_sep)
+    print(f'Training data loaded for L={inter_sep}. Features shape: {train_features.shape}, Labels shape: {train_labels.shape}')
     # Create the training dataset
     train_dataset = make_dataset(train_features, train_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot=ONE_HOT)
     # freeze layers based on interparticle separation. freeze more layers for larger interparticle separations:
@@ -484,8 +509,7 @@ print('>>> Making predictions on validation set...')
 predictions = model.predict(val_dataset, verbose=2, batch_size=BATCH_SIZE)
 print('>>> Predictions made on validation set.')
 print('Predictions shape:', predictions.shape)
-if EXTRA_INPUTS:
-    val_extra_input = tf.concat([val_features, val_extra_input], axis=-1)
+# Calculate scores on validation set
 FILE_PRED = PRED_PATH+ MODEL_NAME + f'_predictions_L{L_VAL}.fvol'
 nets.save_scores_from_fvol(
     val_labels, predictions, MODEL_PATH + MODEL_NAME + f'_L{L_VAL}.h5',
@@ -495,7 +519,8 @@ nets.save_scores_from_model(DATA_PATH + data_info[L_VAL], FILE_MASK,
                            MODEL_PATH + MODEL_NAME + f'_L{L_VAL}.h5',
                            MODEL_FIG_PATH, FILE_PRED,
                            GRID=GRID, SUBGRID=SUBGRID, OFF=OFF,
-                           TRAIN_SCORE=False, EXTRA_INPUTS=EXTRA_INPUTS)
+                           TRAIN_SCORE=False, 
+                           EXTRA_INPUTS=EXTRA_INPUTS_INFO[L_VAL] if EXTRA_INPUTS else None)
 print('>>> Curricular training completed successfully.')
 print('>>> Model and predictions saved in:', MODEL_FIG_PATH)
 print('>>> Predictions saved in:', FILE_PRED)
