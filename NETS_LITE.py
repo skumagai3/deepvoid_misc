@@ -596,9 +596,16 @@ class VoidFractionMonitor(Callback):
         for i, (x_batch, y_batch) in enumerate(self.val_dataset):
             if self.max_batches and i >= self.max_batches:
                 break
-
+            
             y_pred = self.model.predict(x_batch, verbose=0)
-            y_pred_cls = np.argmax(y_pred, axis=-1)
+            if isinstance(y_pred, dict):
+              y_pred_main = y_pred.get('last_activation')
+            elif isinstance(y_pred, list):
+              y_pred_main = y_pred[0]
+            else:
+              y_pred_main = y_pred
+              
+            y_pred_cls = np.argmax(y_pred_main, axis=-1)
 
             if y_batch.shape[-1] > 1:
                 y_true_cls = np.argmax(y_batch, axis=-1)
