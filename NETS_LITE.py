@@ -25,6 +25,7 @@ from tensorflow.keras.optimizers import Adam # type: ignore
 #from tensorflow.keras.utils.layer_utils import count_params # doesnt work?
 from tensorflow.python.keras.utils import layer_utils
 from keras.utils import to_categorical
+import tensorflow as tf
 from keras.layers import Input, Conv3D, MaxPooling3D, Conv3DTranspose, UpSampling3D, Concatenate, BatchNormalization, Activation, Dropout, Lambda, Layer, Add, Multiply, Dense, Reshape, GlobalAveragePooling3D
 from keras import backend as K
 from keras.losses import CategoricalCrossentropy, SparseCategoricalCrossentropy, BinaryCrossentropy
@@ -461,17 +462,17 @@ def categorical_focal_loss(alpha, gamma=2.):
     if y_true.dtype == 'uint8':
       y_true = tf.cast(y_true, 'float32')
     # Clip the prediction value to prevent NaN's and Inf's
-    epsilon = K.epsilon()
-    y_pred = K.clip(y_pred, epsilon, 1. - epsilon)
+    epsilon = tf.keras.backend.epsilon()
+    y_pred = tf.clip_by_value(y_pred, epsilon, 1. - epsilon)
 
     # Calculate Cross Entropy
-    cross_entropy = -y_true * K.log(y_pred)
+    cross_entropy = -y_true * tf.math.log(y_pred)
 
     # Calculate Focal Loss
-    loss = alpha * K.pow(1 - y_pred, gamma) * cross_entropy
+    loss = alpha * tf.math.pow(1 - y_pred, gamma) * cross_entropy
 
     # Compute mean loss in mini_batch
-    return K.mean(K.sum(loss, axis=-1))
+    return tf.reduce_mean(tf.reduce_sum(loss, axis=-1))
 
   return categorical_focal_loss_fixed
 #---------------------------------------------------------
@@ -1050,18 +1051,18 @@ def PR_F1_keras(int_labels=True):
     Returns: tuple of precision, recall, F1 score. (macro-avg)
     '''
     if not int_labels:
-      y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.argmax(y_true, axis=-1)
       y_true = tf.expand_dims(y_true, axis=-1)
-    y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.argmax(y_pred, axis=-1)
     y_pred = tf.expand_dims(y_pred, axis=-1)
-    y_true = K.cast(y_true, 'float32')
-    y_pred = K.cast(y_pred, 'float32')
-    TP = K.sum(K.cast(y_true * y_pred, 'float'), axis=0)
-    FP = K.sum(K.cast((1-y_true) * y_pred, 'float'), axis=0)
-    FN = K.sum(K.cast(y_true * (1-y_pred), 'float'), axis=0)
-    precision = TP / (TP + FP + K.epsilon())
-    recall = TP / (TP + FN + K.epsilon())
-    f1 = 2 * precision * recall / (precision + recall + K.epsilon())
+    y_true = tf.cast(y_true, 'float32')
+    y_pred = tf.cast(y_pred, 'float32')
+    TP = tf.reduce_sum(tf.cast(y_true * y_pred, 'float'), axis=0)
+    FP = tf.reduce_sum(tf.cast((1-y_true) * y_pred, 'float'), axis=0)
+    FN = tf.reduce_sum(tf.cast(y_true * (1-y_pred), 'float'), axis=0)
+    precision = TP / (TP + FP + tf.keras.backend.epsilon())
+    recall = TP / (TP + FN + tf.keras.backend.epsilon())
+    f1 = 2 * precision * recall / (precision + recall + tf.keras.backend.epsilon())
     return precision, recall, f1
   return PR_F1_macro
 def PR_F1_micro_keras(int_labels=True):
@@ -1076,18 +1077,18 @@ def PR_F1_micro_keras(int_labels=True):
     Returns: tuple of precision, recall, F1 score. (micro-avg)
     '''
     if not int_labels:
-      y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.argmax(y_true, axis=-1)
       y_true = tf.expand_dims(y_true, axis=-1)
-    y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.argmax(y_pred, axis=-1)
     y_pred = tf.expand_dims(y_pred, axis=-1)
-    y_true = K.cast(y_true, 'float32')
-    y_pred = K.cast(y_pred, 'float32')
-    TP = K.sum(K.cast(y_true * y_pred, 'float'))
-    FP = K.sum(K.cast((1-y_true) * y_pred, 'float'))
-    FN = K.sum(K.cast(y_true * (1-y_pred), 'float'))
-    precision = TP / (TP + FP + K.epsilon())
-    recall = TP / (TP + FN + K.epsilon())
-    f1 = 2 * precision * recall / (precision + recall + K.epsilon())
+    y_true = tf.cast(y_true, 'float32')
+    y_pred = tf.cast(y_pred, 'float32')
+    TP = tf.reduce_sum(tf.cast(y_true * y_pred, 'float'))
+    FP = tf.reduce_sum(tf.cast((1-y_true) * y_pred, 'float'))
+    FN = tf.reduce_sum(tf.cast(y_true * (1-y_pred), 'float'))
+    precision = TP / (TP + FP + tf.keras.backend.epsilon())
+    recall = TP / (TP + FN + tf.keras.backend.epsilon())
+    f1 = 2 * precision * recall / (precision + recall + tf.keras.backend.epsilon())
     return precision, recall, f1
   return PR_F1_micro
 def precision_keras(num_classes=4, int_labels=True):
@@ -1101,15 +1102,15 @@ def precision_keras(num_classes=4, int_labels=True):
     Returns: precision. tf.Tensor.
     '''
     if not int_labels:
-      y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.argmax(y_true, axis=-1)
       y_true = tf.expand_dims(y_true, axis=-1)
-    y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.argmax(y_pred, axis=-1)
     y_pred = tf.expand_dims(y_pred, axis=-1)
-    y_true = K.cast(y_true, 'float32')
-    y_pred = K.cast(y_pred, 'float32')
-    TP = K.sum(y_true * y_pred, axis=0)
-    FP = K.sum((1-y_true) * y_pred, axis=0)
-    precision = K.mean(TP / (TP + FP + K.epsilon()))
+    y_true = tf.cast(y_true, 'float32')
+    y_pred = tf.cast(y_pred, 'float32')
+    TP = tf.reduce_sum(y_true * y_pred, axis=0)
+    FP = tf.reduce_sum((1-y_true) * y_pred, axis=0)
+    precision = tf.reduce_mean(TP / (TP + FP + tf.keras.backend.epsilon()))
     return precision
   return precision_macro
 def recall_keras(num_classes=4, int_labels=True):
@@ -1123,15 +1124,15 @@ def recall_keras(num_classes=4, int_labels=True):
     Returns: recall. tf.Tensor.
     '''
     if not int_labels:
-      y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.argmax(y_true, axis=-1)
       y_true = tf.expand_dims(y_true, axis=-1)
-    y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.argmax(y_pred, axis=-1)
     y_pred = tf.expand_dims(y_pred, axis=-1)
-    y_true = K.cast(y_true, 'float32')
-    y_pred = K.cast(y_pred, 'float32')
-    TP = K.sum(y_true * y_pred, axis=0)
-    FN = K.sum(y_true * (1-y_pred), axis=0)
-    recall = K.mean(TP / (TP + FN + K.epsilon()))
+    y_true = tf.cast(y_true, 'float32')
+    y_pred = tf.cast(y_pred, 'float32')
+    TP = tf.reduce_sum(y_true * y_pred, axis=0)
+    FN = tf.reduce_sum(y_true * (1-y_pred), axis=0)
+    recall = tf.reduce_mean(TP / (TP + FN + tf.keras.backend.epsilon()))
     return recall
   return recall_macro
 def F1_keras(num_classes=4, int_labels=True):
@@ -1146,7 +1147,7 @@ def F1_keras(num_classes=4, int_labels=True):
     '''
     precision = precision_keras(num_classes, int_labels)(y_true, y_pred)
     recall = recall_keras(num_classes, int_labels)(y_true, y_pred)
-    f1 = 2 * precision * recall / (precision + recall + K.epsilon())
+    f1 = 2 * precision * recall / (precision + recall + tf.keras.backend.epsilon())
     return f1
   return F1_macro
 def precision_micro_keras(num_classes=4, int_labels=True):
@@ -1265,16 +1266,16 @@ def balanced_accuracy_keras(num_classes=4, int_labels=True):
     Returns: balanced accuracy.
     '''
     if not int_labels:
-      y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.argmax(y_true, axis=-1)
       y_true = tf.expand_dims(y_true, axis=-1)
-    y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.argmax(y_pred, axis=-1)
     y_pred = tf.expand_dims(y_pred, axis=-1)
-    y_true = K.cast(y_true, 'float32')
-    y_pred = K.cast(y_pred, 'float32')
-    TP = K.sum(K.cast(y_true * y_pred, 'float'), axis=0)
-    FN = K.sum(K.cast(y_true * (1-y_pred), 'float'), axis=0)
-    recall_per_class = TP / (TP + FN + K.epsilon())
-    balanced_accuracy = K.mean(recall_per_class)
+    y_true = tf.cast(y_true, 'float32')
+    y_pred = tf.cast(y_pred, 'float32')
+    TP = tf.reduce_sum(tf.cast(y_true * y_pred, 'float'), axis=0)
+    FN = tf.reduce_sum(tf.cast(y_true * (1-y_pred), 'float'), axis=0)
+    recall_per_class = TP / (TP + FN + tf.keras.backend.epsilon())
+    balanced_accuracy = tf.reduce_mean(recall_per_class)
     return balanced_accuracy
   return balanced_accuracy
 def void_PR_F1_keras(num_classes=4, int_labels=True):
@@ -1289,18 +1290,18 @@ def void_PR_F1_keras(num_classes=4, int_labels=True):
     Returns: tuple of precision, recall, F1 score for the void class.
     '''
     if not int_labels:
-      y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.argmax(y_true, axis=-1)
       y_true = tf.expand_dims(y_true, axis=-1)
-    y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.argmax(y_pred, axis=-1)
     y_pred = tf.expand_dims(y_pred, axis=-1)
-    void_true = K.cast(K.equal(y_true, 0), 'float')
-    void_pred = K.cast(K.equal(y_pred, 0), 'float')
-    TP = K.sum(void_true * void_pred)
-    FP = K.sum((1-void_true) * void_pred)
-    FN = K.sum(void_true * (1-void_pred))
-    precision = TP / (TP + FP + K.epsilon())
-    recall = TP / (TP + FN + K.epsilon())
-    f1 = 2 * precision * recall / (precision + recall + K.epsilon())
+    void_true = tf.cast(tf.equal(y_true, 0), 'float')
+    void_pred = tf.cast(tf.equal(y_pred, 0), 'float')
+    TP = tf.reduce_sum(void_true * void_pred)
+    FP = tf.reduce_sum((1-void_true) * void_pred)
+    FN = tf.reduce_sum(void_true * (1-void_pred))
+    precision = TP / (TP + FP + tf.keras.backend.epsilon())
+    recall = TP / (TP + FN + tf.keras.backend.epsilon())
+    f1 = 2 * precision * recall / (precision + recall + tf.keras.backend.epsilon())
     return precision, recall, f1
   return void_PR_F1
 def void_F1_keras(num_classes=4, int_labels=True):
@@ -1340,13 +1341,13 @@ def true_wall_pred_as_void_keras(num_classes=4, int_labels=True):
     Returns: true wall predicted as void.
     '''
     if not int_labels:
-      y_true = K.argmax(y_true, axis=-1)
+      y_true = tf.argmax(y_true, axis=-1)
       y_true = tf.expand_dims(y_true, axis=-1)
-    y_pred = K.argmax(y_pred, axis=-1)
+    y_pred = tf.argmax(y_pred, axis=-1)
     y_pred = tf.expand_dims(y_pred, axis=-1)
-    wall_true = K.cast(K.equal(y_true, 1), 'float')
-    void_pred = K.cast(K.equal(y_pred, 0), 'float')
-    true_wall_pred_as_void = K.sum(wall_true * (1-void_pred) * void_pred) / (K.sum(wall_true) + K.epsilon())
+    wall_true = tf.cast(tf.equal(y_true, 1), 'float')
+    void_pred = tf.cast(tf.equal(y_pred, 0), 'float')
+    true_wall_pred_as_void = tf.reduce_sum(wall_true * (1-void_pred) * void_pred) / (tf.reduce_sum(wall_true) + tf.keras.backend.epsilon())
     return true_wall_pred_as_void
   return true_wall_pred_as_void
 #---------------------------------------------------------
