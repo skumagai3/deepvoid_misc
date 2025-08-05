@@ -637,7 +637,7 @@ if MULTI_FLAG:
                             dropout_rate=DROPOUT,
                             model_name=MODEL_NAME,
                             REG_FLAG=REGULARIZE_FLAG,
-                            LAMBDA_CONDITIONING=LAMBDA_CONDITIONING)
+                            lambda_conditioning=LAMBDA_CONDITIONING)
       else:
         model = nets.unet_partial_conv_3d_with_survey_mask(
           input_shape, initial_filters=FILTERS, depth=DEPTH,
@@ -651,7 +651,7 @@ if MULTI_FLAG:
                                        dropout_rate=DROPOUT,
                                        model_name=MODEL_NAME,
                                        REG_FLAG=REGULARIZE_FLAG,
-                                       LAMBDA_CONDITIONING=LAMBDA_CONDITIONING)
+                                       lambda_conditioning=LAMBDA_CONDITIONING)
       if LAMBDA_CONDITIONING:
         model.compile(optimizer=nets.Adam(learning_rate=LR),
                       loss={'output_conv': loss, 'lambda_output': 'mse'},
@@ -674,7 +674,7 @@ else:
                           dropout_rate=DROPOUT,
                           model_name=MODEL_NAME,
                           REG_FLAG=REGULARIZE_FLAG,
-                          LAMBDA_CONDITIONING=LAMBDA_CONDITIONING)
+                          lambda_conditioning=LAMBDA_CONDITIONING)
     else:
       model = nets.unet_partial_conv_3d_with_survey_mask(
         input_shape, initial_filters=FILTERS, depth=DEPTH,
@@ -688,7 +688,7 @@ else:
                                      dropout_rate=DROPOUT,
                                      model_name=MODEL_NAME,
                                      REG_FLAG=REGULARIZE_FLAG,
-                                     LAMBDA_CONDITIONING=LAMBDA_CONDITIONING)
+                                     lambda_conditioning=LAMBDA_CONDITIONING)
     if LAMBDA_CONDITIONING:
       model.compile(optimizer=nets.Adam(learning_rate=LR),
                     loss={'output_conv': loss, 'lambda_output': 'mse'},
