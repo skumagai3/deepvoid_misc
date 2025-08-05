@@ -96,6 +96,21 @@ print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS},
 if ROOT_DIR.startswith('/ifs/groups/vogeleyGrp/'):
     from tf.keras import mixed_precision
     mixed_precision.set_global_policy('mixed_float16')
+
+#================================================================
+# Set up custom objects for model serialization
+#================================================================
+CUSTOM_OBJECTS = {
+    'MCC_keras': nets.MCC_keras,
+    'F1_micro_keras': nets.F1_micro_keras,
+    'void_F1_keras': nets.void_F1_keras,
+    'SCCE_Dice_loss': nets.SCCE_Dice_loss,
+    'categorical_focal_loss': nets.categorical_focal_loss,
+    'SCCE_void_penalty': nets.SCCE_void_penalty,
+    'VoidFractionMonitor': nets.VoidFractionMonitor,
+    'Cast': tf.cast
+}
+
 #================================================================
 # Set paths (according to Picotte data structure)
 #================================================================
@@ -282,28 +297,36 @@ metrics = ['accuracy']
 metrics += [nets.MCC_keras(int_labels=not ONE_HOT),
             nets.F1_micro_keras(int_labels=not ONE_HOT),
             nets.void_F1_keras(int_labels=not ONE_HOT)]
+
+# Define loss function based on LOSS argument
 if LOSS == 'CCE':
     loss_fn = tf.keras.losses.CategoricalCrossentropy()
 elif LOSS == 'DISCCE':
-    loss_fn = [nets.SCCE_Dice_loss]
+    loss_fn = nets.SCCE_Dice_loss
 elif LOSS == 'FOCAL_CCE':
     alpha = [0.4, 0.4, 0.15, 0.05]
     gamma = 2.0
-    loss_fn = [nets.categorical_focal_loss(alpha=alpha, gamma=gamma)]
+    loss_fn = nets.categorical_focal_loss(alpha=alpha, gamma=gamma)
     print(f'Using Focal Loss with alpha={alpha} and gamma={gamma}')
 elif LOSS == 'SCCE':
     loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
 elif LOSS == 'SCCE_Void_Penalty':
-    loss_fn = [nets.SCCE_void_penalty]
+    loss_fn = nets.SCCE_void_penalty
 elif LOSS == 'SCCE_Class_Penalty':
     #target_props = [0.65, 0.26, 0.09, 0.005]  # Example target proportions for void, wall, filament, halo
     target_props = None
     penalty_weights = [1.0, 0.9, 0.3, 0.1]
     penalty_type = 'mse'  # Mean Squared Error for penalty
-    loss_fn = lambda y_true, y_pred: nets.SCCE_class_proportion_penalty(
-        y_true, y_pred, target_proportions=target_props,
-        weights=penalty_weights, penalty_type=penalty_type
-    )
+    
+    # Create a proper named function instead of lambda for serialization compatibility
+    def scce_class_penalty_loss(y_true, y_pred):
+        return nets.SCCE_class_proportion_penalty(
+            y_true, y_pred, target_proportions=target_props,
+            weights=penalty_weights, penalty_type=penalty_type
+        )
+    loss_fn = scce_class_penalty_loss
+    # Add the custom loss function to the custom objects dictionary
+    CUSTOM_OBJECTS['scce_class_penalty_loss'] = scce_class_penalty_loss
 # Make tensorboard directory
 log_dir = ROOT_DIR + 'logs/fit/' + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") + '/'
 os.makedirs(log_dir, exist_ok=True)
@@ -477,18 +500,7 @@ for i, inter_sep in enumerate(inter_seps):
     # always load the best model weights after training
     if os.path.exists(checkpt_path):
         print(f'Loading best model from {checkpt_path}')
-        best_model = tf.keras.models.load_model(checkpt_path, custom_objects={
-            'MCC_keras': nets.MCC_keras,
-            'F1_micro_keras': nets.F1_micro_keras,
-            'void_F1_keras': nets.void_F1_keras,
-            'SCCE_Dice_loss': nets.SCCE_Dice_loss,
-            'categorical_focal_loss': nets.categorical_focal_loss,
-            'SCCE_void_penalty': nets.SCCE_void_penalty,
-            'categorical_focal_loss': nets.categorical_focal_loss,
-            'VoidFractionMonitor': nets.VoidFractionMonitor,
-            'Cast': tf.keras.layers.Lambda
-        },
-        compile=False)
+        best_model = tf.keras.models.load_model(checkpt_path, custom_objects=CUSTOM_OBJECTS, compile=False)
         model.set_weights(best_model.get_weights())
         print('Best model weights loaded.')
 
