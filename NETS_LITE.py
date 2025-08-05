@@ -2172,7 +2172,7 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED,
   Y_pred = run_predict_model(model, inputs, BATCH_SIZE, BINARY=BINARY)
   if isinstance(Y_pred, dict):
     # If model has named outputs, use the first one (usually the main output)
-    Y_pred = Y_pred['output_conv']
+    Y_pred = Y_pred['last_activation']
   Y_pred = assemble_cube2(Y_pred,GRID,SUBGRID,OFF)
 
   ### write out prediction
