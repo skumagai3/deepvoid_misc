@@ -2035,15 +2035,22 @@ def data_generator(data, batch_size):
   Generator function to feed data in batches to the model.
   Helps with OOM errors when predicting on a large volume.
   '''
-  num_samples = data.shape[0]
+  if isinstance(data, dict):
+    keys = list(data.keys())
+    num_samples = data[keys[0]].shape[0]
+  else:
+    num_samples = data.shape[0]
   i = 0
   while True:
     batch_start = i * batch_size
     batch_end = (i + 1) * batch_size
     if batch_end >= num_samples:
       batch_end = num_samples
-
-    yield data[batch_start:batch_end]
+    if isinstance(data, dict):
+      batch = {k: v[batch_start:batch_end] for k, v in data.items()}
+    else:
+      batch = data[batch_start:batch_end]
+    yield batch
     i += 1
     if i * batch_size >= num_samples:
       i = 0
@@ -2060,8 +2067,18 @@ def run_predict_model(model, X_test, batch_size, output_argmax=True, BINARY=Fals
   O: Y_pred (np.array of shape [N_samples,SUBGRID,SUBGRID,SUBGRID,1]) 
   (if output_argmax is True)
   '''
+  if isinstance(X_test, dict):
+    sample_array = next(iter(X_test.values()))
+    num_samples = sample_array.shape[0]
+  else:
+    num_samples = X_test.shape[0]
+  print(f'Running prediction on {num_samples} samples with batch size {batch_size}')
+  if num_samples < batch_size:
+    print(f'WARNING: Batch size {batch_size} is larger than number of samples {num_samples}. Setting batch size to {num_samples}.')
+    batch_size = num_samples
+
   gen = data_generator(X_test, batch_size)
-  N_steps = int(np.ceil(X_test.shape[0] / batch_size))
+  N_steps = int(np.ceil(num_samples / batch_size))
   Y_pred = []
   for _ in range(N_steps):
     X_batch = next(gen)
