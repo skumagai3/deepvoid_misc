@@ -73,6 +73,8 @@ optional.add_argument('--USE_ATTENTION', action='store_true',
                       help='Use attention U-Net architecture instead of standard U-Net.')
 optional.add_argument('--LAMBDA_CONDITIONING', action='store_true',
                       help='Use lambda conditioning in the model.')
+optional.add_argument('--N_EPOCHS_PER_INTER_SEP', type=int, default=50,
+                      help='Number of epochs to train for each interparticle separation. Default is 50.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 DEPTH = args.DEPTH
@@ -88,10 +90,11 @@ ADD_RSD = args.ADD_RSD
 L_VAL = args.L_VAL
 USE_ATTENTION = args.USE_ATTENTION
 LAMBDA_CONDITIONING = args.LAMBDA_CONDITIONING
-print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, L_VAL={L_VAL}, USE_ATTENTION={USE_ATTENTION}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}')
+N_EPOCHS_PER_INTER_SEP = args.N_EPOCHS_PER_INTER_SEP
+print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, L_VAL={L_VAL}, USE_ATTENTION={USE_ATTENTION}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}, N_EPOCHS_PER_INTER_SEP={N_EPOCHS_PER_INTER_SEP}')
 # use mixed precision if on Picotte
 if ROOT_DIR.startswith('/ifs/groups/vogeleyGrp/'):
-    from tensorflow.keras import mixed_precision
+    from tf.keras import mixed_precision
     mixed_precision.set_global_policy('mixed_float16')
 #================================================================
 # Set paths (according to Picotte data structure)
@@ -355,7 +358,6 @@ print(model.summary())
 # Training loop
 #================================================================
 print('>>> Starting curricular training...')
-N_EPOCHS_PER_INTER_SEP = 50  # Number of epochs per interparticle separation
 reduce_LR = ReduceLROnPlateau(
             patience=LEARNING_RATE_PATIENCE,
             factor=0.5,
@@ -483,7 +485,8 @@ for i, inter_sep in enumerate(inter_seps):
             'categorical_focal_loss': nets.categorical_focal_loss,
             'SCCE_void_penalty': nets.SCCE_void_penalty,
             'categorical_focal_loss': nets.categorical_focal_loss,
-            'VoidFractionMonitor': nets.VoidFractionMonitor
+            'VoidFractionMonitor': nets.VoidFractionMonitor,
+            'Cast': tf.keras.layers.Lambda
         },
         compile=False)
         model.set_weights(best_model.get_weights())
