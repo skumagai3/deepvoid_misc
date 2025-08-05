@@ -830,8 +830,16 @@ if (LOSS != 'SCCE' and LOSS != 'DISCCE'):
     Y_test = np.expand_dims(Y_test,axis=-1)
 #print('Y_pred summary:',np.unique(Y_pred,return_counts=True))
 #print('Y_test summary:',np.unique(Y_test,return_counts=True))
-print('Y_pred shape:',Y_pred.shape)
-print('Y_test shape:',Y_test.shape)
+try:
+  print('Y_pred shape:',Y_pred.shape)
+  print('Y_test shape:',Y_test.shape)
+except AttributeError:
+  print('Y_pred shape:',np.array(Y_pred).shape)
+  print('Y_test shape:',np.array(Y_test).shape)
+# if Y_pred is a dict, get the first key's value
+if isinstance(Y_pred, dict):
+  Y_pred = Y_pred[model.output_names[0]] # get the first output's predictions
+  print('>>> Y_pred is a dict, using first output:',model.output_names[0])
 # save scores
 print('>>> Calculating scores on validation data')
 if BINARY_MASK:
