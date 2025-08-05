@@ -96,7 +96,6 @@ print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS},
 if ROOT_DIR.startswith('/ifs/groups/vogeleyGrp/'):
     from tf.keras import mixed_precision
     mixed_precision.set_global_policy('mixed_float16')
-
 #================================================================
 # Set up custom objects for model serialization
 #================================================================
@@ -108,9 +107,9 @@ CUSTOM_OBJECTS = {
     'categorical_focal_loss': nets.categorical_focal_loss,
     'SCCE_void_penalty': nets.SCCE_void_penalty,
     'VoidFractionMonitor': nets.VoidFractionMonitor,
+    'RobustModelCheckpoint': nets.RobustModelCheckpoint,
     'Cast': tf.cast
 }
-
 #================================================================
 # Set paths (according to Picotte data structure)
 #================================================================
@@ -466,12 +465,14 @@ for i, inter_sep in enumerate(inter_seps):
         max_batches=16
     )
     checkpt_path = MODEL_PATH + MODEL_NAME + f'_L{inter_sep}.keras'
+    weights_path = MODEL_PATH + MODEL_NAME + f'_L{inter_sep}_weights.h5'
+    
     callbacks = [
-        ModelCheckpoint(
-            filepath=checkpt_path,
+        nets.RobustModelCheckpoint(
+            model_path=checkpt_path,
+            weights_path=weights_path,
             monitor='val_loss',
             save_best_only=True,
-            save_weights_only=False,
             mode='min',
             verbose=1
         ),
@@ -497,12 +498,30 @@ for i, inter_sep in enumerate(inter_seps):
         verbose=2
     )
 
-    # always load the best model weights after training
-    if os.path.exists(checkpt_path):
-        print(f'Loading best model from {checkpt_path}')
-        best_model = tf.keras.models.load_model(checkpt_path, custom_objects=CUSTOM_OBJECTS, compile=False)
-        model.set_weights(best_model.get_weights())
-        print('Best model weights loaded.')
+    # Always load the best model weights after training
+    weights_path = MODEL_PATH + MODEL_NAME + f'_L{inter_sep}_weights.h5'
+    
+    # Try weights first (more reliable for complex models with lambda conditioning)
+    if os.path.exists(weights_path):
+        print(f'Loading best model weights from {weights_path}')
+        try:
+            model.load_weights(weights_path)
+            print('Best model weights loaded successfully from weights file.')
+        except Exception as e:
+            print(f'Failed to load weights: {e}')
+            print('Continuing with current model state...')
+    elif os.path.exists(checkpt_path):
+        print(f'Weights file not found, attempting to load full model from {checkpt_path}')
+        try:
+            best_model = tf.keras.models.load_model(checkpt_path, custom_objects=CUSTOM_OBJECTS, compile=False)
+            model.set_weights(best_model.get_weights())
+            print('Best model weights loaded from full model.')
+            del best_model  # Free memory
+        except Exception as e:
+            print(f'Failed to load full model: {e}')
+            print('Continuing with current model state...')
+    else:
+        print('No checkpoint found, continuing with current model state...')
 
     # Append the history to the combined history
     for key in combined_history.keys():
@@ -527,8 +546,23 @@ for i, inter_sep in enumerate(inter_seps):
         break
     
     # Save the model after each interparticle separation
-    model.save(MODEL_PATH + MODEL_NAME + f'_L{inter_sep}.h5')
-    print(f'Model saved for interparticle separation L={inter_sep} Mpc/h.')
+    final_model_path = MODEL_PATH + MODEL_NAME + f'_L{inter_sep}.keras'
+    final_weights_path = MODEL_PATH + MODEL_NAME + f'_L{inter_sep}_final_weights.h5'
+    
+    # Always save weights
+    try:
+        model.save_weights(final_weights_path)
+        print(f'Model weights saved for interparticle separation L={inter_sep} Mpc/h.')
+    except Exception as e:
+        print(f'Warning: Failed to save weights: {e}')
+    
+    # Try to save full model
+    try:
+        model.save(final_model_path)
+        print(f'Full model saved for interparticle separation L={inter_sep} Mpc/h.')
+    except Exception as e:
+        print(f'Warning: Failed to save full model: {e}, but weights were saved.')
+    
     print('Proceeding to next interparticle separation...\n')
 #================================================================
 # Final evaluation on the validation set

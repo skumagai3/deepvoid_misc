@@ -629,6 +629,56 @@ class VoidFractionMonitor(Callback):
             f"[Epoch {epoch+1}] Predicted void fraction: {pred_void_frac:.4f} | "
             f"True void fraction: {true_void_frac:.4f}"
         )
+
+#---------------------------------------------------------
+# Robust Model Checkpoint for complex models
+#---------------------------------------------------------
+class RobustModelCheckpoint(tf.keras.callbacks.Callback):
+    """
+    A robust model checkpoint callback that saves both full models and weights.
+    Prioritizes weights saving for reliability with complex models (lambda conditioning, FiLM layers, etc.).
+    """
+    def __init__(self, model_path, weights_path, monitor='val_loss', save_best_only=True, mode='min', verbose=1):
+        super().__init__()
+        self.model_path = model_path
+        self.weights_path = weights_path
+        self.monitor = monitor
+        self.save_best_only = save_best_only
+        self.mode = mode
+        self.verbose = verbose
+        self.best_score = float('inf') if mode == 'min' else float('-inf')
+        
+    def on_epoch_end(self, epoch, logs=None):
+        current_score = logs.get(self.monitor)
+        if current_score is None:
+            return
+            
+        improved = False
+        if self.mode == 'min' and current_score < self.best_score:
+            improved = True
+            self.best_score = current_score
+        elif self.mode == 'max' and current_score > self.best_score:
+            improved = True
+            self.best_score = current_score
+            
+        if improved or not self.save_best_only:
+            # Always save weights (more reliable)
+            try:
+                self.model.save_weights(self.weights_path)
+                if self.verbose:
+                    print(f'\nEpoch {epoch+1}: {self.monitor} improved to {current_score:.5f}, saving weights to {self.weights_path}')
+            except Exception as e:
+                print(f'Warning: Failed to save weights: {e}')
+            
+            # Try to save full model, but don't fail if it doesn't work
+            try:
+                self.model.save(self.model_path)
+                if self.verbose:
+                    print(f'Full model saved to {self.model_path}')
+            except Exception as e:
+                if self.verbose:
+                    print(f'Warning: Failed to save full model: {e}, but weights were saved successfully')
+
 #---------------------------------------------------------
 # U-Net creation functions
 #----------------------------------------------------------
