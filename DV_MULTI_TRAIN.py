@@ -698,9 +698,10 @@ else:
                     loss={'output_conv': loss, 'lambda_output': 'mse'},
                     loss_weights={'output_conv': 1.0, 'lambda_output': 0.01},
                     metrics={'output_conv': metrics, 'lambda_output': 'mse'})
-    model.compile(optimizer=nets.Adam(learning_rate=LR),
-                                          loss=loss,
-                                          metrics=metrics)
+    else:
+      model.compile(optimizer=nets.Adam(learning_rate=LR),
+                                            loss=loss,
+                                            metrics=metrics)
 model.summary()
 # get trainable parameters:
 trainable_ps = nets.layer_utils.count_params(model.trainable_weights)
