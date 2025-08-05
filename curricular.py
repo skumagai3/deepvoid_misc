@@ -262,6 +262,8 @@ if ADD_RSD:
     MODEL_NAME += '_RSD'
 if USE_ATTENTION:
     MODEL_NAME += '_attention'
+if LAMBDA_CONDITIONING:
+    MODEL_NAME += '_lambda'
 if EXTRA_INPUTS:
     MODEL_NAME += f'_{EXTRA_INPUTS}'
 print(f'Model name stem: {MODEL_NAME}')
