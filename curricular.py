@@ -71,6 +71,8 @@ optional.add_argument('--L_VAL', type=str, default='10',
                       help='Interparticle separation for validation dataset. Default is 10.')
 optional.add_argument('--USE_ATTENTION', action='store_true',
                       help='Use attention U-Net architecture instead of standard U-Net.')
+optional.add_argument('--LAMBDA_CONDITIONING', action='store_true',
+                      help='Use lambda conditioning in the model.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 DEPTH = args.DEPTH
@@ -85,7 +87,8 @@ EXTRA_INPUTS = args.EXTRA_INPUTS
 ADD_RSD = args.ADD_RSD
 L_VAL = args.L_VAL
 USE_ATTENTION = args.USE_ATTENTION
-print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, L_VAL={L_VAL}, USE_ATTENTION={USE_ATTENTION}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}')
+LAMBDA_CONDITIONING = args.LAMBDA_CONDITIONING
+print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, L_VAL={L_VAL}, USE_ATTENTION={USE_ATTENTION}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}')
 # use mixed precision if on Picotte
 if ROOT_DIR.startswith('/ifs/groups/vogeleyGrp/'):
     from tensorflow.keras import mixed_precision
@@ -189,7 +192,7 @@ def load_data(inter_sep, extra_inputs=None):
         features = np.concatenate([features, extra_input], axis=-1)
     print(f'Features shape: {features.shape}, Labels shape: {labels.shape}')
     return features, labels
-def make_dataset(delta, tij_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot=False):
+def make_dataset(delta, tij_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot=False, lambda_value=None):
     '''
     Create a TensorFlow dataset from the features and labels.
     Args:
@@ -217,11 +220,19 @@ def make_dataset(delta, tij_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot
     tij_labels = tf.convert_to_tensor(tij_labels, dtype=tf.float32)
     # Create the dataset
     print(f'Creating dataset with batch size {batch_size} and shuffle={shuffle}...')
-    dataset = tf.data.Dataset.from_tensor_slices((delta, tij_labels))
+    if lambda_value is not None:
+        print(f'Adding lambda input with value {lambda_value}')
+        lambda_array = np.full((delta.shape[0], 1), lambda_value, dtype=np.float32)
+        dataset = tf.data.Dataset.from_tensor_slices((
+            {'density_input': delta, 'lambda_input': lambda_array},
+            {'last_activation': tij_labels, 'lambda_output': lambda_array}
+        ))
+    else:
+        dataset = tf.data.Dataset.from_tensor_slices((delta, tij_labels))
     if shuffle:
-        dataset = dataset.shuffle(buffer_size=len(delta))
-    dataset = dataset.batch(batch_size)
-    dataset = dataset.prefetch(tf.data.AUTOTUNE)
+        dataset = dataset.shuffle(buffer_size=delta.shape[0])
+    dataset = dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    print(f'Dataset created with {len(dataset)} batches.')
     return dataset
 #================================================================
 # Create model parameters
@@ -260,7 +271,7 @@ if EXTRA_INPUTS:
     val_features, val_labels = load_data(L_VAL, extra_inputs=EXTRA_INPUTS)
 else:
     val_features, val_labels = load_data(L_VAL)
-val_dataset = make_dataset(val_features, val_labels, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT)
+val_dataset = make_dataset(val_features, val_labels, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, lambda_value=float(L_VAL) if LAMBDA_CONDITIONING else None)
 #================================================================
 # Set loss function and metrics
 #================================================================
@@ -282,7 +293,7 @@ elif LOSS == 'SCCE':
 elif LOSS == 'SCCE_Void_Penalty':
     loss_fn = [nets.SCCE_void_penalty]
 elif LOSS == 'SCCE_Class_Penalty':
-    #target_props = [0.65, 0.25, 0.05, 0.05]  # Example target proportions for void, wall, filament, halo
+    #target_props = [0.65, 0.26, 0.09, 0.005]  # Example target proportions for void, wall, filament, halo
     target_props = None
     penalty_weights = [1.0, 0.9, 0.3, 0.1]
     penalty_type = 'mse'  # Mean Squared Error for penalty
@@ -309,7 +320,8 @@ with strategy.scope():
             depth=DEPTH,
             last_activation=last_activation,
             batch_normalization=True,
-            model_name=MODEL_NAME
+            model_name=MODEL_NAME,
+            lambda_conditioning=LAMBDA_CONDITIONING
         )
     else:
         model = nets.unet_3d(
@@ -319,16 +331,25 @@ with strategy.scope():
             depth=DEPTH,
             last_activation=last_activation,
             batch_normalization=True,
-            model_name=MODEL_NAME
+            model_name=MODEL_NAME,
+            lambda_conditioning=LAMBDA_CONDITIONING
         )
-    model.compile(
-        optimizer=tf.keras.optimizers.Adam(
-            learning_rate=LEARNING_RATE,
-            clipnorm=1.0  # Gradient clipping to prevent exploding gradients
-            ),
-        loss=loss_fn,
-        metrics=metrics
-    )
+    if LAMBDA_CONDITIONING:
+        model.compile(
+            optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE,clipnorm=1.0),  # Gradient clipping to prevent exploding gradients
+            loss={'last_activation': loss_fn, 'lambda_output': 'mse'},
+            loss_weights={'last_activation': 1.0, 'lambda_output': 0.1},
+            metrics={'last_activation': metrics, 'lambda_output': 'mse'}
+        )
+    else:
+        model.compile(
+            optimizer=tf.keras.optimizers.Adam(
+                learning_rate=LEARNING_RATE,
+                clipnorm=1.0  # Gradient clipping to prevent exploding gradients
+                ),
+            loss=loss_fn,
+            metrics=metrics
+        )
 print(model.summary())
 #================================================================
 # Training loop
@@ -387,7 +408,7 @@ for i, inter_sep in enumerate(inter_seps):
         train_features, train_labels = load_data(inter_sep)
     print(f'Training data loaded for L={inter_sep}. Features shape: {train_features.shape}, Labels shape: {train_labels.shape}')
     # Create the training dataset
-    train_dataset = make_dataset(train_features, train_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot=ONE_HOT)
+    train_dataset = make_dataset(train_features, train_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot=ONE_HOT, lambda_value=float(inter_sep) if LAMBDA_CONDITIONING else None)
     # freeze layers based on interparticle separation. freeze more layers for larger interparticle separations:
     nets.freeze_encoder_blocks(
         model,
@@ -395,11 +416,17 @@ for i, inter_sep in enumerate(inter_seps):
     )
     if inter_sep != '0.33':
         # recompile the model after freezing layers
-        model.compile(
-            optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
-            loss=loss_fn,
-            metrics=metrics
-    )
+        if LAMBDA_CONDITIONING:
+            model.compile(
+                optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
+                loss={'last_activation': loss_fn, 'lambda_output': 'mse'},
+                loss_weights={'last_activation': 1.0, 'lambda_output': 0.1},
+                metrics={'last_activation': metrics, 'lambda_output': 'mse'})
+        else:
+            model.compile(
+                optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
+                loss=loss_fn,
+                metrics=metrics)
         print(f'Model recompiled after freezing layers for interparticle separation L={inter_sep}')
     # Callbacks:
     early_stop = EarlyStopping(
@@ -511,6 +538,7 @@ print(f'Training history plot saved to {FILE_METRICS}')
 #================================================================
 # Predictions on validation set and slice plots
 #================================================================
+'''
 scores = {}
 print('>>> Making predictions on validation set...')
 predictions = model.predict(val_dataset, verbose=2, batch_size=BATCH_SIZE)
@@ -532,3 +560,4 @@ print('>>> Curricular training completed successfully.')
 print('>>> Model and predictions saved in:', MODEL_FIG_PATH)
 print('>>> Predictions saved in:', FILE_PRED)
 print('>>> Training history plot saved in:', FILE_METRICS)
+'''
