@@ -389,6 +389,7 @@ if LOAD_INTO_MEM:
   if LAMBDA_CONDITIONING:
     print('>>> Using lambda conditioning with FiLM')
     lambda_array = np.full((X_train.shape[0], 1), L)
+    lambda_array_test = np.full((X_test.shape[0], 1), L)
   del features; del labels # memory purposes
   if BINARY_MASK:
     Y_train = nets.convert_to_binary_mask(Y_train)
@@ -456,8 +457,8 @@ if LOAD_INTO_MEM:
       {'output_conv': Y_train, 'lambda_output': lambda_array}
     ))
     test_dataset = tf.data.Dataset.from_tensor_slices((
-      {'density_input': X_test, 'lambda_input': lambda_array},
-      {'output_conv': Y_test, 'lambda_output': lambda_array}
+      {'density_input': X_test, 'lambda_input': lambda_array_test},
+      {'output_conv': Y_test, 'lambda_output': lambda_array_test}
     ))
 else:
   print('>>> Loading train, val data into tf.data.Dataset from memmapped .npy files')
