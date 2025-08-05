@@ -2080,20 +2080,42 @@ def run_predict_model(model, X_test, batch_size, output_argmax=True, BINARY=Fals
   gen = data_generator(X_test, batch_size)
   N_steps = int(np.ceil(num_samples / batch_size))
   Y_pred = []
+  # run prediction in batches:
   for _ in range(N_steps):
     X_batch = next(gen)
-    Y_pred.append(model.predict(X_batch, verbose=0))
-  Y_pred = np.concatenate(Y_pred, axis=0)
-  if not BINARY:
-    if output_argmax:
-      print('Returning argmax of prediction')
-      # if we want the actual predictions [0,1,2,3]
-      Y_pred = np.argmax(Y_pred, axis=-1); Y_pred = np.expand_dims(Y_pred, axis=-1)
+    preds = model.predict(X_batch, verbose=0)
+    Y_pred.append(preds)
+
+  # Handle different output structures
+  if isinstance(Y_pred[0], dict):
+    # If model has named outputs (dict), concatenate each output independently
+    Y_pred_combined = {}
+    for key in Y_pred[0].keys():
+      Y_pred_combined[key] = np.concatenate([p[key] for p in Y_pred], axis=0)
+    Y_pred = Y_pred_combined
+  elif isinstance(Y_pred[0], list) or isinstance(Y_pred[0], tuple):
+    # If model returns list of outputs
+    Y_pred = [np.concatenate([p[i] for p in Y_pred], axis=0) for i in range(len(Y_pred[0]))]
   else:
-    if output_argmax:
-      print('Thresholding prediction at 0.5')
-      # use 0.5 threshold for binary classification
+    # Single output
+    Y_pred = np.concatenate(Y_pred, axis=0)
+
+  # Handle argmax if needed (only for first/main output)
+  if not BINARY and output_argmax:
+    print('Returning argmax of prediction')
+    if isinstance(Y_pred, dict):
+      Y_pred['output_conv'] = np.argmax(Y_pred['output_conv'], axis=-1)
+      Y_pred['output_conv'] = np.expand_dims(Y_pred['output_conv'], axis=-1)
+    else:
+      Y_pred = np.argmax(Y_pred, axis=-1)
+      Y_pred = np.expand_dims(Y_pred, axis=-1)
+  elif BINARY and output_argmax:
+    print('Thresholding prediction at 0.5')
+    if isinstance(Y_pred, dict):
+      Y_pred['output_conv'] = np.where(Y_pred['output_conv'] > 0.5, 1, 0)
+    else:
       Y_pred = np.where(Y_pred > 0.5, 1, 0)
+
   return Y_pred
 def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED, GRID=512, SUBGRID=128, OFF=64, BOXSIZE=205, BOLSHOI_FLAG=False, TRAIN_SCORE=False, COMPILE=False, LATEX=False, BINARY=False, PRED_NAME_SUFFIX='', EXTRA_INPUTS=None):
   '''
