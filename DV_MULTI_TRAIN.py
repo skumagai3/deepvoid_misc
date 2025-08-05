@@ -776,10 +776,7 @@ scores['REG_FLAG'] = REGULARIZE_FLAG
 scores['TRAINABLE_PARAMS'] = trainable_ps
 scores['NONTRAINABLE_PARAMS'] = nontrainable_ps
 scores['TOTAL_PARAMS'] = trainable_ps + nontrainable_ps
-if LAMBDA_CONDITIONING:
-  SEG_OUT = 'last_activation'
-else:
-  SEG_OUT = None
+SEG_OUT = model.output_names[0] + '_'
 scores['TRAIN_LOSS'] = history.history[SEG_OUT+'loss'][-1]
 scores['VAL_LOSS'] = history.history[SEG_OUT+'val_loss'][-1]
 scores['TRAIN_ACC'] = history.history[SEG_OUT+'accuracy'][-1]
