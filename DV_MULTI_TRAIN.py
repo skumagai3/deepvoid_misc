@@ -862,11 +862,13 @@ print('>>> Predicting on training data and plotting slices')
 if SIM == 'TNG':
   nets.save_scores_from_model(FILE_DEN, FILE_MASK, FILE_OUT+MODEL_NAME, FIG_DIR, FILE_PRED,
                               GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,TRAIN_SCORE=False,
-                              BINARY=BINARY_MASK,EXTRA_INPUTS=EXTRA_INPUTS)
+                              BINARY=BINARY_MASK,EXTRA_INPUTS=EXTRA_INPUTS,
+                              lambda_value=L if LAMBDA_CONDITIONING else None)
 elif SIM == 'BOL':
   nets.save_scores_from_model(FILE_DEN, FILE_MASK, FILE_OUT+MODEL_NAME, FIG_DIR, FILE_PRED,
                               GRID=GRID,SUBGRID=SUBGRID,OFF=OFF,BOXSIZE=256,BOLSHOI_FLAG=True,
-                              TRAIN_SCORE=False,BINARY=BINARY_MASK,EXTRA_INPUTS=EXTRA_INPUTS)
+                              TRAIN_SCORE=False,BINARY=BINARY_MASK,EXTRA_INPUTS=EXTRA_INPUTS,
+                              lambda_value=L if LAMBDA_CONDITIONING else None)
 print('>>> Finished predicting on training data')
 #===============================================================
 print('Finished training!')
