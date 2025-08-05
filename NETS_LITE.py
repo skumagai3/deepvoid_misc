@@ -2093,9 +2093,14 @@ def run_predict_model(model, X_test, batch_size, output_argmax=True, BINARY=Fals
     for key in Y_pred[0].keys():
       Y_pred_combined[key] = np.concatenate([p[key] for p in Y_pred], axis=0)
     Y_pred = Y_pred_combined
-  elif isinstance(Y_pred[0], list) or isinstance(Y_pred[0], tuple):
-    # If model returns list of outputs
-    Y_pred = [np.concatenate([p[i] for p in Y_pred], axis=0) for i in range(len(Y_pred[0]))]
+  elif isinstance(Y_pred[0], (list, tuple)):
+    if hasattr(model, 'output_names') and len(model.output_names) == len(Y_pred[0]):
+      Y_pred = {
+              name: np.concatenate([p[i] for p in Y_pred], axis=0)
+              for i, name in enumerate(model.output_names)
+          }
+    else:
+      raise ValueError("Model returned multiple outputs but could not resolve output names.")
   else:
     # Single output
     Y_pred = np.concatenate(Y_pred, axis=0)
@@ -2165,6 +2170,7 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED,
     X_test = np.concatenate([X_test, X_extra], axis=-1)
     print(f'Concatenated extra input {EXTRA_INPUTS} to X_test. New shape: {X_test.shape}')
   if lambda_value is not None:
+    print(f'Adding lambda input with value {lambda_value}')
     lambda_array = np.full((X_test.shape[0], 1), lambda_value, dtype=np.float32)
     inputs = {'density_input': X_test, 'lambda_input': lambda_array}
   else:
