@@ -581,88 +581,145 @@ def main():
     MODEL_FIG_PATH = FIG_PATH + MODEL_NAME + '/'
     os.makedirs(MODEL_FIG_PATH, exist_ok=True)
     
-    # Use alternative scoring method (skip functions that need model files)
-    print('Using direct scoring method (model was recreated from weights)...')
+    # Save model temporarily for scoring functions that require a model file
+    temp_model_path = MODEL_PATH + MODEL_NAME + f'_temp_L{L_PRED}.h5'
+    print(f'Temporarily saving model for scoring functions...')
+    
     try:
-        from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-        from sklearn.metrics import f1_score, precision_score, recall_score
+        # Save the recreated model temporarily
+        model.save(temp_model_path)
+        print(f'Model temporarily saved to {temp_model_path}')
         
-        # Convert predictions to class labels
-        if len(predictions.shape) > 1 and predictions.shape[-1] > 1:
-            pred_labels = np.argmax(predictions, axis=-1)
-        else:
-            pred_labels = predictions
-            
-        # Convert true labels to class labels if needed  
-        if len(true_labels.shape) > 1 and true_labels.shape[-1] > 1:
-            true_labels_flat = np.argmax(true_labels, axis=-1)
-        else:
-            true_labels_flat = true_labels
-            
-        # Flatten for sklearn metrics
-        y_true_flat = true_labels_flat.flatten()
-        y_pred_flat = pred_labels.flatten()
+        # Use your existing save_scores_from_fvol function (includes MCC)
+        print('Using save_scores_from_fvol for comprehensive metrics (including MCC)...')
+        nets.save_scores_from_fvol(
+            true_labels, predictions, 
+            temp_model_path,
+            MODEL_FIG_PATH, scores, N_CLASSES, VAL_FLAG=True
+        )
+        print('save_scores_from_fvol completed successfully.')
         
-        # Calculate comprehensive metrics
-        accuracy = accuracy_score(y_true_flat, y_pred_flat)
-        f1_macro = f1_score(y_true_flat, y_pred_flat, average='macro', zero_division=0)
-        f1_micro = f1_score(y_true_flat, y_pred_flat, average='micro', zero_division=0)
-        f1_weighted = f1_score(y_true_flat, y_pred_flat, average='weighted', zero_division=0)
+        # Print key metrics from your scoring function
+        if scores:
+            print('\n=== Key Metrics (from save_scores_from_fvol) ===')
+            for key, value in scores.items():
+                if isinstance(value, (int, float)):
+                    print(f'{key}: {value:.4f}')
         
-        # Per-class F1 scores
-        f1_per_class = f1_score(y_true_flat, y_pred_flat, average=None, zero_division=0)
-        
-        # Store in scores dict
-        scores['accuracy'] = accuracy
-        scores['f1_macro'] = f1_macro
-        scores['f1_micro'] = f1_micro
-        scores['f1_weighted'] = f1_weighted
-        for i, class_name in enumerate(class_labels):
-            if i < len(f1_per_class):
-                scores[f'f1_{class_name}'] = f1_per_class[i]
-        
-        print('Direct scoring completed successfully.')
-        
-        # Print key metrics
-        print('\n=== Key Metrics ===')
-        print(f'Accuracy: {accuracy:.4f}')
-        print(f'F1 Macro: {f1_macro:.4f}')
-        print(f'F1 Micro: {f1_micro:.4f}')
-        print(f'F1 Weighted: {f1_weighted:.4f}')
-        
-        # Per-class F1 scores
-        print('\n=== Per-Class F1 Scores ===')
-        for i, class_name in enumerate(class_labels):
-            if i < len(f1_per_class):
-                print(f'F1 {class_name}: {f1_per_class[i]:.4f}')
-        
-        # Classification report
-        print('\n=== Classification Report ===')
-        print(classification_report(y_true_flat, y_pred_flat, 
-                                   target_names=class_labels, zero_division=0))
-        
-        # Save confusion matrix
-        try:
-            cm = confusion_matrix(y_true_flat, y_pred_flat)
-            cm_file = MODEL_FIG_PATH + f'{MODEL_NAME}_confusion_matrix_L{L_PRED}.npy'
-            np.save(cm_file, cm)
-            print(f'Confusion matrix saved to {cm_file}')
-        except Exception as e:
-            print(f'Warning: Could not save confusion matrix: {e}')
-                                       
     except Exception as e:
-        print(f'Direct scoring failed: {e}')
-        print('Continuing without detailed metrics...')
+        print(f'save_scores_from_fvol failed: {e}')
+        print('Falling back to direct sklearn scoring...')
+        
+        # Fallback to direct sklearn scoring
+        try:
+            from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+            from sklearn.metrics import f1_score, precision_score, recall_score
+            
+            # Convert predictions to class labels
+            if len(predictions.shape) > 1 and predictions.shape[-1] > 1:
+                pred_labels = np.argmax(predictions, axis=-1)
+            else:
+                pred_labels = predictions
+                
+            # Convert true labels to class labels if needed  
+            if len(true_labels.shape) > 1 and true_labels.shape[-1] > 1:
+                true_labels_flat = np.argmax(true_labels, axis=-1)
+            else:
+                true_labels_flat = true_labels
+                
+            # Flatten for sklearn metrics
+            y_true_flat = true_labels_flat.flatten()
+            y_pred_flat = pred_labels.flatten()
+            
+            # Calculate comprehensive metrics
+            accuracy = accuracy_score(y_true_flat, y_pred_flat)
+            f1_macro = f1_score(y_true_flat, y_pred_flat, average='macro', zero_division=0)
+            f1_micro = f1_score(y_true_flat, y_pred_flat, average='micro', zero_division=0)
+            f1_weighted = f1_score(y_true_flat, y_pred_flat, average='weighted', zero_division=0)
+            
+            # Per-class F1 scores
+            f1_per_class = f1_score(y_true_flat, y_pred_flat, average=None, zero_division=0)
+            
+            # Store in scores dict
+            scores['accuracy'] = accuracy
+            scores['f1_macro'] = f1_macro
+            scores['f1_micro'] = f1_micro
+            scores['f1_weighted'] = f1_weighted
+            for i, class_name in enumerate(class_labels):
+                if i < len(f1_per_class):
+                    scores[f'f1_{class_name}'] = f1_per_class[i]
+            
+            print('Fallback scoring completed successfully.')
+            
+            # Print key metrics
+            print('\n=== Key Metrics (fallback) ===')
+            print(f'Accuracy: {accuracy:.4f}')
+            print(f'F1 Macro: {f1_macro:.4f}')
+            print(f'F1 Micro: {f1_micro:.4f}')
+            print(f'F1 Weighted: {f1_weighted:.4f}')
+            
+            # Per-class F1 scores
+            print('\n=== Per-Class F1 Scores ===')
+            for i, class_name in enumerate(class_labels):
+                if i < len(f1_per_class):
+                    print(f'F1 {class_name}: {f1_per_class[i]:.4f}')
+            
+            # Classification report
+            print('\n=== Classification Report ===')
+            print(classification_report(y_true_flat, y_pred_flat, 
+                                       target_names=class_labels, zero_division=0))
+            
+            # Save confusion matrix
+            try:
+                cm = confusion_matrix(y_true_flat, y_pred_flat)
+                cm_file = MODEL_FIG_PATH + f'{MODEL_NAME}_confusion_matrix_L{L_PRED}.npy'
+                np.save(cm_file, cm)
+                print(f'Confusion matrix saved to {cm_file}')
+            except Exception as e:
+                print(f'Warning: Could not save confusion matrix: {e}')
+                                           
+        except Exception as e2:
+            print(f'Fallback scoring also failed: {e2}')
+            print('Continuing without detailed metrics...')
     
     # Generate slice plots (if not skipped and plotter is available)
-    if not SKIP_SLICE_PLOTS and plotter is not None:
-        print('Slice plot generation skipped for recreated models.')
-        print('Original model file required for slice plot generation.')
-    else:
-        if SKIP_SLICE_PLOTS:
-            print('Slice plots skipped as requested.')
+    if not SKIP_SLICE_PLOTS:
+        if plotter is not None:
+            print('Generating slice plots using save_scores_from_model...')
+            try:
+                # Use your existing save_scores_from_model function with the temporary model
+                FILE_PRED = PRED_PATH + MODEL_NAME + f'_predictions_L{L_PRED}.fvol'
+                
+                nets.save_scores_from_model(
+                    DATA_PATH + data_info[L_PRED],  # FILE_DEN
+                    FILE_MASK,                      # FILE_MSK  
+                    temp_model_path,                # FILE_MODEL
+                    MODEL_FIG_PATH,                 # FILE_FIG
+                    FILE_PRED,                      # FILE_PRED
+                    GRID=GRID, 
+                    SUBGRID=SUBGRID, 
+                    OFF=OFF,
+                    TRAIN_SCORE=False,
+                    EXTRA_INPUTS=EXTRA_INPUTS_INFO.get(L_PRED) if EXTRA_INPUTS and EXTRA_INPUTS_INFO else None,
+                    lambda_value=float(L_PRED) if LAMBDA_CONDITIONING else None
+                )
+                print('Slice plots generated successfully using save_scores_from_model.')
+                
+            except Exception as e:
+                print(f'Slice plot generation failed: {e}')
+                print('This may be due to model serialization or data loading issues.')
         else:
             print('Slice plots skipped (plotter module not available).')
+    else:
+        print('Slice plots skipped as requested.')
+    
+    # Clean up temporary model file
+    try:
+        if os.path.exists(temp_model_path):
+            os.remove(temp_model_path)
+            print(f'Cleaned up temporary model file: {temp_model_path}')
+    except Exception as e:
+        print(f'Warning: Could not remove temporary model file: {e}')
     
     print('\n=== Prediction and Analysis Complete ===')
     print(f'Results saved in: {MODEL_FIG_PATH}')
