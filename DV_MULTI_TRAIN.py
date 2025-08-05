@@ -451,6 +451,8 @@ if LOAD_INTO_MEM:
   else:
     train_dataset = tf.data.Dataset.from_tensor_slices((X_train, Y_train))
     test_dataset = tf.data.Dataset.from_tensor_slices((X_test, Y_test))
+  print('Y_train type:', type(Y_train))
+  print('Y_train[0]:', Y_train[0] if hasattr(Y_train, '__getitem__') else Y_train)
   if LAMBDA_CONDITIONING:
     train_dataset = tf.data.Dataset.from_tensor_slices((
       {'density_input': X_train, 'lambda_input': lambda_array},
