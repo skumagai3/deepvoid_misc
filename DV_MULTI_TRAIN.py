@@ -844,18 +844,12 @@ if isinstance(Y_pred, dict):
 print('>>> Calculating scores on validation data')
 if BINARY_MASK:
   N_CLASSES = 2 # janky fix for save_scores_from_fvol
-if LAMBDA_CONDITIONING:
-  nets.save_scores_from_fvol(
-    Y_test, Y_pred[model.output_names[0]],
-    FILE_OUT + MODEL_NAME, FIG_DIR,
-    scores, N_CLASSES=N_CLASSES,
-    VAL_FLAG=VAL_FLAG)
-else:
-  nets.save_scores_from_fvol(Y_test,Y_pred,
-                            FILE_OUT+MODEL_NAME,FIG_DIR,
-                            scores,
-                            N_CLASSES=N_CLASSES,
-                            VAL_FLAG=VAL_FLAG)
+# VAL SCORE CALCULATION
+nets.save_scores_from_fvol(
+  Y_test, Y_pred,
+  FILE_OUT + MODEL_NAME, FIG_DIR,
+  scores, N_CLASSES=N_CLASSES,
+  VAL_FLAG=VAL_FLAG)
 # save score_dict by appending to the end of the csv.
 # csv will be at ROOT_DIR/model_scores.csv
 print(f'>>> Saving all scores to {ROOT_DIR}/model_scores.csv')
