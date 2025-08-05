@@ -41,6 +41,12 @@ Optional Flags:
   --PICOTTE_FLAG: If set to 1, use Picotte. Default is 0.
   --TENSORBOARD: If set, use TensorBoard. Default is to not.
   --BINARY_MASK: If set to 1, use binary mask. Default is 0. Requires BCE loss.
+  --BOUNDARY_MASK: If set, uses a boundary mask. Default is to not.
+  --EXTRA_INPUTS: If set, uses extra inputs. Default is to not.
+  --ADD_RSD: If set to 1, adds RSD to the training data. Default is 0.
+  --USE_PCONV: If set to 1, uses PConv. Default is 0.
+  --ATTENTION_UNET: If set to 1, uses Attention UNet. Default is 0.
+  --LAMBDA_CONDITIONING: If set to 1, uses lambda conditioning. Default is 0.
 END_COMMENT
 ROOT_DIR="/content/drive/MyDrive/"; echo "Root directory: $ROOT_DIR";
 current_time=$(date +"%Y%m%d-%H%M"); echo "Current time: $current_time";
@@ -69,7 +75,7 @@ fi
 #GRID=256; echo "GRID: $GRID";
 
 # optional flags initialization
-BATCHNORM_ENABLED=0; echo "Batch Norm: $BATCHNORM_ENABLED";
+BATCHNORM_ENABLED=1; echo "Batch Norm: $BATCHNORM_ENABLED";
 DROPOUT_RATE=0.0; echo "Dropout: $DROPOUT_RATE";
 MULTIPROCESSING_ENABLED=0; echo "Multiprocessing: $MULTIPROCESSING_ENABLED";
 HIGH_MEM_ENABLED=0; echo "High memory usage: $HIGH_MEM_ENABLED";
@@ -89,6 +95,9 @@ PICOTTE_FLAG=0; echo "Picotte: $PICOTTE_FLAG";
 TENSORBOARD=1; echo "TensorBoard: $TENSORBOARD";
 BINARY_MASK=0; echo "Binary Mask: $BINARY_MASK";
 ADD_RSD=0; echo "Add RSD: $ADD_RSD";
+USE_PCONV=0; echo "Use PConv: $USE_PCONV";
+ATTENTION_UNET=0; echo "Attention UNet: $ATTENTION_UNET";
+LAMBDA_CONDITIONING=0; echo "Lambda Conditioning: $LAMBDA_CONDITIONING";
 
 # Constructing command line arguments dynamically
 CMD_ARGS="$ROOT_DIR $SIM $L $D $F $LOSS $GRID"
@@ -110,6 +119,10 @@ CMD_ARGS+=" --PATIENCE $PATIENCE"
 [ "$PICOTTE_FLAG" -eq 1 ] && CMD_ARGS+=" --PICOTTE_FLAG"
 [ "$TENSORBOARD" -eq 1 ] && CMD_ARGS+=" --TENSORBOARD"
 [ "$BINARY_MASK" -eq 1 ] && CMD_ARGS+=" --BINARY_MASK"
+[ "$ADD_RSD" -eq 1 ] && CMD_ARGS+=" --ADD_RSD"
+[ "$USE_PCONV" -eq 1 ] && CMD_ARGS+=" --USE_PCONV"
+[ "$ATTENTION_UNET" -eq 1 ] && CMD_ARGS+=" --ATTENTION_UNET"
+[ "$LAMBDA_CONDITIONING" -eq 1 ] && CMD_ARGS+=" --LAMBDA_CONDITIONING"
 echo "Command line arguments: $CMD_ARGS";
 
 # Running the Python script with dynamically constructed arguments
