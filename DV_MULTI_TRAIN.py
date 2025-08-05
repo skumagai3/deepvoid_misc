@@ -460,6 +460,7 @@ if LOAD_INTO_MEM:
       {'density_input': X_test, 'lambda_input': lambda_array_test},
       {'output_conv': Y_test, 'lambda_output': lambda_array_test}
     ))
+    print('>>> Using lambda conditioning with FiLM')
 else:
   print('>>> Loading train, val data into tf.data.Dataset from memmapped .npy files')
   print('>>> Loading X_train, Y_train, X_test, Y_test from .npy files')
