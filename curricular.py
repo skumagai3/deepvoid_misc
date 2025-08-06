@@ -175,12 +175,13 @@ if ADD_RSD and EXTRA_INPUTS is not None:
 #================================================================
 # Define loading function
 #================================================================
-def load_data(inter_sep, extra_inputs=None):
+def load_data(inter_sep, extra_inputs=None, verbose=True):
     '''
     Load the data for a given interparticle separation.
     Args:
         inter_sep (str): Interparticle separation (lambda) as a string.
         extra_inputs (str, optional): Additional inputs file name. Defaults to None.
+        verbose (bool): Whether to print detailed loading statistics. Defaults to True.
     Returns:
         features (np.ndarray): Features array.
         labels (np.ndarray): Labels array.
@@ -189,17 +190,20 @@ def load_data(inter_sep, extra_inputs=None):
     if inter_sep not in inter_seps:
         raise ValueError(f'Invalid interparticle separation: {inter_sep}. Must be one of {inter_seps}.')
     data_file = DATA_PATH + data_info[inter_sep]
-    print(f'Loading data from {data_file}...')
+    if verbose:
+        print(f'Loading data from {data_file}...')
     features, labels = nets.load_dataset_all(
         FILE_DEN=data_file,
         FILE_MASK=FILE_MASK,
-        SUBGRID=SUBGRID
+        SUBGRID=SUBGRID,
+        verbose=verbose
     )
     if extra_inputs is not None:
         if inter_sep not in EXTRA_INPUTS_INFO:
             raise ValueError(f'Invalid interparticle separation for extra inputs: {inter_sep}. Must be one of {list(EXTRA_INPUTS_INFO.keys())}.')
         extra_input_file = DATA_PATH + EXTRA_INPUTS_INFO[inter_sep]
-        print(f'Loading additional inputs from {extra_input_file}...')
+        if verbose:
+            print(f'Loading additional inputs from {extra_input_file}...')
         extra_input = nets.chunk_array(
             extra_input_file,
             SUBGRID=SUBGRID,
@@ -208,6 +212,7 @@ def load_data(inter_sep, extra_inputs=None):
         if extra_input.shape[:-1] != features.shape[:-1]:
             raise ValueError(f'Extra input shape {extra_input.shape} does not match features shape {features.shape}.')
         features = np.concatenate([features, extra_input], axis=-1)
+    return features, labels
     print(f'Features shape: {features.shape}, Labels shape: {labels.shape}')
     return features, labels
 def make_dataset(delta, tij_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot=False, lambda_value=None):
@@ -446,10 +451,12 @@ print('>>> Starting training loop over interparticle separations...')
 epoch_offset = 0
 for i, inter_sep in enumerate(inter_seps):
     print(f'Starting training for interparticle separation L={inter_sep} Mpc/h...')
+    # Only show detailed stats for the first data load
+    verbose_load = (i == 0)
     if EXTRA_INPUTS is not None:
-        train_features, train_labels = load_data(inter_sep, extra_inputs=EXTRA_INPUTS)
+        train_features, train_labels = load_data(inter_sep, extra_inputs=EXTRA_INPUTS, verbose=verbose_load)
     else:
-        train_features, train_labels = load_data(inter_sep)
+        train_features, train_labels = load_data(inter_sep, verbose=verbose_load)
     print(f'Training data loaded for L={inter_sep}. Features shape: {train_features.shape}, Labels shape: {train_labels.shape}')
     # Create the training dataset
     train_dataset = make_dataset(train_features, train_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot=ONE_HOT, lambda_value=float(inter_sep) if LAMBDA_CONDITIONING else None)

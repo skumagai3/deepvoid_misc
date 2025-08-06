@@ -206,7 +206,7 @@ def assemble_cube_multichannel(Y_pred, GRID, SUBGRID, OFF, CHANNELS):
 # For loading training and testing data for training
 # if loading data for regression, ensure classification=False!!
 #---------------------------------------------------------
-def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=True, sigma=None, binary_mask=False):
+def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=True, sigma=None, binary_mask=False, verbose=True):
   '''
   Function that loads the density and mask files, splits into subcubes of size
   SUBGRID, rotates by 90 degrees three times, and returns the X and Y data.
@@ -217,39 +217,48 @@ def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=
   classification: bool whether or not you're doing classification. def True.
   sigma: float sigma for Gaussian smoothing. def None.
   binary_mask: bool whether or not to convert mask to binary. def False. 
+  verbose: bool whether to print detailed statistics. def True.
   '''
-  print(f'Reading volume: {FILE_DEN}... ')
+  if verbose:
+    print(f'Reading volume: {FILE_DEN}... ')
   den = volumes.read_fvolume(FILE_DEN)
   if sigma is not None:
     den = ndi.gaussian_filter(den,sigma,mode='wrap')
-    print(f'Smoothed density with a Gaussian kernel of size {sigma}')
-  print(f'Reading mask: {FILE_MASK}...')
+    if verbose:
+      print(f'Smoothed density with a Gaussian kernel of size {sigma}')
+  if verbose:
+    print(f'Reading mask: {FILE_MASK}...')
   msk = volumes.read_fvolume(FILE_MASK)
   # print mask populations:
-  _, cnts = np.unique(msk,return_counts=True)
-  for val in cnts:
-    print(f'% of population: {val/den.shape[0]**3 * 100}')
+  if verbose:
+    _, cnts = np.unique(msk,return_counts=True)
+    for val in cnts:
+      print(f'% of population: {val/den.shape[0]**3 * 100}')
   den_shp = den.shape
   #msk_shp = msk.shape
-  summary(den); summary(msk)
+  if verbose:
+    summary(den); summary(msk)
   # binary mask oneliner
   if binary_mask == True:
     msk = (msk < 1.).astype(int)
-    print('Converted mask to binary mask. Void = 1, not void = 0.')
-    summary(den); summary(msk)
+    if verbose:
+      print('Converted mask to binary mask. Void = 1, not void = 0.')
+      summary(den); summary(msk)
   if preproc == 'mm':
     #den = minmax(np.log10(den)) # this can create NaNs be careful
     den = minmax(den)
     #msk = minmax(msk) # 12/5 needed to disable this for sparse CCE losses
-    print('Ran preprocessing to scale density to [0,1]!')
-    print('\nNew summary statistics: ')
-    summary(den)
+    if verbose:
+      print('Ran preprocessing to scale density to [0,1]!')
+      print('\nNew summary statistics: ')
+      summary(den)
   if preproc == 'std':
     den = standardize(den)
     #msk = standardize(msk)
-    print('Ran preprocessing by dividing density/mask by std dev and subtracting by the mean! ')
-    print('\nNew summary statistics: ')
-    summary(den)
+    if verbose:
+      print('Ran preprocessing by dividing density/mask by std dev and subtracting by the mean! ')
+      print('\nNew summary statistics: ')
+      summary(den)
   # Make wall mask
   #msk = np.zeros(den_shp,dtype=np.uint8)
   n_bins = den_shp[0] // SUBGRID
