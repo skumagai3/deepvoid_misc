@@ -14,6 +14,7 @@ import argparse
 import numpy as np
 import tensorflow as tf
 import NETS_LITE as nets
+from NETS_LITE import create_validation_datasets, MultiScaleValidationCallback
 import absl.logging
 import plotter
 import datetime
@@ -69,12 +70,22 @@ optional.add_argument('--ADD_RSD', action='store_true',
                       help='Add RSD (Redshift Space Distortion) to the inputs.')
 optional.add_argument('--L_VAL', type=str, default='10',
                       help='Interparticle separation for validation dataset. Default is 10.')
+optional.add_argument('--VALIDATION_STRATEGY', type=str, default='target',
+                      choices=['target', 'stage', 'hybrid'],
+                      help='Validation strategy: target (validate on final goal), stage (validate on current training stage), or hybrid (both). Default is target.')
+optional.add_argument('--TARGET_LAMBDA', type=str, default=None,
+                      help='Target lambda for final model performance (defaults to L_VAL if not specified).')
 optional.add_argument('--USE_ATTENTION', action='store_true',
                       help='Use attention U-Net architecture instead of standard U-Net.')
 optional.add_argument('--LAMBDA_CONDITIONING', action='store_true',
                       help='Use lambda conditioning in the model.')
 optional.add_argument('--N_EPOCHS_PER_INTER_SEP', type=int, default=50,
                       help='Number of epochs to train for each interparticle separation. Default is 50.')
+optional.add_argument('--PREPROCESSING', type=str, default='standard',
+                      choices=['standard', 'robust', 'log_transform', 'clip_extreme'],
+                      help='Preprocessing method for density data. Default is standard.')
+optional.add_argument('--WARMUP_EPOCHS', type=int, default=0,
+                      help='Number of warmup epochs with gradual learning rate increase. Default is 0 (no warmup).')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 DEPTH = args.DEPTH
@@ -91,7 +102,14 @@ L_VAL = args.L_VAL
 USE_ATTENTION = args.USE_ATTENTION
 LAMBDA_CONDITIONING = args.LAMBDA_CONDITIONING
 N_EPOCHS_PER_INTER_SEP = args.N_EPOCHS_PER_INTER_SEP
-print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, L_VAL={L_VAL}, USE_ATTENTION={USE_ATTENTION}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}, N_EPOCHS_PER_INTER_SEP={N_EPOCHS_PER_INTER_SEP}')
+PREPROCESSING = args.PREPROCESSING
+WARMUP_EPOCHS = args.WARMUP_EPOCHS
+
+# Set up validation strategy parameters
+validation_strategy = args.VALIDATION_STRATEGY
+target_lambda = args.TARGET_LAMBDA or args.L_VAL  # Default to L_VAL if not specified
+
+print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, L_VAL={L_VAL}, USE_ATTENTION={USE_ATTENTION}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}, N_EPOCHS_PER_INTER_SEP={N_EPOCHS_PER_INTER_SEP}, VALIDATION_STRATEGY={validation_strategy}, TARGET_LAMBDA={target_lambda}, PREPROCESSING={PREPROCESSING}, WARMUP_EPOCHS={WARMUP_EPOCHS}')
 # use mixed precision if on Picotte
 if ROOT_DIR.startswith('/ifs/groups/vogeleyGrp/'):
     from tf.keras import mixed_precision
@@ -175,13 +193,14 @@ if ADD_RSD and EXTRA_INPUTS is not None:
 #================================================================
 # Define loading function
 #================================================================
-def load_data(inter_sep, extra_inputs=None, verbose=True):
+def load_data(inter_sep, extra_inputs=None, verbose=True, preprocessing='standard'):
     '''
     Load the data for a given interparticle separation.
     Args:
         inter_sep (str): Interparticle separation (lambda) as a string.
         extra_inputs (str, optional): Additional inputs file name. Defaults to None.
         verbose (bool): Whether to print detailed loading statistics. Defaults to True.
+        preprocessing (str): Preprocessing method for density data. Defaults to 'standard'.
     Returns:
         features (np.ndarray): Features array.
         labels (np.ndarray): Labels array.
@@ -192,11 +211,14 @@ def load_data(inter_sep, extra_inputs=None, verbose=True):
     data_file = DATA_PATH + data_info[inter_sep]
     if verbose:
         print(f'Loading data from {data_file}...')
+        print(f'Using preprocessing method: {preprocessing}')
+    
     features, labels = nets.load_dataset_all(
         FILE_DEN=data_file,
         FILE_MASK=FILE_MASK,
         SUBGRID=SUBGRID,
-        verbose=verbose
+        verbose=verbose,
+        preprocessing=preprocessing
     )
     if extra_inputs is not None:
         if inter_sep not in EXTRA_INPUTS_INFO:
@@ -212,9 +234,10 @@ def load_data(inter_sep, extra_inputs=None, verbose=True):
         if extra_input.shape[:-1] != features.shape[:-1]:
             raise ValueError(f'Extra input shape {extra_input.shape} does not match features shape {features.shape}.')
         features = np.concatenate([features, extra_input], axis=-1)
+    if verbose:
+        print(f'Features shape: {features.shape}, Labels shape: {labels.shape}')
     return features, labels
-    print(f'Features shape: {features.shape}, Labels shape: {labels.shape}')
-    return features, labels
+
 def make_dataset(delta, tij_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot=False, lambda_value=None):
     '''
     Create a TensorFlow dataset from the features and labels.
@@ -282,21 +305,55 @@ if EXTRA_INPUTS:
     input_shape = (None, None, None, 1 + 1) # Adjust for extra inputs
 print(f'Input shape: {input_shape}')
 #================================================================
-# Make fixed validation set (since we are interested in L=10 Mpc/h)
+# Create validation datasets based on strategy
 #================================================================
 if 'SCCE' in LOSS or 'DISCCE' in LOSS:
     ONE_HOT = False
 else:
     ONE_HOT = True
 print(f'ONE_HOT encoding: {ONE_HOT}')
-print(f'Loading validation data for interparticle separation L={L_VAL} Mpc/h...')
-if L_VAL not in inter_seps:
-    raise ValueError(f'Invalid interparticle separation for validation: {L_VAL}. Must be one of {inter_seps}.')
-if EXTRA_INPUTS:
-    val_features, val_labels = load_data(L_VAL, extra_inputs=EXTRA_INPUTS)
+
+# Create validation datasets based on strategy
+print(f'Creating validation datasets with strategy: {validation_strategy}')
+if validation_strategy == 'target':
+    print(f'Using target-based validation: L={target_lambda} Mpc/h')
+elif validation_strategy == 'stage':
+    print(f'Using stage-based validation: current training stage')
+else:  # hybrid
+    print(f'Using hybrid validation: both target (L={target_lambda}) and stage-based')
+
+x_val, y_val, extra_val = create_validation_datasets(
+    validation_strategy=validation_strategy,
+    current_lambda=L_VAL,
+    target_lambda=target_lambda,
+    density_target=data_info[target_lambda],
+    base_dir=f'{ROOT_DIR}/processed/density_cube/',
+    lambda_conditioning=LAMBDA_CONDITIONING,
+    use_extra_input=EXTRA_INPUTS,
+    verbose=True
+)
+
+# Create TensorFlow datasets from the validation data
+if validation_strategy == 'hybrid':
+    # For hybrid, x_val and y_val are tuples of (target_data, stage_data)
+    target_x_val, stage_x_val = x_val
+    target_y_val, stage_y_val = y_val
+    if EXTRA_INPUTS:
+        target_extra_val, stage_extra_val = extra_val
+        target_val_dataset = nets.make_dataset(target_x_val, target_y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, lambda_value=float(target_lambda) if LAMBDA_CONDITIONING else None, extra_inputs=target_extra_val)
+        stage_val_dataset = nets.make_dataset(stage_x_val, stage_y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, lambda_value=float(L_VAL) if LAMBDA_CONDITIONING else None, extra_inputs=stage_extra_val)
+    else:
+        target_val_dataset = nets.make_dataset(target_x_val, target_y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, lambda_value=float(target_lambda) if LAMBDA_CONDITIONING else None)
+        stage_val_dataset = nets.make_dataset(stage_x_val, stage_y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, lambda_value=float(L_VAL) if LAMBDA_CONDITIONING else None)
+    # Use target validation dataset as primary for now
+    val_dataset = target_val_dataset
 else:
-    val_features, val_labels = load_data(L_VAL)
-val_dataset = make_dataset(val_features, val_labels, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, lambda_value=float(L_VAL) if LAMBDA_CONDITIONING else None)
+    # For target or stage strategies, use the returned data directly
+    lambda_val = float(target_lambda) if validation_strategy == 'target' else float(L_VAL)
+    if EXTRA_INPUTS:
+        val_dataset = nets.make_dataset(x_val, y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, lambda_value=lambda_val if LAMBDA_CONDITIONING else None, extra_inputs=extra_val)
+    else:
+        val_dataset = nets.make_dataset(x_val, y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, lambda_value=lambda_val if LAMBDA_CONDITIONING else None)
 #================================================================
 # Set loss function and metrics
 #================================================================
@@ -402,6 +459,29 @@ with strategy.scope():
         )
 print(model.summary())
 #================================================================
+# Learning Rate Warmup Callback
+#================================================================
+class WarmupLearningRateScheduler(tf.keras.callbacks.Callback):
+    def __init__(self, warmup_epochs, target_lr, verbose=1):
+        super(WarmupLearningRateScheduler, self).__init__()
+        self.warmup_epochs = warmup_epochs
+        self.target_lr = target_lr
+        self.verbose = verbose
+        
+    def on_epoch_begin(self, epoch, logs=None):
+        if epoch < self.warmup_epochs:
+            # Gradual warmup from target_lr/10 to target_lr
+            warmup_lr = self.target_lr * (0.1 + 0.9 * (epoch + 1) / self.warmup_epochs)
+            tf.keras.backend.set_value(self.model.optimizer.learning_rate, warmup_lr)
+            if self.verbose:
+                print(f'\nWarmup epoch {epoch + 1}/{self.warmup_epochs}: Learning rate set to {warmup_lr:.6f}')
+        elif epoch == self.warmup_epochs:
+            # Set to target learning rate after warmup
+            tf.keras.backend.set_value(self.model.optimizer.learning_rate, self.target_lr)
+            if self.verbose:
+                print(f'\nWarmup complete. Learning rate set to target: {self.target_lr:.6f}')
+
+#================================================================
 # Training loop
 #================================================================
 print('>>> Starting curricular training...')
@@ -454,12 +534,33 @@ for i, inter_sep in enumerate(inter_seps):
     # Only show detailed stats for the first data load
     verbose_load = (i == 0)
     if EXTRA_INPUTS is not None:
-        train_features, train_labels = load_data(inter_sep, extra_inputs=EXTRA_INPUTS, verbose=verbose_load)
+        train_features, train_labels = load_data(inter_sep, extra_inputs=EXTRA_INPUTS, verbose=verbose_load, preprocessing=PREPROCESSING)
     else:
-        train_features, train_labels = load_data(inter_sep, verbose=verbose_load)
+        train_features, train_labels = load_data(inter_sep, verbose=verbose_load, preprocessing=PREPROCESSING)
     print(f'Training data loaded for L={inter_sep}. Features shape: {train_features.shape}, Labels shape: {train_labels.shape}')
     # Create the training dataset
     train_dataset = make_dataset(train_features, train_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot=ONE_HOT, lambda_value=float(inter_sep) if LAMBDA_CONDITIONING else None)
+    
+    # Update validation dataset for stage-based validation
+    if validation_strategy == 'stage':
+        print(f'Updating validation dataset for stage-based validation: L={inter_sep} Mpc/h')
+        if EXTRA_INPUTS:
+            val_features, val_labels = load_data(inter_sep, extra_inputs=EXTRA_INPUTS, verbose=False, preprocessing=PREPROCESSING)
+        else:
+            val_features, val_labels = load_data(inter_sep, verbose=False, preprocessing=PREPROCESSING)
+        val_dataset = make_dataset(val_features, val_labels, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, lambda_value=float(inter_sep) if LAMBDA_CONDITIONING else None)
+        # Clean up previous validation data to save memory
+        if i > 0:  # Don't delete on first iteration
+            try:
+                del x_val, y_val
+                if EXTRA_INPUTS:
+                    del extra_val
+            except NameError:
+                pass  # Variables may not exist on first iteration
+        # Update validation variables for cleanup later
+        x_val, y_val = val_features, val_labels
+        if EXTRA_INPUTS:
+            extra_val = None  # Not needed for stage-based validation since it's embedded in dataset
     # freeze layers based on interparticle separation. freeze more layers for larger interparticle separations:
     nets.freeze_encoder_blocks(
         model,
@@ -508,6 +609,26 @@ for i, inter_sep in enumerate(inter_seps):
         early_stop,
         void_fraction_monitor
     ]
+    
+    # Add learning rate warmup if specified
+    if WARMUP_EPOCHS > 0 and i == 0:  # Only add warmup for the first interparticle separation
+        warmup_callback = WarmupLearningRateScheduler(
+            warmup_epochs=WARMUP_EPOCHS,
+            target_lr=LEARNING_RATE,
+            verbose=1
+        )
+        callbacks.insert(1, warmup_callback)  # Insert after checkpoint callback
+        print(f'Added learning rate warmup for {WARMUP_EPOCHS} epochs')
+    
+    # Add multi-scale validation callback for hybrid validation strategy
+    if validation_strategy == 'hybrid':
+        validation_callback = MultiScaleValidationCallback(
+            target_val_dataset=target_val_dataset,
+            stage_val_dataset=stage_val_dataset,
+            current_lambda=inter_sep,
+            target_lambda=target_lambda
+        )
+        callbacks.append(validation_callback)
     # add printing # of parameters:
     total_params = model.count_params()
     print(f'Total number of parameters in the model: {total_params}')
@@ -611,11 +732,23 @@ for i, inter_sep in enumerate(inter_seps):
 # Final evaluation on the validation set
 #================================================================
 print('Evaluating final model on validation set...')
-results = model.evaluate(val_dataset, verbose=2)
+if validation_strategy == 'target':
+    print(f'Using target validation dataset: L={target_lambda} Mpc/h')
+    eval_dataset = val_dataset
+elif validation_strategy == 'stage':
+    print(f'Using final stage validation dataset: L={inter_seps[-1]} Mpc/h')
+    eval_dataset = val_dataset  # Already updated to final stage in the loop
+else:  # hybrid
+    print(f'Using target validation dataset for final evaluation: L={target_lambda} Mpc/h')
+    eval_dataset = target_val_dataset
+
+results = model.evaluate(eval_dataset, verbose=2)
 print('Final evaluation results:', results)
 
 # Clean up validation data and model to free memory before plotting
-del val_features, val_labels, val_dataset
+del x_val, y_val, val_dataset
+if EXTRA_INPUTS:
+    del extra_val
 import gc
 gc.collect()
 print('Validation data cleaned up.')

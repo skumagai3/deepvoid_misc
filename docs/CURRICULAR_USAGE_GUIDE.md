@@ -39,19 +39,98 @@ python curricular.py ROOT_DIR DEPTH FILTERS LOSS [OPTIONS]
 | `--LEARNING_RATE_PATIENCE` | 10 | Patience for learning rate reduction |
 | `--EARLY_STOP_PATIENCE` | 10 | Patience for early stopping |
 | `--L_VAL` | "10" | Interparticle separation for validation dataset |
+| `--VALIDATION_STRATEGY` | "target" | Validation strategy: 'target', 'stage', or 'hybrid' |
+| `--TARGET_LAMBDA` | None | Target lambda for validation (defaults to L_VAL) |
 | `--USE_ATTENTION` | False | Use attention U-Net architecture |
 | `--LAMBDA_CONDITIONING` | False | Use lambda conditioning in the model |
 | `--N_EPOCHS_PER_INTER_SEP` | 50 | Epochs to train for each interparticle separation |
 | `--EXTRA_INPUTS` | None | Additional inputs ('g-r' or 'r_flux_density') |
 | `--ADD_RSD` | False | Add Redshift Space Distortion to inputs |
+| `--PREPROCESSING` | "standard" | Preprocessing method: 'standard', 'robust', 'log_transform', 'clip_extreme' |
+| `--WARMUP_EPOCHS` | 0 | Number of warmup epochs with gradual learning rate increase |
 
 ### Training Process
 
 Curricular training progressively trains on different interparticle separations:
+
 1. Starts with lowest separation (0.33 Mpc/h)
 2. Progressively increases: 0.33 → 3 → 5 → 7 → 10 Mpc/h
 3. Trains for `N_EPOCHS_PER_INTER_SEP` epochs at each level
 4. Saves checkpoints at each stage
+
+### Validation Strategies
+
+DeepVoid supports three different validation strategies during curricular training:
+
+#### 1. Target-based Validation (Default)
+- **Purpose**: Evaluates model performance on the final goal (typically L=10 Mpc/h)
+- **Usage**: `--VALIDATION_STRATEGY target --TARGET_LAMBDA 10`
+- **Best for**: Assessing how well the model will perform on the final interparticle separation
+- **Behavior**: Uses a fixed validation dataset throughout all training stages
+
+#### 2. Stage-based Validation
+- **Purpose**: Evaluates model performance on the current training stage
+- **Usage**: `--VALIDATION_STRATEGY stage`
+- **Best for**: Understanding model performance at each curricular level
+- **Behavior**: Validation dataset changes with each training stage (0.33 → 3 → 5 → 7 → 10)
+
+#### 3. Hybrid Validation
+- **Purpose**: Combines both target-based and stage-based validation
+- **Usage**: `--VALIDATION_STRATEGY hybrid --TARGET_LAMBDA 10`
+- **Best for**: Comprehensive monitoring of both current and final performance
+- **Behavior**: Tracks metrics for both target dataset and current stage dataset
+
+### Validation Strategy Examples
+
+```bash
+# Target-based (default): validate on L=10 throughout training
+python curricular.py /path/to/data/ 4 16 SCCE_Class_Penalty_Fixed --VALIDATION_STRATEGY target --TARGET_LAMBDA 10
+
+# Stage-based: validate on current training stage
+python curricular.py /path/to/data/ 4 16 SCCE_Class_Penalty_Fixed --VALIDATION_STRATEGY stage
+
+# Hybrid: track both target and stage performance
+python curricular.py /path/to/data/ 4 16 SCCE_Class_Penalty_Fixed --VALIDATION_STRATEGY hybrid --TARGET_LAMBDA 10
+```
+
+### Preprocessing Options
+
+DeepVoid supports different preprocessing methods for density data to improve training stability:
+
+#### 1. Standard (Default)
+- **Usage**: `--PREPROCESSING standard`
+- **Method**: Min-max scaling to [0,1] range
+- **Best for**: General purpose, stable training
+
+#### 2. Robust
+- **Usage**: `--PREPROCESSING robust`
+- **Method**: Clips outliers (1st-99th percentile), median centering, std scaling, caps extreme values to [-3,3]
+- **Best for**: Data with outliers causing training instability
+
+#### 3. Log Transform
+- **Usage**: `--PREPROCESSING log_transform`
+- **Method**: Log10 transform followed by standardization
+- **Best for**: Density fields with wide dynamic range
+
+#### 4. Clip Extreme
+- **Usage**: `--PREPROCESSING clip_extreme`
+- **Method**: Clips extreme outliers (0.1st-99.9th percentile) then standardizes
+- **Best for**: Conservative outlier handling
+
+### Learning Rate Warmup
+
+Learning rate warmup gradually increases the learning rate from a small value to the target value over the first few epochs:
+
+#### Usage
+```bash
+# Add 10 epochs of warmup (only applied to first interparticle separation)
+python curricular.py /path/to/data/ 4 16 SCCE --WARMUP_EPOCHS 10 --LEARNING_RATE 1e-4
+```
+
+#### Benefits
+- Prevents early training instability
+- Helps with convergence when using large learning rates
+- Particularly useful with complex loss functions
 
 ---
 
@@ -131,17 +210,23 @@ python curricular_pred.py MODEL_NAME L_PRED [OPTIONS]
 ### Basic Training (Recommended)
 
 ```bash
-# Best balanced approach
+# Best balanced approach with robust preprocessing and warmup
 python curricular.py /content/drive/MyDrive/ 4 16 SCCE_Class_Penalty_Fixed \
-    --BATCH_SIZE 8 --USE_ATTENTION --LAMBDA_CONDITIONING --L_VAL 10
+    --BATCH_SIZE 8 --USE_ATTENTION --LAMBDA_CONDITIONING --L_VAL 10 \
+    --VALIDATION_STRATEGY target --TARGET_LAMBDA 10 \
+    --PREPROCESSING robust --WARMUP_EPOCHS 10
 
-# Proportion-aware training
+# Proportion-aware training with log transform for wide dynamic range data
 python curricular.py /content/drive/MyDrive/ 4 16 SCCE_Proportion_Aware \
-    --BATCH_SIZE 8 --USE_ATTENTION --LAMBDA_CONDITIONING --L_VAL 10
+    --BATCH_SIZE 8 --USE_ATTENTION --LAMBDA_CONDITIONING --L_VAL 10 \
+    --VALIDATION_STRATEGY stage \
+    --PREPROCESSING log_transform --WARMUP_EPOCHS 5
 
-# Safe fallback (standard loss)
+# Safe fallback with hybrid validation and standard preprocessing
 python curricular.py /content/drive/MyDrive/ 4 16 SCCE \
-    --BATCH_SIZE 8 --USE_ATTENTION --LAMBDA_CONDITIONING --L_VAL 10
+    --BATCH_SIZE 8 --USE_ATTENTION --LAMBDA_CONDITIONING --L_VAL 10 \
+    --VALIDATION_STRATEGY hybrid --TARGET_LAMBDA 10 \
+    --PREPROCESSING standard --WARMUP_EPOCHS 0
 ```
 
 ### Advanced Training Options

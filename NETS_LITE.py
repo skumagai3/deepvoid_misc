@@ -206,7 +206,7 @@ def assemble_cube_multichannel(Y_pred, GRID, SUBGRID, OFF, CHANNELS):
 # For loading training and testing data for training
 # if loading data for regression, ensure classification=False!!
 #---------------------------------------------------------
-def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=True, sigma=None, binary_mask=False, verbose=True):
+def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=True, sigma=None, binary_mask=False, verbose=True, preprocessing=None):
   '''
   Function that loads the density and mask files, splits into subcubes of size
   SUBGRID, rotates by 90 degrees three times, and returns the X and Y data.
@@ -218,6 +218,7 @@ def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=
   sigma: float sigma for Gaussian smoothing. def None.
   binary_mask: bool whether or not to convert mask to binary. def False. 
   verbose: bool whether to print detailed statistics. def True.
+  preprocessing: str new preprocessing method. If provided, overrides preproc. Options: 'standard', 'robust', 'log_transform', 'clip_extreme'.
   '''
   if verbose:
     print(f'Reading volume: {FILE_DEN}... ')
@@ -244,21 +245,58 @@ def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=
     if verbose:
       print('Converted mask to binary mask. Void = 1, not void = 0.')
       summary(den); summary(msk)
-  if preproc == 'mm':
-    #den = minmax(np.log10(den)) # this can create NaNs be careful
-    den = minmax(den)
-    #msk = minmax(msk) # 12/5 needed to disable this for sparse CCE losses
-    if verbose:
-      print('Ran preprocessing to scale density to [0,1]!')
-      print('\nNew summary statistics: ')
-      summary(den)
-  if preproc == 'std':
-    den = standardize(den)
-    #msk = standardize(msk)
-    if verbose:
-      print('Ran preprocessing by dividing density/mask by std dev and subtracting by the mean! ')
-      print('\nNew summary statistics: ')
-      summary(den)
+  
+  # Handle new preprocessing methods
+  if preprocessing is not None:
+    if preprocessing == 'standard':
+      # Standard preprocessing (same as 'mm')
+      den = minmax(den)
+      if verbose:
+        print('Ran standard preprocessing to scale density to [0,1]!')
+        print('\nNew summary statistics: ')
+        summary(den)
+    elif preprocessing == 'robust':
+      # Robust preprocessing with outlier clipping
+      den_clipped = np.clip(den, np.percentile(den, 1), np.percentile(den, 99))
+      den = (den_clipped - np.median(den_clipped)) / np.std(den_clipped)
+      den = np.clip(den, -3, 3)  # Cap extreme values
+      if verbose:
+        print('Ran robust preprocessing with outlier clipping and capping!')
+        print('\nNew summary statistics: ')
+        summary(den)
+    elif preprocessing == 'log_transform':
+      # Log transform for density fields
+      den = np.log10(den + 1e-6)  # Add small constant to avoid log(0)
+      den = (den - np.mean(den)) / np.std(den)
+      if verbose:
+        print('Ran log transform preprocessing!')
+        print('\nNew summary statistics: ')
+        summary(den)
+    elif preprocessing == 'clip_extreme':
+      # Clip extreme values and standardize
+      den = np.clip(den, np.percentile(den, 0.1), np.percentile(den, 99.9))
+      den = standardize(den)
+      if verbose:
+        print('Ran extreme value clipping and standardization!')
+        print('\nNew summary statistics: ')
+        summary(den)
+  else:
+    # Use legacy preprocessing methods
+    if preproc == 'mm':
+      #den = minmax(np.log10(den)) # this can create NaNs be careful
+      den = minmax(den)
+      #msk = minmax(msk) # 12/5 needed to disable this for sparse CCE losses
+      if verbose:
+        print('Ran preprocessing to scale density to [0,1]!')
+        print('\nNew summary statistics: ')
+        summary(den)
+    if preproc == 'std':
+      den = standardize(den)
+      #msk = standardize(msk)
+      if verbose:
+        print('Ran preprocessing by dividing density/mask by std dev and subtracting by the mean! ')
+        print('\nNew summary statistics: ')
+        summary(den)
   # Make wall mask
   #msk = np.zeros(den_shp,dtype=np.uint8)
   n_bins = den_shp[0] // SUBGRID
@@ -2918,6 +2956,134 @@ def chunk_array(arr_path, SUBGRID, scale=False):
     out = out.astype(np.float32)
     out = minmax(out)
   return out
+
+#---------------------------------------------------------
+# Curricular Training Validation Strategies
+#---------------------------------------------------------
+class MultiScaleValidationCallback(tf.keras.callbacks.Callback):
+    """
+    Callback for multi-scale validation during curricular training.
+    Tracks performance on both current stage and target lambda.
+    """
+    def __init__(self, val_datasets_dict, target_lambda, validation_freq=1):
+        super().__init__()
+        self.val_datasets = val_datasets_dict  # Dict of {lambda: dataset}
+        self.target_lambda = target_lambda
+        self.validation_freq = validation_freq
+        self.history = {}
+        
+    def on_epoch_end(self, epoch, logs=None):
+        if epoch % self.validation_freq == 0:
+            logs = logs or {}
+            
+            for lambda_val, dataset in self.val_datasets.items():
+                try:
+                    results = self.model.evaluate(dataset, verbose=0, return_dict=True)
+                    
+                    # Add results to logs with proper naming
+                    for metric_name, value in results.items():
+                        if lambda_val == self.target_lambda:
+                            key = f"target_{metric_name}"
+                        else:
+                            key = f"stage_{metric_name}"
+                        logs[key] = value
+                        
+                        # Store in history
+                        if key not in self.history:
+                            self.history[key] = []
+                        self.history[key].append(value)
+                        
+                except Exception as e:
+                    print(f"Warning: Validation failed for lambda {lambda_val}: {e}")
+
+def setup_curricular_validation(data_loader_func, current_lambda, target_lambda, 
+                               validation_strategy='target', extra_inputs=None, 
+                               batch_size=8, one_hot=False, lambda_conditioning=False):
+    """
+    Set up validation datasets for curricular training.
+    
+    Args:
+        data_loader_func: Function to load data, signature: (lambda, extra_inputs, verbose)
+        current_lambda: Current training lambda
+        target_lambda: Target lambda for final performance
+        validation_strategy: 'target', 'stage', or 'hybrid'
+        extra_inputs: Extra inputs to use
+        batch_size: Batch size for validation
+        one_hot: Whether to use one-hot encoding
+        lambda_conditioning: Whether to use lambda conditioning
+        
+    Returns:
+        dict: Dictionary of validation datasets
+        MultiScaleValidationCallback: Callback for multi-scale validation (if hybrid)
+    """
+    val_datasets = {}
+    
+    if validation_strategy in ['target', 'hybrid']:
+        # Load target validation data
+        print(f"Setting up target validation (L={target_lambda})")
+        target_features, target_labels = data_loader_func(target_lambda, extra_inputs, verbose=False)
+        target_dataset = create_tf_dataset(
+            target_features, target_labels, batch_size=batch_size, 
+            shuffle=False, one_hot=one_hot,
+            lambda_value=float(target_lambda) if lambda_conditioning else None
+        )
+        val_datasets[target_lambda] = target_dataset
+        
+    if validation_strategy in ['stage', 'hybrid']:
+        # Load stage-matched validation data
+        if current_lambda != target_lambda:
+            print(f"Setting up stage validation (L={current_lambda})")
+            stage_features, stage_labels = data_loader_func(current_lambda, extra_inputs, verbose=False)
+            stage_dataset = create_tf_dataset(
+                stage_features, stage_labels, batch_size=batch_size,
+                shuffle=False, one_hot=one_hot,
+                lambda_value=float(current_lambda) if lambda_conditioning else None
+            )
+            val_datasets[current_lambda] = stage_dataset
+    
+    # Create callback for hybrid validation
+    callback = None
+    if validation_strategy == 'hybrid' and len(val_datasets) > 1:
+        callback = MultiScaleValidationCallback(val_datasets, target_lambda)
+    
+    # Return primary dataset for standard callbacks
+    if validation_strategy == 'target':
+        primary_dataset = val_datasets[target_lambda]
+    elif validation_strategy == 'stage':
+        primary_dataset = val_datasets[current_lambda]
+    else:  # hybrid
+        primary_dataset = val_datasets[target_lambda]  # Use target for model checkpointing
+        
+    return primary_dataset, val_datasets, callback
+
+def create_tf_dataset(features, labels, batch_size=8, shuffle=False, one_hot=False, lambda_value=None):
+    """
+    Create a TensorFlow dataset from features and labels.
+    Helper function to avoid code duplication.
+    """
+    import tensorflow as tf
+    
+    if one_hot:
+        labels = tf.keras.utils.to_categorical(labels, num_classes=4)
+        
+    # Ensure correct data types
+    features = tf.convert_to_tensor(features, dtype=tf.float32)
+    labels = tf.convert_to_tensor(labels, dtype=tf.float32)
+    
+    if lambda_value is not None:
+        lambda_array = tf.fill([features.shape[0], 1], float(lambda_value))
+        dataset = tf.data.Dataset.from_tensor_slices((
+            {'density_input': features, 'lambda_input': lambda_array},
+            {'last_activation': labels, 'lambda_output': lambda_array}
+        ))
+    else:
+        dataset = tf.data.Dataset.from_tensor_slices((features, labels))
+    
+    if shuffle:
+        dataset = dataset.shuffle(buffer_size=features.shape[0])
+        
+    dataset = dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    return dataset
 
 #---------------------------------------------------------
 # Custom objects for model loading with new loss functions
