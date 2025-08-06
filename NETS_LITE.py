@@ -511,12 +511,95 @@ def SCCE_Dice_loss(y_true, y_pred, cce_weight=1.0, dice_weight=1.0):
 #---------------------------------------------------------
 # Custom SCCE loss that penalizes for predicting too many voids
 #---------------------------------------------------------
-def SCCE_void_penalty(y_true, y_pred, max_void_fraction=0.7, weight=0.1):
-  void_preds = y_pred[..., 0]
-  void_fraction = tf.reduce_mean(void_preds)
-  penalty = tf.nn.relu(void_fraction - max_void_fraction)
-  scce_loss = tf.keras.losses.sparse_categorical_crossentropy(y_true, y_pred)
-  return scce_loss + weight * penalty
+def SCCE_void_penalty(y_true, y_pred, max_void_fraction=0.7, penalty_factor=5.0):
+    """
+    Enhanced SCCE loss with aggressive penalty for void over-prediction.
+    
+    Args:
+        y_true: true labels (sparse format)
+        y_pred: predicted probabilities (softmax output)
+        max_void_fraction: maximum allowed void fraction before penalty kicks in
+        penalty_factor: strength of penalty (higher = more aggressive)
+    """
+    # Base SCCE loss
+    scce_loss = tf.keras.losses.sparse_categorical_crossentropy(y_true, y_pred)
+    
+    # Get predicted void fraction
+    void_preds = y_pred[..., 0]  # Void class is index 0
+    void_fraction = tf.reduce_mean(void_preds)
+    
+    # Heavy penalty for exceeding max void fraction
+    void_penalty = tf.nn.relu(void_fraction - max_void_fraction) * penalty_factor
+    
+    # Additional penalty: punish false positive voids (predicting void when it's not)
+    y_true_classes = tf.cast(tf.squeeze(y_true, axis=-1), tf.int64)
+    void_predictions = tf.cast(tf.argmax(y_pred, axis=-1), tf.int64)
+    
+    # Penalty for predicting void when true class is not void
+    false_void_mask = tf.logical_and(void_predictions == 0, y_true_classes != 0)
+    false_void_penalty = tf.reduce_mean(tf.cast(false_void_mask, tf.float32)) * penalty_factor
+    
+    # Reward for correctly predicting non-void classes
+    non_void_correct_mask = tf.logical_and(
+        tf.logical_and(void_predictions != 0, y_true_classes != 0),
+        void_predictions == y_true_classes
+    )
+    non_void_reward = -tf.reduce_mean(tf.cast(non_void_correct_mask, tf.float32)) * 0.5
+    
+    return scce_loss + void_penalty + false_void_penalty + non_void_reward
+
+#---------------------------------------------------------
+# Custom SCCE loss with class-aware penalties to combat void bias
+#---------------------------------------------------------
+def SCCE_Class_Penalty(y_true, y_pred, void_penalty=8.0, minority_boost=3.0):
+    """
+    Enhanced SCCE loss that heavily penalizes void over-prediction and 
+    rewards minority class prediction.
+    
+    Args:
+        y_true: true labels (sparse format)  
+        y_pred: predicted probabilities (softmax output)
+        void_penalty: penalty factor for predicting void when it's not void
+        minority_boost: boost factor for correctly predicting minority classes
+    """
+    # Base SCCE loss
+    scce_loss = tf.keras.losses.sparse_categorical_crossentropy(y_true, y_pred)
+    
+    # Get class predictions and true labels
+    y_pred_classes = tf.argmax(y_pred, axis=-1)
+    y_true_classes = tf.cast(tf.squeeze(y_true, axis=-1), tf.int64)
+    
+    # Heavy penalty for predicting void when it's not void (combat lazy solution)
+    false_void_mask = tf.logical_and(y_pred_classes == 0, y_true_classes != 0)
+    false_void_penalty = tf.reduce_mean(tf.cast(false_void_mask, tf.float32)) * void_penalty
+    
+    # Class-specific penalties based on importance
+    # Filament (class 2) and Halo (class 3) are minority classes - reward correct predictions
+    filament_correct = tf.logical_and(y_pred_classes == 2, y_true_classes == 2)
+    halo_correct = tf.logical_and(y_pred_classes == 3, y_true_classes == 3)
+    wall_correct = tf.logical_and(y_pred_classes == 1, y_true_classes == 1)
+    
+    # Rewards for minority classes (negative penalty = reward)
+    filament_reward = -tf.reduce_mean(tf.cast(filament_correct, tf.float32)) * minority_boost
+    halo_reward = -tf.reduce_mean(tf.cast(halo_correct, tf.float32)) * minority_boost * 2.0  # Extra boost for rarest class
+    wall_reward = -tf.reduce_mean(tf.cast(wall_correct, tf.float32)) * minority_boost * 0.5
+    
+    # Additional penalty: missing minority classes when they exist
+    # Penalty for predicting void when true class is filament or halo
+    missed_filament = tf.logical_and(y_pred_classes == 0, y_true_classes == 2)
+    missed_halo = tf.logical_and(y_pred_classes == 0, y_true_classes == 3)
+    missed_wall = tf.logical_and(y_pred_classes == 0, y_true_classes == 1)
+    
+    missed_filament_penalty = tf.reduce_mean(tf.cast(missed_filament, tf.float32)) * minority_boost * 2.0
+    missed_halo_penalty = tf.reduce_mean(tf.cast(missed_halo, tf.float32)) * minority_boost * 3.0
+    missed_wall_penalty = tf.reduce_mean(tf.cast(missed_wall, tf.float32)) * minority_boost
+    
+    # Combine all penalties and rewards
+    total_penalty = (false_void_penalty + 
+                     missed_filament_penalty + missed_halo_penalty + missed_wall_penalty +
+                     filament_reward + halo_reward + wall_reward)
+    
+    return scce_loss + total_penalty
 #---------------------------------------------------------
 # custom SCCE loss that penalizes for missing the class distribution
 #---------------------------------------------------------

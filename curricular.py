@@ -106,6 +106,7 @@ CUSTOM_OBJECTS = {
     'SCCE_Dice_loss': nets.SCCE_Dice_loss,
     'categorical_focal_loss': nets.categorical_focal_loss,
     'SCCE_void_penalty': nets.SCCE_void_penalty,
+    'SCCE_Class_Penalty': nets.SCCE_Class_Penalty,
     'VoidFractionMonitor': nets.VoidFractionMonitor,
     'RobustModelCheckpoint': nets.RobustModelCheckpoint,
     'Cast': tf.cast
@@ -314,17 +315,10 @@ elif LOSS == 'SCCE':
 elif LOSS == 'SCCE_Void_Penalty':
     loss_fn = nets.SCCE_void_penalty
 elif LOSS == 'SCCE_Class_Penalty':
-    #target_props = [0.65, 0.26, 0.09, 0.005]  # Example target proportions for void, wall, filament, halo
-    target_props = None
-    penalty_weights = [1.0, 0.9, 0.3, 0.1]
-    penalty_type = 'mse'  # Mean Squared Error for penalty
-    
-    # Create a proper named function instead of lambda for serialization compatibility
+    # Use the new enhanced class penalty function
     def scce_class_penalty_loss(y_true, y_pred):
-        return nets.SCCE_class_proportion_penalty(
-            y_true, y_pred, target_proportions=target_props,
-            weights=penalty_weights, penalty_type=penalty_type
-        )
+        return nets.SCCE_Class_Penalty(y_true, y_pred, void_penalty=8.0, minority_boost=3.0)
+    
     loss_fn = scce_class_penalty_loss
     # Add the custom loss function to the custom objects dictionary
     CUSTOM_OBJECTS['scce_class_penalty_loss'] = scce_class_penalty_loss
