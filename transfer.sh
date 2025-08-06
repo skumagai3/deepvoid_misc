@@ -10,6 +10,9 @@ Parameters:
         D: Depth of the model.
         F: Number of filters in the model.
         LOSS: Loss function to be used. Example: 'SCCE'.
+            Available options: SCCE, CCE, FOCAL_CCE, DISCCE, BCE,
+            SCCE_Class_Penalty_Fixed (RECOMMENDED), SCCE_Proportion_Aware,
+            SCCE_Balanced_Class_Penalty.
         tran_L: Interparticle separation for transfer learning.
         SIM: Either 'TNG' or 'BOL'.
         GRID: Desired cube size on a side in voxels.
@@ -58,6 +61,10 @@ base_L=0.33; echo "Lambda: $base_L";
 D=3; echo "Depth: $D";
 F=32;  echo "Filters: $F";
 LOSS="BCE"; echo "Loss: $LOSS"; # make blank if CCE
+# Example configurations with new improved loss functions:
+# LOSS="SCCE_Class_Penalty_Fixed"; echo "Loss: $LOSS";  # RECOMMENDED for void detection
+# LOSS="SCCE_Proportion_Aware"; echo "Loss: $LOSS";     # Alternative balanced approach
+# LOSS="SCCE_Balanced_Class_Penalty"; echo "Loss: $LOSS"; # Another balanced option
 #######################################################################
 ### Interparticle separation for transfer learning
 tran_L=10; echo "Transfer lambda: $tran_L";

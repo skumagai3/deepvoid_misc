@@ -109,6 +109,9 @@ CUSTOM_OBJECTS = {
     'categorical_focal_loss': nets.categorical_focal_loss,
     'SCCE_void_penalty': nets.SCCE_void_penalty,
     'SCCE_Class_Penalty': nets.SCCE_Class_Penalty,
+    'SCCE_Balanced_Class_Penalty': nets.SCCE_Balanced_Class_Penalty,
+    'SCCE_Class_Penalty_Fixed': nets.SCCE_Class_Penalty_Fixed,
+    'SCCE_Proportion_Aware': nets.SCCE_Proportion_Aware,
     'VoidFractionMonitor': nets.VoidFractionMonitor,
     'RobustModelCheckpoint': nets.RobustModelCheckpoint,
     'Cast': tf.cast

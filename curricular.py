@@ -49,7 +49,7 @@ required.add_argument('DEPTH', type=int, default=3,
                       help='Depth of the model. Default is 3.')
 required.add_argument('FILTERS', type=int, default=32,
                       help='Number of filters in the model. Default is 32.')
-required.add_argument('LOSS', type=str, choices=['CCE', 'DISCCE', 'FOCAL_CCE', 'SCCE', 'SCCE_Void_Penalty', 'SCCE_Class_Penalty'],
+required.add_argument('LOSS', type=str, choices=['CCE', 'DISCCE', 'FOCAL_CCE', 'SCCE', 'SCCE_Void_Penalty', 'SCCE_Class_Penalty', 'SCCE_Balanced_Class_Penalty', 'SCCE_Class_Penalty_Fixed', 'SCCE_Proportion_Aware'],
                       help='Loss function to use for training.')
 optional = parser.add_argument_group('optional arguments')
 optional.add_argument('--UNIFORM_FLAG', action='store_true',
@@ -315,13 +315,37 @@ elif LOSS == 'SCCE':
 elif LOSS == 'SCCE_Void_Penalty':
     loss_fn = nets.SCCE_void_penalty
 elif LOSS == 'SCCE_Class_Penalty':
-    # Use the new enhanced class penalty function
+    # Use the enhanced class penalty function with balanced parameters
     def scce_class_penalty_loss(y_true, y_pred):
-        return nets.SCCE_Class_Penalty(y_true, y_pred, void_penalty=8.0, minority_boost=3.0)
+        # Reduced void_penalty from 8.0 to 2.0 to prevent over-penalizing void predictions
+        # Reduced minority_boost from 3.0 to 1.5 to prevent extreme bias toward wall
+        return nets.SCCE_Class_Penalty(y_true, y_pred, void_penalty=2.0, minority_boost=1.5)
     
     loss_fn = scce_class_penalty_loss
     # Add the custom loss function to the custom objects dictionary
     CUSTOM_OBJECTS['scce_class_penalty_loss'] = scce_class_penalty_loss
+elif LOSS == 'SCCE_Balanced_Class_Penalty':
+    # Use the new balanced class penalty function
+    def scce_balanced_class_penalty_loss(y_true, y_pred):
+        return nets.SCCE_Balanced_Class_Penalty(y_true, y_pred, void_penalty=1.5, wall_penalty=1.5, minority_boost=2.0)
+    
+    loss_fn = scce_balanced_class_penalty_loss
+    # Add the custom loss function to the custom objects dictionary
+    CUSTOM_OBJECTS['scce_balanced_class_penalty_loss'] = scce_balanced_class_penalty_loss
+elif LOSS == 'SCCE_Class_Penalty_Fixed':
+    # Use the improved fixed class penalty function
+    def scce_class_penalty_fixed_loss(y_true, y_pred):
+        return nets.SCCE_Class_Penalty_Fixed(y_true, y_pred, void_penalty=2.0, wall_penalty=1.0, minority_boost=2.0)
+    
+    loss_fn = scce_class_penalty_fixed_loss
+    CUSTOM_OBJECTS['scce_class_penalty_fixed_loss'] = scce_class_penalty_fixed_loss
+elif LOSS == 'SCCE_Proportion_Aware':
+    # Use the proportion-aware loss function
+    def scce_proportion_aware_loss(y_true, y_pred):
+        return nets.SCCE_Proportion_Aware(y_true, y_pred, target_props=[0.65, 0.25, 0.08, 0.02], prop_weight=1.0)
+    
+    loss_fn = scce_proportion_aware_loss
+    CUSTOM_OBJECTS['scce_proportion_aware_loss'] = scce_proportion_aware_loss
 # Make tensorboard directory
 log_dir = ROOT_DIR + 'logs/fit/' + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") + '/'
 os.makedirs(log_dir, exist_ok=True)

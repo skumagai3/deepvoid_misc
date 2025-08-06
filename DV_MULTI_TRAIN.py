@@ -587,6 +587,26 @@ elif LOSS == 'BCE':
     sys.exit('ERROR: Binary crossentropy loss only compatible with binary mask')
 elif LOSS == 'SCCE_Void_Penalty':
   loss_fn = [nets.SCCE_void_penalty]
+elif LOSS == 'SCCE_Class_Penalty':
+  # Original class penalty with balanced parameters
+  def scce_class_penalty_loss(y_true, y_pred):
+    return nets.SCCE_Class_Penalty(y_true, y_pred, void_penalty=2.0, minority_boost=1.5)
+  loss_fn = [scce_class_penalty_loss]
+elif LOSS == 'SCCE_Balanced_Class_Penalty':
+  # Balanced class penalty function
+  def scce_balanced_class_penalty_loss(y_true, y_pred):
+    return nets.SCCE_Balanced_Class_Penalty(y_true, y_pred, void_penalty=1.5, wall_penalty=1.5, minority_boost=2.0)
+  loss_fn = [scce_balanced_class_penalty_loss]
+elif LOSS == 'SCCE_Class_Penalty_Fixed':
+  # Improved fixed class penalty function (RECOMMENDED)
+  def scce_class_penalty_fixed_loss(y_true, y_pred):
+    return nets.SCCE_Class_Penalty_Fixed(y_true, y_pred, void_penalty=2.0, wall_penalty=1.0, minority_boost=2.0)
+  loss_fn = [scce_class_penalty_fixed_loss]
+elif LOSS == 'SCCE_Proportion_Aware':
+  # Proportion-aware loss function
+  def scce_proportion_aware_loss(y_true, y_pred):
+    return nets.SCCE_Proportion_Aware(y_true, y_pred, target_props=[0.65, 0.25, 0.08, 0.02], prop_weight=1.0)
+  loss_fn = [scce_proportion_aware_loss]
 elif LOSS == 'DICE_VOID':
   # implement dice loss with void class
   pass

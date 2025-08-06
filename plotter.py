@@ -632,50 +632,121 @@ def show_image_row(imgs, plot_size, **kwargs):
 def plot_training_metric_to_ax(ax,history,metric,GRID=True,CSV_FLAG=False,**kwargs):
     '''
     Function to plot a metric from history.history. Special cases for
-    'loss' and 'acc' are included. 
+    'loss' and 'acc' are included. Now handles metrics with output prefixes
+    (e.g., 'last_activation_loss', 'lambda_output_loss').
     ax is the axis to plot on.
     history is the history object from model.fit.
-    N_epoch_skip is the number of epochs that ALL metrics were computed on.
-    i.e. if N_epoch_skip=3, then for every 3rd epoch metrics were computed.
     GRID is a boolean to determine if grid is plotted.
-    CSV_FLAG: bool, for plotting training metrics from a CSV file. Needs to
-    be added since the dict won't contain history.history.keys()
+    CSV_FLAG: bool, for plotting training metrics from a CSV file.
     '''
     if not CSV_FLAG:
         metric_dict = history.history
-        #epochs = len(history.epoch) # this breaks when no epoch 
-        if metric not in history.history.keys():
-            raise ValueError(f'{metric} not found in history.history.keys()')
-        epochs = len(history.history[metric])
+        available_keys = list(metric_dict.keys())
     else:
         metric_dict = history
-        #epochs = len(history['epoch'])
-        epochs = len(metric_dict[metric])
-        if metric not in history.keys():
-            raise ValueError(f'{metric} not found in dict.keys()')
-    full_epochs = np.arange(0,epochs)
-    mask = np.isfinite(np.array(metric_dict[metric]).astype(np.double))
-    full_epochs = full_epochs[mask]
-    #epoch_labels = [f'{i}' for i in full_epochs]
-    #skip_epochs = np.arange(0,epochs,N_epoch_skip)
-    #skip_labels = [f'{i}' for i in skip_epochs]
-    # skip val_loss, val_acc.
+        available_keys = list(metric_dict.keys())
+    
+    # Helper function to find metric keys that match a pattern
+    def find_metric_keys(pattern, exclude_val=False):
+        keys = []
+        for key in available_keys:
+            if exclude_val and key.startswith('val_'):
+                continue
+            if pattern in key and not key.startswith('val_'):
+                keys.append(key)
+        return keys
+    
+    def find_val_metric_keys(pattern):
+        keys = []
+        for key in available_keys:
+            if key.startswith('val_') and pattern in key:
+                keys.append(key)
+        return keys
+    
+    # Special handling for loss and accuracy
     if metric == 'loss' or metric == 'val_loss':
-        ax.plot(full_epochs,np.array(metric_dict['loss']).astype(float),label='Train',**kwargs)
-        ax.plot(full_epochs,np.array(metric_dict['val_loss']).astype(float),label='Test',**kwargs)
-        ax.set_title(f'Model Loss')
-        ax.legend()
-        #ax.set_xticks(full_epochs, labels=epoch_labels)
+        # Find all loss-related keys
+        train_loss_keys = find_metric_keys('loss', exclude_val=True)
+        val_loss_keys = find_val_metric_keys('loss')
+        
+        if train_loss_keys and val_loss_keys:
+            # Use the first main loss (usually the total loss)
+            train_key = train_loss_keys[0] if 'loss' in train_loss_keys else train_loss_keys[0]
+            val_key = val_loss_keys[0] if 'val_loss' in val_loss_keys else val_loss_keys[0]
+            
+            epochs = len(metric_dict[train_key])
+            full_epochs = np.arange(0, epochs)
+            
+            ax.plot(full_epochs, np.array(metric_dict[train_key]).astype(float), label='Train', **kwargs)
+            ax.plot(full_epochs, np.array(metric_dict[val_key]).astype(float), label='Test', **kwargs)
+            ax.set_title('Model Loss')
+            ax.legend()
+        else:
+            print(f"Warning: Could not find loss metrics. Available keys: {available_keys}")
+            return
+            
     elif metric == 'accuracy' or metric == 'val_accuracy':
-        ax.plot(full_epochs,np.array(metric_dict['accuracy']).astype(float),label='Train',**kwargs)
-        ax.plot(full_epochs,np.array(metric_dict['val_accuracy']).astype(float),label='Test',**kwargs)
-        ax.set_title(f'Model Accuracy')
-        ax.legend()
-        #ax.set_xticks(full_epochs, labels=epoch_labels)
+        # Find all accuracy-related keys
+        train_acc_keys = find_metric_keys('accuracy', exclude_val=True)
+        val_acc_keys = find_val_metric_keys('accuracy')
+        
+        if train_acc_keys and val_acc_keys:
+            # Prefer main accuracy, then any accuracy metric
+            train_key = 'accuracy' if 'accuracy' in train_acc_keys else train_acc_keys[0]
+            val_key = 'val_accuracy' if 'val_accuracy' in val_acc_keys else val_acc_keys[0]
+            
+            epochs = len(metric_dict[train_key])
+            full_epochs = np.arange(0, epochs)
+            
+            ax.plot(full_epochs, np.array(metric_dict[train_key]).astype(float), label='Train', **kwargs)
+            ax.plot(full_epochs, np.array(metric_dict[val_key]).astype(float), label='Test', **kwargs)
+            ax.set_title('Model Accuracy')
+            ax.legend()
+        else:
+            print(f"Warning: Could not find accuracy metrics. Available keys: {available_keys}")
+            return
     else:
-        ax.plot(full_epochs,np.array(metric_dict[metric]).astype(np.double)[mask],**kwargs)
-        ax.set_title(f'Model {metric}')
-        #ax.set_xticks(skip_epochs, labels=skip_labels)
+        # For other metrics, find both train and validation versions
+        train_keys = find_metric_keys(metric, exclude_val=True)
+        val_keys = find_val_metric_keys(metric)
+        
+        if train_keys:
+            # Use the best matching training key
+            if metric in train_keys:
+                train_key = metric
+            else:
+                train_key = train_keys[0]
+                print(f"Using '{train_key}' for requested metric '{metric}'")
+            
+            epochs = len(metric_dict[train_key])
+            full_epochs = np.arange(0, epochs)
+            train_mask = np.isfinite(np.array(metric_dict[train_key]).astype(np.double))
+            
+            ax.plot(full_epochs[train_mask], np.array(metric_dict[train_key]).astype(np.double)[train_mask], 
+                   label='Train', **kwargs)
+            
+            # Plot validation if available
+            if val_keys:
+                # Find corresponding validation key
+                val_key = None
+                for vkey in val_keys:
+                    if metric in vkey or train_key.replace('val_', '') in vkey:
+                        val_key = vkey
+                        break
+                if not val_key:
+                    val_key = val_keys[0]
+                
+                val_mask = np.isfinite(np.array(metric_dict[val_key]).astype(np.double))
+                ax.plot(full_epochs[val_mask], np.array(metric_dict[val_key]).astype(np.double)[val_mask], 
+                       label='Test', **kwargs)
+            
+            ax.set_title(f'Model {metric}')
+            if val_keys:
+                ax.legend()
+        else:
+            print(f"Warning: Could not find metric '{metric}'. Available keys: {available_keys}")
+            return
+    
     ax.set_xlabel('Epoch')
     ax.set_ylabel(metric)
     if GRID:
@@ -685,23 +756,85 @@ def plot_training_metric_to_ax(ax,history,metric,GRID=True,CSV_FLAG=False,**kwar
 def plot_training_metrics_all(history,FILE_OUT,aspect='rect',savefig=False,CSV_FLAG=False,**kwargs):
     '''
     Function to plot all available metrics from history.history. 
+    Now handles metrics with output prefixes (e.g., 'last_activation_loss').
     FILE_OUT is the filepath to save the plot. 
-    N_epochs_skip is how often ALL metrics were computed. int.
     aspect is either 'rect' or 'square'.
     If savefig=True, the plot will be saved.
-    CSV_FLAG: bool, for plotting training metrics from a CSV file. Needs to
-    be added since the dictionary won't be history.history.
+    CSV_FLAG: bool, for plotting training metrics from a CSV file.
     '''
     if not CSV_FLAG:
-        metrics = list(history.history.keys())
+        all_keys = list(history.history.keys())
     else:
-        metrics = list(history.keys())
-    # remove val_loss, val_acc, val_accuracy from metrics:
-    skip_metrics = ['val_loss','val_acc','val_accuracy']
+        all_keys = list(history.keys())
+    
+    print(f"Available metric keys: {all_keys}")
+    
+    # Skip validation metrics and specific keys
+    skip_patterns = ['val_', 'epoch']
     if CSV_FLAG:
-        skip_metrics.append('epoch')
-    metrics = [metric for metric in metrics if metric not in skip_metrics]
-    n_metrics = len(metrics)
+        skip_patterns.append('epoch')
+    
+    # Filter out validation metrics and other unwanted keys
+    filtered_keys = []
+    for key in all_keys:
+        should_skip = False
+        for pattern in skip_patterns:
+            if key.startswith(pattern):
+                should_skip = True
+                break
+        if not should_skip:
+            filtered_keys.append(key)
+    
+    # Group similar metrics and pick representative ones
+    # Priority: main metrics first, then output-specific ones
+    metric_groups = {
+        'loss': [],
+        'accuracy': [],
+        'f1_micro': [],
+        'mcc': [],
+        'void_f1': [],
+        'other': []
+    }
+    
+    # Categorize metrics
+    for key in filtered_keys:
+        categorized = False
+        for metric_type in ['loss', 'accuracy', 'f1_micro', 'mcc', 'void_f1']:
+            if metric_type in key:
+                metric_groups[metric_type].append(key)
+                categorized = True
+                break
+        if not categorized:
+            metric_groups['other'].append(key)
+    
+    # Select the best representative for each group
+    metrics_to_plot = []
+    for group_name, group_keys in metric_groups.items():
+        if group_keys:
+            # For main metrics, prefer the simple name, otherwise take the first
+            if group_name in ['loss', 'accuracy']:
+                if group_name in group_keys:
+                    metrics_to_plot.append(group_name)
+                else:
+                    metrics_to_plot.append(group_keys[0])
+            else:
+                # For other metrics, prefer the simplest name (shortest)
+                best_key = min(group_keys, key=len)
+                metrics_to_plot.append(best_key)
+    
+    # Add any remaining metrics from 'other' category
+    metrics_to_plot.extend(metric_groups['other'])
+    
+    # Remove duplicates while preserving order
+    metrics_to_plot = list(dict.fromkeys(metrics_to_plot))
+    
+    print(f"Plotting metrics: {metrics_to_plot}")
+    
+    n_metrics = len(metrics_to_plot)
+    if n_metrics == 0:
+        print("Warning: No metrics found to plot!")
+        return
+    
     if aspect == 'square':
         # if we want a square grid of plots or as close to it as possible:
         n_cols = int(np.ceil(np.sqrt(n_metrics))); n_rows = int(np.ceil(n_metrics/n_cols))
@@ -710,21 +843,39 @@ def plot_training_metrics_all(history,FILE_OUT,aspect='rect',savefig=False,CSV_F
         # if we want a grid of plots with 3 columns:
         n_cols = 3; n_rows = int(np.ceil(n_metrics/n_cols))
         figsize = (13,20)
+    
     fig, ax = plt.subplots(n_rows,n_cols,figsize=figsize,layout='constrained')
-    for i, metric in enumerate(metrics):
-        # if there is only one row or one column, ax will be a 1D array, so we need to handle this case:
-        if n_rows == 1 or n_cols == 1:
-            if n_rows == 1:
-                plot_training_metric_to_ax(ax[i],history,metric,CSV_FLAG=CSV_FLAG,**kwargs)
+    
+    # Handle case where we only have one subplot
+    if n_metrics == 1:
+        ax = [ax]
+    elif n_rows == 1 or n_cols == 1:
+        # ax is already a 1D array
+        pass
+    else:
+        # ax is a 2D array, flatten it
+        ax = ax.flatten()
+    
+    for i, metric in enumerate(metrics_to_plot):
+        try:
+            if n_rows == 1 and n_cols == 1:
+                plot_training_metric_to_ax(ax[0], history, metric, CSV_FLAG=CSV_FLAG, **kwargs)
             else:
-                plot_training_metric_to_ax(ax[i],history,metric,CSV_FLAG=CSV_FLAG,**kwargs)
-        else:
-            plot_training_metric_to_ax(ax[i//n_cols,i%n_cols],history,metric,CSV_FLAG=CSV_FLAG,**kwargs)
+                plot_training_metric_to_ax(ax[i], history, metric, CSV_FLAG=CSV_FLAG, **kwargs)
+        except Exception as e:
+            print(f"Error plotting metric '{metric}': {e}")
+            continue
+    
     # remove any empty axes:
-    for i in range(n_metrics,len(ax.flatten())):
-        fig.delaxes(ax.flatten()[i])
+    if n_metrics < len(ax):
+        for i in range(n_metrics, len(ax)):
+            fig.delaxes(ax[i])
+    
     if savefig:
         plt.savefig(FILE_OUT)
+        print(f"Training metrics plot saved to {FILE_OUT}")
+    else:
+        plt.show()
 
 # returns golden ratio sized rectangle for plotting:
 def golden_ratio(width):

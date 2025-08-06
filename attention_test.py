@@ -93,7 +93,7 @@ req_group.add_argument('L', type=lambda x: float(x) if x in ['0.33', '0.122'] el
                        help='Interparticle separation in Mpc/h. TNG full DM 0.33, BOL full DM 0.122, 3,5,7,10.')
 req_group.add_argument('DEPTH', type=int, default=3, help='Depth of the U-Net.')
 req_group.add_argument('FILTERS', type=int, default=32, help='Number of filters in the first layer.')
-req_group.add_argument('LOSS', type=str, default='CCE', help='Loss function to use: CCE, SCCE, FOCAL_CCE, DISCCE.')
+req_group.add_argument('LOSS', type=str, default='CCE', help='Loss function to use: CCE, SCCE, FOCAL_CCE, DISCCE, SCCE_Class_Penalty, SCCE_Balanced_Class_Penalty, SCCE_Class_Penalty_Fixed, SCCE_Proportion_Aware.')
 req_group.add_argument('GRID', type=int, help='Size of the density and mask fields on a side. For TNG, GRID=512, for Bolshoi, GRID=640.')
 # optional args: UNIFORM_FLAG, BATCHNORM, DROPOUT, MULTI_FLAG, LOW_MEM_FLAG
 opt_group = parser.add_argument_group('optional arguments')
@@ -236,7 +236,7 @@ if SIM == 'Bolshoi':
 # set up .npy filepaths for saving/loading data
 X_PREFIX = f'{SIM}_L{L}_Nm={GRID}'
 Y_PREFIX = f'{SIM}_Nm={GRID}'
-if LOSS == 'SCCE' or LOSS == 'DISCCE':
+if LOSS in ['SCCE', 'DISCCE', 'SCCE_Class_Penalty', 'SCCE_Balanced_Class_Penalty', 'SCCE_Class_Penalty_Fixed', 'SCCE_Proportion_Aware']:
   Y_PREFIX += '_int'
   if BINARY_MASK:
     sys.exit('ERROR: categorical crossentropy loss not compatible with binary mask')
@@ -447,7 +447,7 @@ else:
   print('>>> X_test:',FILE_X_TEST); print('>>> Y_test:',FILE_Y_TEST)
   n_samples_train = np.load(FILE_X_TRAIN,mmap_mode='r').shape[0]
   n_samples_test = np.load(FILE_X_TEST,mmap_mode='r').shape[0]
-  last_dim = 1 if LOSS == 'SCCE' or LOSS == 'DISCCE' else N_CLASSES
+  last_dim = 1 if LOSS in ['SCCE', 'DISCCE', 'SCCE_Class_Penalty', 'SCCE_Balanced_Class_Penalty', 'SCCE_Class_Penalty_Fixed', 'SCCE_Proportion_Aware'] else N_CLASSES
   if BINARY_MASK:
     last_dim = 1
   train_dataset = tf.data.Dataset.from_generator(
@@ -557,6 +557,26 @@ elif LOSS == 'FOCAL_CCE':
 elif LOSS == 'DISCCE':
   # implement dice loss averaged over all classes
   loss = [nets.SCCE_Dice_loss]
+elif LOSS == 'SCCE_Class_Penalty':
+  # Original class penalty with balanced parameters
+  def scce_class_penalty_loss(y_true, y_pred):
+    return nets.SCCE_Class_Penalty(y_true, y_pred, void_penalty=2.0, minority_boost=1.5)
+  loss = [scce_class_penalty_loss]
+elif LOSS == 'SCCE_Balanced_Class_Penalty':
+  # Balanced class penalty function
+  def scce_balanced_class_penalty_loss(y_true, y_pred):
+    return nets.SCCE_Balanced_Class_Penalty(y_true, y_pred, void_penalty=1.5, wall_penalty=1.5, minority_boost=2.0)
+  loss = [scce_balanced_class_penalty_loss]
+elif LOSS == 'SCCE_Class_Penalty_Fixed':
+  # Improved fixed class penalty function (RECOMMENDED)
+  def scce_class_penalty_fixed_loss(y_true, y_pred):
+    return nets.SCCE_Class_Penalty_Fixed(y_true, y_pred, void_penalty=2.0, wall_penalty=1.0, minority_boost=2.0)
+  loss = [scce_class_penalty_fixed_loss]
+elif LOSS == 'SCCE_Proportion_Aware':
+  # Proportion-aware loss function
+  def scce_proportion_aware_loss(y_true, y_pred):
+    return nets.SCCE_Proportion_Aware(y_true, y_pred, target_props=[0.65, 0.25, 0.08, 0.02], prop_weight=1.0)
+  loss = [scce_proportion_aware_loss]
 elif LOSS == 'BCE':
   loss = nets.BinaryCrossentropy()
   if not BINARY_MASK:
@@ -566,7 +586,7 @@ elif LOSS == 'DICE_VOID':
   pass
 # set one-hot flag:
 ONE_HOT_FLAG = True # for compute metrics callback
-if LOSS == 'SCCE' or LOSS == 'DISCCE':
+if LOSS in ['SCCE', 'DISCCE', 'SCCE_Class_Penalty', 'SCCE_Balanced_Class_Penalty', 'SCCE_Class_Penalty_Fixed', 'SCCE_Proportion_Aware']:
   ONE_HOT_FLAG = False
 if BINARY_MASK:
   ONE_HOT_FLAG = False

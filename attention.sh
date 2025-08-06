@@ -18,6 +18,9 @@ Parameters:
       SCCE: Sparse Categorical Crossentropy,
       DISCCE: Combo Dice and SCCE loss,
       SCCE_Void_Penalty: SCCE with a penalty for guessing the wrong proportion of voids,
+      SCCE_Class_Penalty_Fixed: Improved balanced class penalty (RECOMMENDED),
+      SCCE_Proportion_Aware: Maintains target class proportions,
+      SCCE_Balanced_Class_Penalty: Alternative balanced approach,
       BCE: Binary Crossentropy.
   GRID: Desired cube size on a side in voxels. For TNG use 512, for BOL use 640.
 
@@ -61,6 +64,10 @@ L=0.33; echo "Lambda: $L";
 D=3; echo "Depth: $D";
 F=32;  echo "Filters: $F";
 LOSS="SCCE"; echo "Loss: $LOSS";
+# Example configurations with new improved loss functions:
+# LOSS="SCCE_Class_Penalty_Fixed"; echo "Loss: $LOSS";  # RECOMMENDED for void detection
+# LOSS="SCCE_Proportion_Aware"; echo "Loss: $LOSS";     # Alternative balanced approach
+# LOSS="SCCE_Balanced_Class_Penalty"; echo "Loss: $LOSS"; # Another balanced option
 if [ "$SIM" = "TNG" ]; then
   GRID=512
 elif [ "$SIM" = "BOL" ] || [ "$SIM" = "Bolshoi"]; then

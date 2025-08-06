@@ -205,6 +205,30 @@ elif LOSS == 'SCCE':
 elif LOSS == 'DISCCE':
   loss = [nets.SCCE_Dice_loss]
   ONE_HOT_FLAG = False
+elif LOSS == 'SCCE_Class_Penalty':
+  # Original class penalty with balanced parameters
+  def scce_class_penalty_loss(y_true, y_pred):
+    return nets.SCCE_Class_Penalty(y_true, y_pred, void_penalty=2.0, minority_boost=1.5)
+  loss = [scce_class_penalty_loss]
+  ONE_HOT_FLAG = False
+elif LOSS == 'SCCE_Balanced_Class_Penalty':
+  # Balanced class penalty function
+  def scce_balanced_class_penalty_loss(y_true, y_pred):
+    return nets.SCCE_Balanced_Class_Penalty(y_true, y_pred, void_penalty=1.5, wall_penalty=1.5, minority_boost=2.0)
+  loss = [scce_balanced_class_penalty_loss]
+  ONE_HOT_FLAG = False
+elif LOSS == 'SCCE_Class_Penalty_Fixed':
+  # Improved fixed class penalty function (RECOMMENDED)
+  def scce_class_penalty_fixed_loss(y_true, y_pred):
+    return nets.SCCE_Class_Penalty_Fixed(y_true, y_pred, void_penalty=2.0, wall_penalty=1.0, minority_boost=2.0)
+  loss = [scce_class_penalty_fixed_loss]
+  ONE_HOT_FLAG = False
+elif LOSS == 'SCCE_Proportion_Aware':
+  # Proportion-aware loss function
+  def scce_proportion_aware_loss(y_true, y_pred):
+    return nets.SCCE_Proportion_Aware(y_true, y_pred, target_props=[0.65, 0.25, 0.08, 0.02], prop_weight=1.0)
+  loss = [scce_proportion_aware_loss]
+  ONE_HOT_FLAG = False
 elif LOSS == 'FOCAL_CCE':
   loss = [nets.categorical_focal_loss(alpha=alpha_list_float,gamma=gamma)] 
   #loss = nets.CategoricalFocalCrossentropy(alpha=alpha,gamma=gamma)
