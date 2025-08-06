@@ -4,11 +4,13 @@ A collection of deep learning tools for identifying and analyzing cosmic voids i
 
 ## Overview
 
-DeepVoid uses deep convolutional neural networks to detect cosmic voids in dark matter density fields from cosmological simulations. The morphological classification of large-scale structure (LSS) in the universe is fundamentally based on the tidal tensor, which is the Hessian of the gravitational potential, and its eigenvalues. The classification scheme counts how many eigenvalues exceed a given threshold to determine morphology: void (no eigenvalues exceed threshold), sheet (one eigenvalue exceeds threshold), filament (two eigenvalues exceed threshold), or node/halo (all three eigenvalues exceed threshold).
+DeepVoid uses deep convolutional neural networks to detect cosmic voids in dark matter density fields from cosmological simulations. The morphology of large-scale structure can be defined in many different ways. The tidal tensor approach is one good physics-based dynamical definition that can be easily derived from simulations. In this scheme, we count how many eigenvalues of the tidal tensor (the Hessian of the gravitational potential) exceed a given threshold to determine morphology: void (no eigenvalues exceed threshold), sheet (one eigenvalue exceeds threshold), filament (two eigenvalues exceed threshold), or node/halo (all three eigenvalues exceed threshold).
 
-However, the most basic tidal tensor scheme only identifies the most underdense centers of voids. In this implementation, we use an eigenvalue threshold of 0.65 (visible in the mask filenames) to define void regions more comprehensively. This architecture is flexible and can be adapted to different physical void definitions beyond the tidal tensor approach.
+The basic tidal tensor scheme identifies the most underdense centers of voids. In this implementation, we use an eigenvalue threshold of 0.65 (visible in the mask filenames) to define void regions more comprehensively. However, this architecture is flexible and can be adapted to different physical void definitions beyond the tidal tensor approach.
 
-The eventual goal of the DeepVoid project is to apply these deep learning techniques to observational galaxy surveys such as DESI and other high-redshift surveys, bridging the gap between simulation-based training and real observational data.
+The goal is to train models on simulation data that can then take galaxy surveys as input and output LSS morphology classifications. For void finding specifically, this can be used to create void catalogues that are then stacked (averaged) to create samples for cosmological tests like Alcock-Paczyński tests, integrated Sachs-Wolfe studies, and other analyses. It could also be interesting to study how local morphology influences galaxy properties.
+
+The immediate target is applying these techniques to observational galaxy surveys such as DESI and other high-redshift surveys.
 
 The project includes training scripts, prediction tools, and comprehensive documentation for working with IllustrisTNG and Bolshoi simulations.
 
