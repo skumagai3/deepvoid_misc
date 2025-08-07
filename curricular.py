@@ -14,7 +14,17 @@ import argparse
 import numpy as np
 import tensorflow as tf
 import NETS_LITE as nets
-from NETS_LITE import create_validation_datasets, MultiScaleValidationCallback
+# Import validation functions with error handling
+try:
+    from NETS_LITE import MultiScaleValidationCallback
+except ImportError:
+    # Define a dummy callback if import fails
+    class MultiScaleValidationCallback(tf.keras.callbacks.Callback):
+        def __init__(self, *args, **kwargs):
+            super().__init__()
+            print("Warning: Using dummy MultiScaleValidationCallback")
+        def on_epoch_end(self, epoch, logs=None):
+            pass
 import absl.logging
 import plotter
 import datetime
@@ -317,43 +327,38 @@ print(f'ONE_HOT encoding: {ONE_HOT}')
 print(f'Creating validation datasets with strategy: {validation_strategy}')
 if validation_strategy == 'target':
     print(f'Using target-based validation: L={target_lambda} Mpc/h')
+    # Load target validation data directly
+    x_val, y_val = load_data(target_lambda, extra_inputs=EXTRA_INPUTS, verbose=True, preprocessing=PREPROCESSING)
+    
+    # Create validation dataset
+    val_dataset = make_dataset(x_val, y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, 
+                              lambda_value=float(target_lambda) if LAMBDA_CONDITIONING else None)
+    
 elif validation_strategy == 'stage':
-    print(f'Using stage-based validation: current training stage')
+    print(f'Using stage-based validation: will update during training')
+    # For stage-based, we'll load the first stage data initially and update during training
+    x_val, y_val = load_data(inter_seps[0], extra_inputs=EXTRA_INPUTS, verbose=True, preprocessing=PREPROCESSING)
+    
+    # Create initial validation dataset (will be updated during training)
+    val_dataset = make_dataset(x_val, y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT,
+                              lambda_value=float(inter_seps[0]) if LAMBDA_CONDITIONING else None)
+    
 else:  # hybrid
     print(f'Using hybrid validation: both target (L={target_lambda}) and stage-based')
-
-x_val, y_val, extra_val = create_validation_datasets(
-    validation_strategy=validation_strategy,
-    current_lambda=L_VAL,
-    target_lambda=target_lambda,
-    density_target=data_info[target_lambda],
-    base_dir=f'{ROOT_DIR}/processed/density_cube/',
-    lambda_conditioning=LAMBDA_CONDITIONING,
-    use_extra_input=EXTRA_INPUTS,
-    verbose=True
-)
-
-# Create TensorFlow datasets from the validation data
-if validation_strategy == 'hybrid':
-    # For hybrid, x_val and y_val are tuples of (target_data, stage_data)
-    target_x_val, stage_x_val = x_val
-    target_y_val, stage_y_val = y_val
-    if EXTRA_INPUTS:
-        target_extra_val, stage_extra_val = extra_val
-        target_val_dataset = nets.make_dataset(target_x_val, target_y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, lambda_value=float(target_lambda) if LAMBDA_CONDITIONING else None, extra_inputs=target_extra_val)
-        stage_val_dataset = nets.make_dataset(stage_x_val, stage_y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, lambda_value=float(L_VAL) if LAMBDA_CONDITIONING else None, extra_inputs=stage_extra_val)
-    else:
-        target_val_dataset = nets.make_dataset(target_x_val, target_y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, lambda_value=float(target_lambda) if LAMBDA_CONDITIONING else None)
-        stage_val_dataset = nets.make_dataset(stage_x_val, stage_y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, lambda_value=float(L_VAL) if LAMBDA_CONDITIONING else None)
-    # Use target validation dataset as primary for now
+    
+    # Load target validation data
+    target_x_val, target_y_val = load_data(target_lambda, extra_inputs=EXTRA_INPUTS, verbose=True, preprocessing=PREPROCESSING)
+    target_val_dataset = make_dataset(target_x_val, target_y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT,
+                                     lambda_value=float(target_lambda) if LAMBDA_CONDITIONING else None)
+    
+    # Load initial stage validation data
+    stage_x_val, stage_y_val = load_data(inter_seps[0], extra_inputs=EXTRA_INPUTS, verbose=False, preprocessing=PREPROCESSING)
+    stage_val_dataset = make_dataset(stage_x_val, stage_y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT,
+                                    lambda_value=float(inter_seps[0]) if LAMBDA_CONDITIONING else None)
+    
+    # Use target validation dataset as primary for standard callbacks
     val_dataset = target_val_dataset
-else:
-    # For target or stage strategies, use the returned data directly
-    lambda_val = float(target_lambda) if validation_strategy == 'target' else float(L_VAL)
-    if EXTRA_INPUTS:
-        val_dataset = nets.make_dataset(x_val, y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, lambda_value=lambda_val if LAMBDA_CONDITIONING else None, extra_inputs=extra_val)
-    else:
-        val_dataset = nets.make_dataset(x_val, y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, lambda_value=lambda_val if LAMBDA_CONDITIONING else None)
+    x_val, y_val = target_x_val, target_y_val
 #================================================================
 # Set loss function and metrics
 #================================================================
@@ -544,23 +549,24 @@ for i, inter_sep in enumerate(inter_seps):
     # Update validation dataset for stage-based validation
     if validation_strategy == 'stage':
         print(f'Updating validation dataset for stage-based validation: L={inter_sep} Mpc/h')
-        if EXTRA_INPUTS:
-            val_features, val_labels = load_data(inter_sep, extra_inputs=EXTRA_INPUTS, verbose=False, preprocessing=PREPROCESSING)
-        else:
-            val_features, val_labels = load_data(inter_sep, verbose=False, preprocessing=PREPROCESSING)
-        val_dataset = make_dataset(val_features, val_labels, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, lambda_value=float(inter_sep) if LAMBDA_CONDITIONING else None)
+        val_features, val_labels = load_data(inter_sep, extra_inputs=EXTRA_INPUTS, verbose=False, preprocessing=PREPROCESSING)
+        val_dataset = make_dataset(val_features, val_labels, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, 
+                                  lambda_value=float(inter_sep) if LAMBDA_CONDITIONING else None)
         # Clean up previous validation data to save memory
         if i > 0:  # Don't delete on first iteration
             try:
                 del x_val, y_val
-                if EXTRA_INPUTS:
-                    del extra_val
             except NameError:
                 pass  # Variables may not exist on first iteration
         # Update validation variables for cleanup later
         x_val, y_val = val_features, val_labels
-        if EXTRA_INPUTS:
-            extra_val = None  # Not needed for stage-based validation since it's embedded in dataset
+    
+    # Update stage dataset for hybrid validation
+    if validation_strategy == 'hybrid' and i > 0:
+        print(f'Updating stage validation dataset for hybrid validation: L={inter_sep} Mpc/h')
+        stage_x_val, stage_y_val = load_data(inter_sep, extra_inputs=EXTRA_INPUTS, verbose=False, preprocessing=PREPROCESSING)
+        stage_val_dataset = make_dataset(stage_x_val, stage_y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT,
+                                        lambda_value=float(inter_sep) if LAMBDA_CONDITIONING else None)
     # freeze layers based on interparticle separation. freeze more layers for larger interparticle separations:
     nets.freeze_encoder_blocks(
         model,
@@ -747,8 +753,6 @@ print('Final evaluation results:', results)
 
 # Clean up validation data and model to free memory before plotting
 del x_val, y_val, val_dataset
-if EXTRA_INPUTS:
-    del extra_val
 import gc
 gc.collect()
 print('Validation data cleaned up.')
