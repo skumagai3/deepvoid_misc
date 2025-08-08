@@ -14,17 +14,8 @@ import argparse
 import numpy as np
 import tensorflow as tf
 import NETS_LITE as nets
-# Import validation functions with error handling
-try:
-    from NETS_LITE import MultiScaleValidationCallback
-except ImportError:
-    # Define a dummy callback if import fails
-    class MultiScaleValidationCallback(tf.keras.callbacks.Callback):
-        def __init__(self, *args, **kwargs):
-            super().__init__()
-            print("Warning: Using dummy MultiScaleValidationCallback")
-        def on_epoch_end(self, epoch, logs=None):
-            pass
+# Import validation functions
+from NETS_LITE import MultiScaleValidationCallback
 import absl.logging
 import plotter
 import datetime
@@ -267,8 +258,15 @@ def make_dataset(delta, tij_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot
         print(f'One-hot encoding applied. Labels shape: {tij_labels.shape}')
     # Check for NaN values in delta and tij_labels
     if np.any(np.isnan(delta)):
+        print(f'ERROR: NaN values found in delta array!')
+        print(f'Number of NaN values: {np.sum(np.isnan(delta))}')
+        print(f'Delta shape: {delta.shape}')
+        print(f'Delta min/max: {np.nanmin(delta):.6f} / {np.nanmax(delta):.6f}')
         raise ValueError('NaN values found in delta array.')
     if np.any(np.isnan(tij_labels)):
+        print(f'ERROR: NaN values found in tij_labels array!')
+        print(f'Number of NaN values: {np.sum(np.isnan(tij_labels))}')
+        print(f'Labels shape: {tij_labels.shape}')
         raise ValueError('NaN values found in tij_labels array.')
     # Ensure delta is a float32 tensor
     delta = tf.convert_to_tensor(delta, dtype=tf.float32)

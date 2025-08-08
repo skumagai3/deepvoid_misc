@@ -59,9 +59,16 @@ def summary(array):
 # Regularization options: minmax and standardize
 #---------------------------------------------------------
 def minmax(a):
-  return (a-np.min(a))/(np.max(a)-np.min(a))
+  range_val = np.max(a) - np.min(a)
+  if range_val == 0:
+    return np.zeros_like(a)
+  return (a-np.min(a))/range_val
+
 def standardize(a):
-  return (a-np.mean(a))/(np.std(a))
+  std_val = np.std(a)
+  if std_val == 0:
+    return np.zeros_like(a)
+  return (a-np.mean(a))/std_val
 #---------------------------------------------------------
 # Convert multiclass mask to binary void/not void mask
 #---------------------------------------------------------
@@ -258,8 +265,13 @@ def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=
     elif preprocessing == 'robust':
       # Robust preprocessing with outlier clipping
       den_clipped = np.clip(den, np.percentile(den, 1), np.percentile(den, 99))
-      den = (den_clipped - np.median(den_clipped)) / np.std(den_clipped)
-      den = np.clip(den, -3, 3)  # Cap extreme values
+      std_val = np.std(den_clipped)
+      if std_val == 0:
+        print("Warning: Standard deviation is zero after clipping. Using zeros array.")
+        den = np.zeros_like(den_clipped)
+      else:
+        den = (den_clipped - np.median(den_clipped)) / std_val
+        den = np.clip(den, -3, 3)  # Cap extreme values
       if verbose:
         print('Ran robust preprocessing with outlier clipping and capping!')
         print('\nNew summary statistics: ')
@@ -267,7 +279,12 @@ def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=
     elif preprocessing == 'log_transform':
       # Log transform for density fields
       den = np.log10(den + 1e-6)  # Add small constant to avoid log(0)
-      den = (den - np.mean(den)) / np.std(den)
+      std_val = np.std(den)
+      if std_val == 0:
+        print("Warning: Standard deviation is zero after log transform. Using zeros array.")
+        den = np.zeros_like(den)
+      else:
+        den = (den - np.mean(den)) / std_val
       if verbose:
         print('Ran log transform preprocessing!')
         print('\nNew summary statistics: ')
@@ -343,6 +360,21 @@ def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=
     #print(i,j,k)
   X_all = X_all.astype('float32')
   Y_all = Y_all.astype('int8')
+  
+  # Check for NaN values before returning
+  if np.any(np.isnan(X_all)):
+    print("ERROR: NaN values detected in feature array!")
+    print(f"Number of NaN values: {np.sum(np.isnan(X_all))}")
+    print(f"Preprocessing method used: {preprocessing or preproc}")
+    # Replace NaNs with zeros as a fallback
+    X_all = np.nan_to_num(X_all, nan=0.0, posinf=0.0, neginf=0.0)
+    print("NaN values replaced with zeros.")
+  
+  if np.any(np.isnan(Y_all)):
+    print("ERROR: NaN values detected in label array!")
+    Y_all = np.nan_to_num(Y_all, nan=0.0, posinf=0.0, neginf=0.0)
+    print("NaN values in labels replaced with zeros.")
+  
   gc.collect()
   return X_all, Y_all
 #---------------------------------------------------------
