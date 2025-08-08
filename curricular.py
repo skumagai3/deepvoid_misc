@@ -531,6 +531,20 @@ tensor_board_callback = TensorBoard(
 # Training loop over interparticle separations
 #================================================================
 print('>>> Starting training loop over interparticle separations...')
+
+# Initialize multi-scale validation callback for hybrid validation strategy
+validation_callback = None
+if validation_strategy == 'hybrid':
+    # Create initial datasets dictionary for the callback
+    val_datasets_dict = {
+        target_lambda: target_val_dataset,
+        inter_seps[0]: stage_val_dataset
+    }
+    validation_callback = MultiScaleValidationCallback(
+        val_datasets_dict=val_datasets_dict,
+        target_lambda=target_lambda
+    )
+
 epoch_offset = 0
 for i, inter_sep in enumerate(inter_seps):
     print(f'Starting training for interparticle separation L={inter_sep} Mpc/h...')
@@ -565,6 +579,8 @@ for i, inter_sep in enumerate(inter_seps):
         stage_x_val, stage_y_val = load_data(inter_sep, extra_inputs=EXTRA_INPUTS, verbose=False, preprocessing=PREPROCESSING)
         stage_val_dataset = make_dataset(stage_x_val, stage_y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT,
                                         lambda_value=float(inter_sep) if LAMBDA_CONDITIONING else None)
+        # Update the validation callback with new stage dataset
+        validation_callback.update_stage_dataset(inter_sep, stage_val_dataset)
     # freeze layers based on interparticle separation. freeze more layers for larger interparticle separations:
     nets.freeze_encoder_blocks(
         model,
@@ -625,13 +641,7 @@ for i, inter_sep in enumerate(inter_seps):
         print(f'Added learning rate warmup for {WARMUP_EPOCHS} epochs')
     
     # Add multi-scale validation callback for hybrid validation strategy
-    if validation_strategy == 'hybrid':
-        validation_callback = MultiScaleValidationCallback(
-            target_val_dataset=target_val_dataset,
-            stage_val_dataset=stage_val_dataset,
-            current_lambda=inter_sep,
-            target_lambda=target_lambda
-        )
+    if validation_strategy == 'hybrid' and validation_callback is not None:
         callbacks.append(validation_callback)
     # add printing # of parameters:
     total_params = model.count_params()

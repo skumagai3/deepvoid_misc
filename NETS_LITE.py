@@ -3027,6 +3027,17 @@ class MultiScaleValidationCallback(tf.keras.callbacks.Callback):
                         
                 except Exception as e:
                     print(f"Warning: Validation failed for lambda {lambda_val}: {e}")
+    
+    def update_stage_dataset(self, new_lambda, new_dataset):
+        """Update the stage dataset when moving to next interparticle separation"""
+        # Remove old stage dataset (keep target dataset)
+        keys_to_remove = [k for k in self.val_datasets.keys() if k != self.target_lambda]
+        for key in keys_to_remove:
+            del self.val_datasets[key]
+        
+        # Add new stage dataset
+        self.val_datasets[new_lambda] = new_dataset
+        print(f"Updated stage validation dataset to L={new_lambda} Mpc/h")
 
 def setup_curricular_validation(data_loader_func, current_lambda, target_lambda, 
                                validation_strategy='target', extra_inputs=None, 
