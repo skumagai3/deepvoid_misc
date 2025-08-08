@@ -87,6 +87,10 @@ optional.add_argument('--PREPROCESSING', type=str, default='standard',
                       help='Preprocessing method for density data. Default is standard.')
 optional.add_argument('--WARMUP_EPOCHS', type=int, default=0,
                       help='Number of warmup epochs with gradual learning rate increase. Default is 0 (no warmup).')
+optional.add_argument('--FOCAL_ALPHA', nargs=4, type=float, default=[0.6, 0.3, 0.09, 0.02],
+                      help='Alpha values for focal loss [void, wall, filament, halo]. Default: 0.6 0.3 0.09 0.02')
+optional.add_argument('--FOCAL_GAMMA', type=float, default=1.5,
+                      help='Gamma value for focal loss. Default: 1.5')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 DEPTH = args.DEPTH
@@ -105,12 +109,19 @@ LAMBDA_CONDITIONING = args.LAMBDA_CONDITIONING
 N_EPOCHS_PER_INTER_SEP = args.N_EPOCHS_PER_INTER_SEP
 PREPROCESSING = args.PREPROCESSING
 WARMUP_EPOCHS = args.WARMUP_EPOCHS
+FOCAL_ALPHA = args.FOCAL_ALPHA
+FOCAL_GAMMA = args.FOCAL_GAMMA
 
 # Set up validation strategy parameters
 validation_strategy = args.VALIDATION_STRATEGY
 target_lambda = args.TARGET_LAMBDA or args.L_VAL  # Default to L_VAL if not specified
 
-print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, L_VAL={L_VAL}, USE_ATTENTION={USE_ATTENTION}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}, N_EPOCHS_PER_INTER_SEP={N_EPOCHS_PER_INTER_SEP}, VALIDATION_STRATEGY={validation_strategy}, TARGET_LAMBDA={target_lambda}, PREPROCESSING={PREPROCESSING}, WARMUP_EPOCHS={WARMUP_EPOCHS}')
+print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, L_VAL={L_VAL}, USE_ATTENTION={USE_ATTENTION}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}, N_EPOCHS_PER_INTER_SEP={N_EPOCHS_PER_INTER_SEP}, VALIDATION_STRATEGY={validation_strategy}, TARGET_LAMBDA={target_lambda}, PREPROCESSING={PREPROCESSING}, WARMUP_EPOCHS={WARMUP_EPOCHS}, FOCAL_ALPHA={FOCAL_ALPHA}, FOCAL_GAMMA={FOCAL_GAMMA}')
+
+# Validate focal loss parameters
+if LOSS != 'FOCAL_CCE' and (args.FOCAL_ALPHA != [0.6, 0.3, 0.09, 0.02] or args.FOCAL_GAMMA != 1.5):
+    print(f"WARNING: Focal loss parameters specified (alpha={FOCAL_ALPHA}, gamma={FOCAL_GAMMA}) but loss function is '{LOSS}', not 'FOCAL_CCE'. These parameters will be ignored.")
+
 # use mixed precision if on Picotte
 if ROOT_DIR.startswith('/ifs/groups/vogeleyGrp/'):
     from tf.keras import mixed_precision
@@ -371,8 +382,8 @@ if LOSS == 'CCE':
 elif LOSS == 'DISCCE':
     loss_fn = nets.SCCE_Dice_loss
 elif LOSS == 'FOCAL_CCE':
-    alpha = [0.4, 0.4, 0.15, 0.05]
-    gamma = 2.0
+    alpha = FOCAL_ALPHA
+    gamma = FOCAL_GAMMA
     loss_fn = nets.categorical_focal_loss(alpha=alpha, gamma=gamma)
     print(f'Using Focal Loss with alpha={alpha} and gamma={gamma}')
 elif LOSS == 'SCCE':
