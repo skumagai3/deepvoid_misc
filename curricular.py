@@ -475,12 +475,34 @@ class WarmupLearningRateScheduler(tf.keras.callbacks.Callback):
         if epoch < self.warmup_epochs:
             # Gradual warmup from target_lr/10 to target_lr
             warmup_lr = self.target_lr * (0.1 + 0.9 * (epoch + 1) / self.warmup_epochs)
-            tf.keras.backend.set_value(self.model.optimizer.learning_rate, warmup_lr)
+            # Use the most compatible method to set learning rate
+            try:
+                # Try the newer method first
+                self.model.optimizer.learning_rate.assign(warmup_lr)
+            except AttributeError:
+                try:
+                    # Fallback to older method
+                    tf.keras.backend.set_value(self.model.optimizer.learning_rate, warmup_lr)
+                except Exception as e:
+                    # Final fallback - create new optimizer with desired LR
+                    print(f"Warning: Could not set learning rate directly, trying optimizer recreation: {e}")
+                    old_config = self.model.optimizer.get_config()
+                    old_config['learning_rate'] = float(warmup_lr)
+                    new_optimizer = type(self.model.optimizer).from_config(old_config)
+                    self.model.compile(optimizer=new_optimizer, 
+                                     loss=self.model.loss,
+                                     metrics=self.model.metrics)
             if self.verbose:
                 print(f'\nWarmup epoch {epoch + 1}/{self.warmup_epochs}: Learning rate set to {warmup_lr:.6f}')
         elif epoch == self.warmup_epochs:
             # Set to target learning rate after warmup
-            tf.keras.backend.set_value(self.model.optimizer.learning_rate, self.target_lr)
+            try:
+                self.model.optimizer.learning_rate.assign(self.target_lr)
+            except AttributeError:
+                try:
+                    tf.keras.backend.set_value(self.model.optimizer.learning_rate, self.target_lr)
+                except Exception as e:
+                    print(f"Warning: Could not set target learning rate: {e}")
             if self.verbose:
                 print(f'\nWarmup complete. Learning rate set to target: {self.target_lr:.6f}')
 
