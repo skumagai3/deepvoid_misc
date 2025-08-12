@@ -393,9 +393,9 @@ elif LOSS == 'SCCE_Void_Penalty':
 elif LOSS == 'SCCE_Class_Penalty':
     # Use the enhanced class penalty function with balanced parameters
     def scce_class_penalty_loss(y_true, y_pred):
-        # Reduced void_penalty from 8.0 to 2.0 to prevent over-penalizing void predictions
+        # Reduced void_penalty from 8.0 to 0.5 to prevent over-penalizing void predictions
         # Reduced minority_boost from 3.0 to 1.5 to prevent extreme bias toward wall
-        return nets.SCCE_Class_Penalty(y_true, y_pred, void_penalty=2.0, minority_boost=1.5)
+        return nets.SCCE_Class_Penalty(y_true, y_pred, void_penalty=0.5, minority_boost=1.5)
     
     loss_fn = scce_class_penalty_loss
     # Add the custom loss function to the custom objects dictionary
