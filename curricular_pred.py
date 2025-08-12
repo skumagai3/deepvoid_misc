@@ -586,7 +586,7 @@ def main():
     
     # Save predictions if requested
     if SAVE_PREDICTIONS:
-        pred_file = PRED_PATH + MODEL_NAME + f'_predictions_L{L_PRED}.npy'
+        pred_file = PRED_PATH + MODEL_NAME + f'_predictions_L{L_PRED}_{PREPROCESSING}.npy'
         try:
             np.save(pred_file, predictions)
             print(f'Predictions saved to {pred_file}')
@@ -602,7 +602,7 @@ def main():
     os.makedirs(MODEL_FIG_PATH, exist_ok=True)
     
     # Save model temporarily for scoring functions that require a model file
-    temp_model_path = MODEL_PATH + MODEL_NAME + f'_temp_L{L_PRED}'
+    temp_model_path = MODEL_PATH + MODEL_NAME + f'_temp_L{L_PRED}_{PREPROCESSING}'
     print(f'Temporarily saving model for scoring functions...')
     
     try:
@@ -692,7 +692,7 @@ def main():
             # Save confusion matrix
             try:
                 cm = confusion_matrix(y_true_flat, y_pred_flat)
-                cm_file = MODEL_FIG_PATH + f'{MODEL_NAME}_confusion_matrix_L{L_PRED}.npy'
+                cm_file = MODEL_FIG_PATH + f'{MODEL_NAME}_confusion_matrix_L{L_PRED}_{PREPROCESSING}.npy'
                 np.save(cm_file, cm)
                 print(f'Confusion matrix saved to {cm_file}')
             except Exception as e:
@@ -737,7 +737,7 @@ def main():
                     
                     if slice_predictions is not None:
                         # Save slice predictions
-                        slice_pred_file = PRED_PATH + MODEL_NAME + f'_slice_predictions_L{L_PRED}.npy'
+                        slice_pred_file = PRED_PATH + MODEL_NAME + f'_slice_predictions_L{L_PRED}_{PREPROCESSING}.npy'
                         np.save(slice_pred_file, slice_predictions)
                         print(f'Slice predictions saved to {slice_pred_file}')
                         
@@ -749,7 +749,7 @@ def main():
                             true_classes = np.argmax(slice_true_labels, axis=-1) if len(slice_true_labels.shape) > 1 else slice_true_labels
                             
                             # Save slice plot data for external plotting if needed
-                            slice_data_file = MODEL_FIG_PATH + f'{MODEL_NAME}_slice_data_L{L_PRED}.npz'
+                            slice_data_file = MODEL_FIG_PATH + f'{MODEL_NAME}_slice_data_L{L_PRED}_{PREPROCESSING}.npz'
                             np.savez(slice_data_file, 
                                    predictions=pred_classes, 
                                    true_labels=true_classes,
@@ -765,7 +765,7 @@ def main():
                 else:
                     # Fall back to original method for backward compatibility
                     print(f'Using original save_scores_from_model (may have preprocessing mismatch)...')
-                    FILE_PRED = PRED_PATH + MODEL_NAME + f'_predictions_L{L_PRED}.fvol'
+                    FILE_PRED = PRED_PATH + MODEL_NAME + f'_predictions_L{L_PRED}_{PREPROCESSING}.fvol'
                     
                     nets.save_scores_from_model(
                         DATA_PATH + data_info[L_PRED],  # FILE_DEN
