@@ -2503,7 +2503,7 @@ def run_predict_model(model, X_test, batch_size, output_argmax=True, BINARY=Fals
 def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED,
                            GRID=512, SUBGRID=128, OFF=64, BOXSIZE=205, BOLSHOI_FLAG=False, 
                            TRAIN_SCORE=False, COMPILE=False, LATEX=False, BINARY=False, 
-                           PRED_NAME_SUFFIX='', EXTRA_INPUTS=None, lambda_value=None):
+                           PRED_NAME_SUFFIX='', EXTRA_INPUTS=None, lambda_value=None, preprocessing='standard'):
   '''
   Save image of density, mask, and predicted mask. Using save_scores_from_fvol,
   saves F1 scores, confusion matrix to MODEL_NAME_hps.txt and plots confusion matrix.
@@ -2520,6 +2520,8 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED,
   custom objects error.
   LATEX: bool whether or not to typeset plot labels/titles with LaTeX. added 
   because some envs have thrown errors.
+  preprocessing: str preprocessing method to apply to input data. Options: 
+  'standard' (min-max), 'robust', 'log_transform', 'clip_extreme'. Default 'standard'.
   '''
   MODEL_NAME = FILE_MODEL.split('/')[-1]
   DELTA_NAME = FILE_DEN.split('/')[-1]
@@ -2539,12 +2541,43 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED,
       print('Model not found. Trying without .keras extension...')
       model = load_model(FILE_MODEL, compile=False, custom_objects=CUSTOM_OBJECTS)
 
-  X_test = load_dataset(FILE_DEN,SUBGRID,OFF,preproc='mm')
-  if EXTRA_INPUTS is not None:
-    # if we have an extra input, load it and concatenate it to X_test
-    X_extra = load_dataset(EXTRA_INPUTS,SUBGRID,OFF,preproc='mm')
-    X_test = np.concatenate([X_test, X_extra], axis=-1)
-    print(f'Concatenated extra input {EXTRA_INPUTS} to X_test. New shape: {X_test.shape}')
+  # Convert new preprocessing parameter to old preproc format
+  if preprocessing == 'standard':
+    preproc = 'mm'
+  elif preprocessing == 'robust':
+    # Use load_dataset_all for robust preprocessing since load_dataset doesn't support it
+    X_test = load_dataset_all(FILE_DEN, FILE_MSK, SUBGRID, preprocessing=preprocessing, classification=False)
+    if EXTRA_INPUTS is not None:
+      X_extra = load_dataset_all(EXTRA_INPUTS, FILE_MSK, SUBGRID, preprocessing=preprocessing, classification=False) 
+      X_test = np.concatenate([X_test, X_extra], axis=-1)
+      print(f'Concatenated extra input {EXTRA_INPUTS} to X_test. New shape: {X_test.shape}')
+  elif preprocessing == 'log_transform':
+    # Use load_dataset_all for log_transform preprocessing since load_dataset doesn't support it
+    X_test = load_dataset_all(FILE_DEN, FILE_MSK, SUBGRID, preprocessing=preprocessing, classification=False)
+    if EXTRA_INPUTS is not None:
+      X_extra = load_dataset_all(EXTRA_INPUTS, FILE_MSK, SUBGRID, preprocessing=preprocessing, classification=False)
+      X_test = np.concatenate([X_test, X_extra], axis=-1)
+      print(f'Concatenated extra input {EXTRA_INPUTS} to X_test. New shape: {X_test.shape}')
+  elif preprocessing == 'clip_extreme':
+    # Use load_dataset_all for clip_extreme preprocessing since load_dataset doesn't support it
+    X_test = load_dataset_all(FILE_DEN, FILE_MSK, SUBGRID, preprocessing=preprocessing, classification=False)
+    if EXTRA_INPUTS is not None:
+      X_extra = load_dataset_all(EXTRA_INPUTS, FILE_MSK, SUBGRID, preprocessing=preprocessing, classification=False)
+      X_test = np.concatenate([X_test, X_extra], axis=-1)
+      print(f'Concatenated extra input {EXTRA_INPUTS} to X_test. New shape: {X_test.shape}')
+  else:
+    preproc = 'mm'  # fallback to default
+    
+  # Use old load_dataset for standard preprocessing only
+  if preprocessing == 'standard':
+    X_test = load_dataset(FILE_DEN,SUBGRID,OFF,preproc=preproc)
+    if EXTRA_INPUTS is not None:
+      # if we have an extra input, load it and concatenate it to X_test
+      X_extra = load_dataset(EXTRA_INPUTS,SUBGRID,OFF,preproc=preproc)
+      X_test = np.concatenate([X_test, X_extra], axis=-1)
+      print(f'Concatenated extra input {EXTRA_INPUTS} to X_test. New shape: {X_test.shape}')
+      
+  print(f'Loaded data with preprocessing: {preprocessing}')
   if lambda_value is not None:
     print(f'Adding lambda input with value {lambda_value}')
     lambda_array = np.full((X_test.shape[0], 1), lambda_value, dtype=np.float32)
