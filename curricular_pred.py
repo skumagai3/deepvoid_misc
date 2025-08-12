@@ -9,6 +9,14 @@ This script loads a trained curricular model and performs:
 
 Usage:
 python curricular_pred.py ROOT_DIR MODEL_NAME L_PRED [options]
+
+Key Options:
+--PREPROCESSING {standard,robust,log_transform,clip_extreme}
+    Preprocessing method to apply (must match training preprocessing)
+--BATCH_SIZE BATCH_SIZE
+    Batch size for prediction (default: 2)
+--TEST_MODE
+    Use only a small subset of data for quick testing
 '''
 
 import os
@@ -79,6 +87,9 @@ optional.add_argument('--MAX_PRED_BATCHES', type=int, default=None,
                       help='Limit number of prediction batches for memory management.')
 optional.add_argument('--TEST_MODE', action='store_true',
                       help='Test mode: use only a small subset of data for quick testing.')
+optional.add_argument('--PREPROCESSING', type=str, default='standard',
+                      choices=['standard', 'robust', 'log_transform', 'clip_extreme'],
+                      help='Preprocessing method to apply to input data. Must match training preprocessing.')
 
 args = parser.parse_args()
 
@@ -93,10 +104,12 @@ SAVE_PREDICTIONS = args.SAVE_PREDICTIONS
 SKIP_SLICE_PLOTS = args.SKIP_SLICE_PLOTS
 MAX_PRED_BATCHES = args.MAX_PRED_BATCHES
 TEST_MODE = args.TEST_MODE
+PREPROCESSING = args.PREPROCESSING
 
 print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, MODEL_NAME={MODEL_NAME}, L_PRED={L_PRED}')
 print(f'BATCH_SIZE={BATCH_SIZE}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}')
 print(f'LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}, SAVE_PREDICTIONS={SAVE_PREDICTIONS}')
+print(f'PREPROCESSING={PREPROCESSING}')
 
 #================================================================
 # Set up custom objects for model loading
@@ -200,7 +213,7 @@ def check_memory_usage():
 #================================================================
 # Memory-efficient data loading function
 #================================================================
-def load_data_for_prediction(inter_sep, extra_inputs=None, max_samples=None):
+def load_data_for_prediction(inter_sep, extra_inputs=None, max_samples=None, preprocessing='standard'):
     """
     Load data for prediction with memory management.
     """
@@ -209,6 +222,7 @@ def load_data_for_prediction(inter_sep, extra_inputs=None, max_samples=None):
     
     data_file = DATA_PATH + data_info[inter_sep]
     print(f'Loading prediction data from {data_file}...')
+    print(f'Using preprocessing method: {preprocessing}')
     
     # Check if file exists
     if not os.path.exists(data_file):
@@ -222,9 +236,10 @@ def load_data_for_prediction(inter_sep, extra_inputs=None, max_samples=None):
         features, labels = nets.load_dataset_all(
             FILE_DEN=data_file,
             FILE_MASK=FILE_MASK,
-            SUBGRID=SUBGRID
+            SUBGRID=SUBGRID,
+            preprocessing=preprocessing
         )
-        print(f'Data loading completed successfully.')
+        print(f'Data loading completed successfully with {preprocessing} preprocessing.')
     except Exception as e:
         print(f'Error during data loading: {e}')
         raise
@@ -534,7 +549,8 @@ def main():
         pred_features, pred_labels = load_data_for_prediction(
             L_PRED, 
             extra_inputs=EXTRA_INPUTS,
-            max_samples=max_samples
+            max_samples=max_samples,
+            preprocessing=PREPROCESSING
         )
         
         # Force garbage collection after data loading
