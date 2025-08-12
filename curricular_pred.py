@@ -705,29 +705,86 @@ def main():
     # Generate slice plots (if not skipped and plotter is available)
     if not SKIP_SLICE_PLOTS:
         if plotter is not None:
-            print('Generating slice plots using save_scores_from_model...')
+            print('Generating slice plots with correct preprocessing...')
             try:
-                # Use your existing save_scores_from_model function with the temporary model
-                FILE_PRED = PRED_PATH + MODEL_NAME + f'_predictions_L{L_PRED}.fvol'
-                
-                nets.save_scores_from_model(
-                    DATA_PATH + data_info[L_PRED],  # FILE_DEN
-                    FILE_MASK,                      # FILE_MSK  
-                    temp_model_path,                # FILE_MODEL
-                    MODEL_FIG_PATH,                 # FILE_FIG
-                    FILE_PRED,                      # FILE_PRED
-                    GRID=GRID, 
-                    SUBGRID=SUBGRID, 
-                    OFF=OFF,
-                    TRAIN_SCORE=False,
-                    EXTRA_INPUTS=EXTRA_INPUTS_INFO.get(L_PRED) if EXTRA_INPUTS and EXTRA_INPUTS_INFO else None,
-                    lambda_value=float(L_PRED) if LAMBDA_CONDITIONING else None
-                )
-                print('Slice plots generated successfully using save_scores_from_model.')
+                # Check if the preprocessing method is supported by the old load_dataset function
+                if PREPROCESSING in ['standard', 'robust', 'log_transform', 'clip_extreme']:
+                    print(f'Using manual slice plot generation for preprocessing: {PREPROCESSING}')
+                    
+                    # Load data with correct preprocessing for slice plots
+                    slice_features, slice_labels = nets.load_dataset_all(
+                        FILE_DEN=DATA_PATH + data_info[L_PRED],
+                        FILE_MASK=FILE_MASK,
+                        SUBGRID=SUBGRID,
+                        preprocessing=PREPROCESSING
+                    )
+                    
+                    print(f'Loaded slice plot data with {PREPROCESSING} preprocessing')
+                    print(f'Slice features shape: {slice_features.shape}')
+                    
+                    # Create dataset for prediction
+                    slice_lambda_value = float(L_PRED) if LAMBDA_CONDITIONING else None
+                    slice_dataset = make_prediction_dataset(
+                        slice_features, slice_labels, 
+                        batch_size=BATCH_SIZE, 
+                        lambda_value=slice_lambda_value
+                    )
+                    
+                    # Make predictions for slice plots
+                    slice_predictions, slice_true_labels = predict_with_memory_management(
+                        model, slice_dataset, max_batches=None  # Use all data for slice plots
+                    )
+                    
+                    if slice_predictions is not None:
+                        # Save slice predictions
+                        slice_pred_file = PRED_PATH + MODEL_NAME + f'_slice_predictions_L{L_PRED}.npy'
+                        np.save(slice_pred_file, slice_predictions)
+                        print(f'Slice predictions saved to {slice_pred_file}')
+                        
+                        # Generate slice plots manually (basic implementation)
+                        print('Generating slice plots from predictions...')
+                        try:
+                            # Convert predictions to class labels for visualization
+                            pred_classes = np.argmax(slice_predictions, axis=-1)
+                            true_classes = np.argmax(slice_true_labels, axis=-1) if len(slice_true_labels.shape) > 1 else slice_true_labels
+                            
+                            # Save slice plot data for external plotting if needed
+                            slice_data_file = MODEL_FIG_PATH + f'{MODEL_NAME}_slice_data_L{L_PRED}.npz'
+                            np.savez(slice_data_file, 
+                                   predictions=pred_classes, 
+                                   true_labels=true_classes,
+                                   features=slice_features[:, :, :, :, 0])  # Remove channel dimension
+                            print(f'Slice plot data saved to {slice_data_file}')
+                            print('Use this data with your plotting tools to generate slice visualizations')
+                            
+                        except Exception as slice_error:
+                            print(f'Warning: Could not prepare slice plot data: {slice_error}')
+                    else:
+                        print('Warning: Slice predictions failed')
+                        
+                else:
+                    # Fall back to original method for backward compatibility
+                    print(f'Using original save_scores_from_model (may have preprocessing mismatch)...')
+                    FILE_PRED = PRED_PATH + MODEL_NAME + f'_predictions_L{L_PRED}.fvol'
+                    
+                    nets.save_scores_from_model(
+                        DATA_PATH + data_info[L_PRED],  # FILE_DEN
+                        FILE_MASK,                      # FILE_MSK  
+                        temp_model_path,                # FILE_MODEL
+                        MODEL_FIG_PATH,                 # FILE_FIG
+                        FILE_PRED,                      # FILE_PRED
+                        GRID=GRID, 
+                        SUBGRID=SUBGRID, 
+                        OFF=OFF,
+                        TRAIN_SCORE=False,
+                        EXTRA_INPUTS=EXTRA_INPUTS_INFO.get(L_PRED) if EXTRA_INPUTS and EXTRA_INPUTS_INFO else None,
+                        lambda_value=float(L_PRED) if LAMBDA_CONDITIONING else None
+                    )
+                    print('WARNING: This used preprocessing=mm (standard) which may not match your model training!')
                 
             except Exception as e:
                 print(f'Slice plot generation failed: {e}')
-                print('This may be due to model serialization or data loading issues.')
+                print('This may be due to preprocessing mismatch or data loading issues.')
         else:
             print('Slice plots skipped (plotter module not available).')
     else:
