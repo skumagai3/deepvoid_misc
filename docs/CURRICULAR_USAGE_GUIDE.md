@@ -10,7 +10,9 @@ This guide covers the usage of `curricular.py` for training and `curricular_pred
 2. [Prediction (`curricular_pred.py`)](#prediction)
 3. [Loss Functions Guide](#loss-functions-guide)
 4. [Common Usage Examples](#common-usage-examples)
-5. [Troubleshooting](#troubleshooting)
+5. [File Output Strategy](#file-output-strategy)
+6. [Troubleshooting](#troubleshooting)
+7. [Log Transform Preprocessing Explained](#log-transform-preprocessing-explained)
 
 ---
 
@@ -24,7 +26,7 @@ python curricular.py ROOT_DIR DEPTH FILTERS LOSS [OPTIONS]
 
 ### Required Arguments
 
-- `ROOT_DIR`: Root directory for the project (e.g., `/content/drive/MyDrive/`)
+- `ROOT_DIR`: Root directory for the project (e.g., `/ifs/groups/vogeleyGrp/`)
 - `DEPTH`: Depth of the U-Net model (e.g., `4`)
 - `FILTERS`: Number of initial filters (e.g., `16`)
 - `LOSS`: Loss function to use (see [Loss Functions Guide](#loss-functions-guide))
@@ -48,6 +50,177 @@ python curricular.py ROOT_DIR DEPTH FILTERS LOSS [OPTIONS]
 | `--ADD_RSD` | False | Add Redshift Space Distortion to inputs |
 | `--PREPROCESSING` | "standard" | Preprocessing method: 'standard', 'robust', 'log_transform', 'clip_extreme' |
 | `--WARMUP_EPOCHS` | 0 | Number of warmup epochs with gradual learning rate increase |
+| `--FOCAL_ALPHA` | [0.6, 0.3, 0.09, 0.02] | Alpha values for focal loss [void, wall, filament, halo] |
+| `--FOCAL_GAMMA` | 1.5 | Gamma value for focal loss |
+
+### Training Process
+
+Curricular training progressively trains on different interparticle separations:
+
+1. Starts with lowest separation (0.33 Mpc/h)
+2. Progressively increases: 0.33 → 3 → 5 → 7 → 10 Mpc/h
+3. Trains for `N_EPOCHS_PER_INTER_SEP` epochs at each level
+4. Saves checkpoints at each stage
+
+### Validation Strategies
+
+DeepVoid supports three different validation strategies during curricular training:
+
+#### 1. Target-based Validation (Default)
+- **Purpose**: Evaluates model performance on the final goal (typically L=10 Mpc/h)
+- **Usage**: `--VALIDATION_STRATEGY target --TARGET_LAMBDA 10`
+- **Best for**: Assessing how well the model will perform on the final interparticle separation
+- **Behavior**: Uses a fixed validation dataset throughout all training stages
+
+#### 2. Stage-based Validation
+- **Purpose**: Evaluates model performance on the current training stage
+- **Usage**: `--VALIDATION_STRATEGY stage`
+- **Best for**: Understanding model performance at each curricular level
+- **Behavior**: Validation dataset changes with each training stage (0.33 → 3 → 5 → 7 → 10)
+
+#### 3. Hybrid Validation
+- **Purpose**: Combines both target-based and stage-based validation
+- **Usage**: `--VALIDATION_STRATEGY hybrid --TARGET_LAMBDA 10`
+- **Best for**: Comprehensive monitoring of both current and final performance
+- **Behavior**: Tracks metrics for both target dataset and current stage dataset
+
+### Validation Strategy Examples
+
+```bash
+# Target-based (default): validate on L=10 throughout training
+python curricular.py /ifs/groups/vogeleyGrp/ 4 16 SCCE_Class_Penalty_Fixed --VALIDATION_STRATEGY target --TARGET_LAMBDA 10
+
+# Stage-based: validate on current training stage
+python curricular.py /ifs/groups/vogeleyGrp/ 4 16 SCCE_Class_Penalty_Fixed --VALIDATION_STRATEGY stage
+
+# Hybrid: track both target and stage performance
+python curricular.py /ifs/groups/vogeleyGrp/ 4 16 SCCE_Class_Penalty_Fixed --VALIDATION_STRATEGY hybrid --TARGET_LAMBDA 10
+```
+
+### Preprocessing Options
+
+DeepVoid supports different preprocessing methods for density data to improve training stability:
+
+#### 1. Standard (Default)
+- **Usage**: `--PREPROCESSING standard`
+- **Method**: Min-max scaling to [0,1] range
+- **Best for**: General purpose, stable training
+
+#### 2. Robust
+- **Usage**: `--PREPROCESSING robust`
+- **Method**: Clips outliers (1st-99th percentile), median centering, std scaling, caps extreme values to [-3,3]
+- **Best for**: Data with outliers causing training instability
+
+#### 3. Log Transform
+- **Usage**: `--PREPROCESSING log_transform`
+- **Method**: Log10 transform followed by standardization
+- **Best for**: Density fields with wide dynamic range (see detailed explanation below)
+
+#### 4. Clip Extreme
+- **Usage**: `--PREPROCESSING clip_extreme`
+- **Method**: Clips extreme outliers (0.1st-99.9th percentile) then standardizes
+- **Best for**: Conservative outlier handling
+
+### Learning Rate Warmup
+
+Learning rate warmup gradually increases the learning rate from a small value to the target value over the first few epochs:
+
+#### Usage
+```bash
+# Add 10 epochs of warmup (only applied to first interparticle separation)
+python curricular.py /ifs/groups/vogeleyGrp/ 4 16 SCCE --WARMUP_EPOCHS 10 --LEARNING_RATE 1e-4
+```
+
+#### Benefits
+- Prevents early training instability
+- Helps with convergence when using large learning rates
+- Particularly useful with complex loss functions
+
+---
+
+## Prediction
+
+### Basic Syntax
+
+```bash
+python curricular_pred.py ROOT_DIR MODEL_NAME L_PRED [OPTIONS]
+```
+
+### Required Arguments
+
+- `ROOT_DIR`: Root directory for the project (e.g., `/ifs/groups/vogeleyGrp/`)
+- `MODEL_NAME`: Name of the trained model (without file extension)
+- `L_PRED`: Interparticle separation for prediction (e.g., "10")
+
+### Key Options
+
+| Argument | Default | Description |
+|----------|---------|-------------|
+| `--BATCH_SIZE` | 8 | Batch size for prediction |
+| `--MAX_PRED_BATCHES` | None | Limit number of batches (for memory) |
+| `--SAVE_PREDICTIONS` | True | Save prediction arrays |
+| `--SKIP_SLICE_PLOTS` | False | Skip generating visualization plots |
+| `--TEST_MODE` | False | Use only 16 samples for quick testing |
+| `--PREPROCESSING` | "standard" | Preprocessing method: 'standard', 'robust', 'log_transform', 'clip_extreme' |
+
+### Important Note on Preprocessing
+
+⚠️ **The preprocessing method used for prediction MUST match the preprocessing method used during training**
+
+Models trained with different preprocessing methods need to be evaluated with their respective preprocessing. Check your training logs or configuration to determine which preprocessing was used.
+
+### Prediction Examples
+
+```bash
+# Standard preprocessing (default)
+python curricular_pred.py /ifs/groups/vogeleyGrp/ TNG_curricular_model 10 --PREPROCESSING standard
+
+# Robust preprocessing
+python curricular_pred.py /ifs/groups/vogeleyGrp/ TNG_curricular_model 10 --PREPROCESSING robust
+
+# Log transform preprocessing
+python curricular_pred.py /ifs/groups/vogeleyGrp/ TNG_curricular_model 10 --PREPROCESSING log_transform
+
+# Memory-safe prediction
+python curricular_pred.py /ifs/groups/vogeleyGrp/ MODEL_NAME 10 --MAX_PRED_BATCHES 32 --BATCH_SIZE 4
+
+# Quick test prediction
+python curricular_pred.py /ifs/groups/vogeleyGrp/ MODEL_NAME 10 --TEST_MODE --SKIP_SLICE_PLOTS
+```
+
+---
+
+## File Output Strategy
+
+### Prediction File Naming
+
+The `curricular_pred.py` script ensures that all output files include both the L_PRED (interparticle separation) value and the preprocessing method in their filenames. This prevents file overwrites when running predictions multiple times with different parameters.
+
+#### File Naming Patterns
+
+**Prediction Files (PRED_PATH)**
+- Main predictions: `{MODEL_NAME}_predictions_L{L_PRED}_{PREPROCESSING}.npy`
+- Slice predictions: `{MODEL_NAME}_slice_predictions_L{L_PRED}_{PREPROCESSING}.npy`
+- Legacy .fvol format: `{MODEL_NAME}_predictions_L{L_PRED}_{PREPROCESSING}.fvol`
+
+**Figure Files (FIG_PATH/{MODEL_NAME}/)**
+- Confusion matrix: `{MODEL_NAME}_confusion_matrix_L{L_PRED}_{PREPROCESSING}.npy`
+- Slice plot data: `{MODEL_NAME}_slice_data_L{L_PRED}_{PREPROCESSING}.npz`
+- ROC curves: `{MODEL_NAME}_temp_L{L_PRED}_{PREPROCESSING}_ROC_OvR.png`
+- PR curves: `{MODEL_NAME}_temp_L{L_PRED}_{PREPROCESSING}_PR.png`
+- Confusion matrix plot: `{MODEL_NAME}_temp_L{L_PRED}_{PREPROCESSING}_cm.png`
+- Prediction comparison: `{MODEL_NAME}_temp_L{L_PRED}_{PREPROCESSING}-pred-comp.png`
+
+#### Example Filenames
+
+For model "TNG_curricular_model" with L_PRED=10 and PREPROCESSING=robust:
+
+```
+TNG_curricular_model_predictions_L10_robust.npy
+TNG_curricular_model_confusion_matrix_L10_robust.npy
+TNG_curricular_model_temp_L10_robust_ROC_OvR.png
+TNG_curricular_model_temp_L10_robust-pred-comp.png
+```
 
 ### Training Process
 
@@ -352,3 +525,52 @@ python diagnose_bias.py /path/to/training_log.txt
 7. **Memory Management**: Use appropriate batch sizes for your hardware
 
 The curricular training approach provides robust, multi-scale void detection with careful handling of class imbalance issues!
+
+---
+
+## Log Transform Preprocessing Explained
+
+### What is Log Transform Preprocessing?
+
+Log transform preprocessing applies a logarithmic transformation to the density data before feeding it to the neural network. In DeepVoid, this specifically uses a **log₁₀ transformation** followed by standardization.
+
+### Why Use Log Transform?
+
+Cosmic density fields have **extreme dynamic ranges** - meaning they can have very low density values (in voids) and very high density values (in dense regions like halos). This creates several problems for neural networks:
+
+1. **Extreme Value Ranges**: Raw density values might range from near 0 in voids to thousands in dense regions
+2. **Skewed Distributions**: Most of the volume is low-density (voids and walls), with only small regions of high density
+3. **Training Instability**: Neural networks struggle with such wide ranges of input values
+4. **Gradient Problems**: Very large values can cause exploding gradients, while very small values lead to vanishing gradients
+
+### How Log Transform Helps
+
+The logarithmic transformation **compresses the dynamic range**:
+
+- **Before**: Density values from 0.1 to 10,000 (5 orders of magnitude)
+- **After log₁₀**: Values from -1 to 4 (compressed to ~5 units)
+
+This compression makes the data:
+- **More normally distributed**: The transformation makes the skewed density distribution more symmetric
+- **Easier to learn**: Neural networks perform better with inputs in moderate ranges
+- **More stable**: Reduces gradient explosion/vanishing problems
+- **Better balanced**: Gives equal "weight" to low and high density regions in the learning process
+
+### When to Use Log Transform
+
+Use log transform preprocessing when:
+- Your density data has very wide dynamic ranges (common in cosmological simulations)
+- Standard preprocessing leads to training instability
+- The model has trouble learning void structures (very low density regions)
+- You notice the loss function oscillating wildly during training
+
+### Real-World Example
+
+In cosmic void detection:
+- **Voids** might have density contrast δ = -0.9 (very underdense)
+- **Walls** might have δ = 0.1 (slightly overdense) 
+- **Halos** might have δ = 100+ (extremely overdense)
+
+After log transform, these become more manageable values that the neural network can learn from more effectively, allowing it to distinguish between these different cosmic structures with better accuracy.
+
+**Important**: Always use the same preprocessing method for both training AND prediction - if you train with log transform, you must also predict with log transform!
