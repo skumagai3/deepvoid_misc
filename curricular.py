@@ -34,7 +34,17 @@ tf.config.optimizer.set_jit(False)  # if you're using XLA
 os.environ["TF_DISABLE_CUDNN_AUTOTUNE"] = "1"
 tf.config.experimental.enable_op_determinism()
 from tensorflow.keras import mixed_precision
-mixed_precision.set_global_policy('mixed_float16')
+
+# Disable mixed precision on Picotte V100s to avoid NaN issues with custom loss functions
+if os.getcwd().startswith('/ifs/groups/vogeleyGrp'):
+    print('Detected Picotte environment - disabling mixed precision for V100 numerical stability')
+    policy = mixed_precision.Policy('float32')
+    mixed_precision.set_global_policy(policy)
+else:
+    print('Not on Picotte - enabling mixed precision')
+    policy = mixed_precision.Policy('mixed_float16')
+    mixed_precision.set_global_policy(policy)
+print(f'Mixed precision policy: {mixed_precision.global_policy().name}')
 #===============================================================
 # Set random seed
 #===============================================================
@@ -455,19 +465,20 @@ with strategy.scope():
             model_name=MODEL_NAME,
             lambda_conditioning=LAMBDA_CONDITIONING
         )
+    # Create optimizer with loss scaling for mixed precision
+    base_optimizer = tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE, clipnorm=1.0)
+    optimizer = mixed_precision.LossScaleOptimizer(base_optimizer)
+    
     if LAMBDA_CONDITIONING:
         model.compile(
-            optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE,clipnorm=1.0),  # Gradient clipping to prevent exploding gradients
+            optimizer=optimizer,  # Use loss-scaled optimizer
             loss={'last_activation': loss_fn, 'lambda_output': 'mse'},
             loss_weights={'last_activation': 1.0, 'lambda_output': 0.1},
             metrics={'last_activation': metrics, 'lambda_output': 'mse'}
         )
     else:
         model.compile(
-            optimizer=tf.keras.optimizers.Adam(
-                learning_rate=LEARNING_RATE,
-                clipnorm=1.0  # Gradient clipping to prevent exploding gradients
-                ),
+            optimizer=optimizer,  # Use loss-scaled optimizer
             loss=loss_fn,
             metrics=metrics
         )
@@ -486,32 +497,41 @@ class WarmupLearningRateScheduler(tf.keras.callbacks.Callback):
         if epoch < self.warmup_epochs:
             # Gradual warmup from target_lr/10 to target_lr
             warmup_lr = self.target_lr * (0.1 + 0.9 * (epoch + 1) / self.warmup_epochs)
+            # Handle loss-scaled optimizer
+            optimizer = self.model.optimizer
+            if hasattr(optimizer, '_optimizer'):
+                # This is a LossScaleOptimizer, access the inner optimizer
+                base_optimizer = optimizer._optimizer
+            else:
+                base_optimizer = optimizer
+                
             # Use the most compatible method to set learning rate
             try:
                 # Try the newer method first
-                self.model.optimizer.learning_rate.assign(warmup_lr)
+                base_optimizer.learning_rate.assign(warmup_lr)
             except AttributeError:
                 try:
                     # Fallback to older method
-                    tf.keras.backend.set_value(self.model.optimizer.learning_rate, warmup_lr)
+                    tf.keras.backend.set_value(base_optimizer.learning_rate, warmup_lr)
                 except Exception as e:
-                    # Final fallback - create new optimizer with desired LR
-                    print(f"Warning: Could not set learning rate directly, trying optimizer recreation: {e}")
-                    old_config = self.model.optimizer.get_config()
-                    old_config['learning_rate'] = float(warmup_lr)
-                    new_optimizer = type(self.model.optimizer).from_config(old_config)
-                    self.model.compile(optimizer=new_optimizer, 
-                                     loss=self.model.loss,
-                                     metrics=self.model.metrics)
+                    print(f"Warning: Could not set learning rate during warmup: {e}")
+                    
             if self.verbose:
                 print(f'\nWarmup epoch {epoch + 1}/{self.warmup_epochs}: Learning rate set to {warmup_lr:.6f}')
         elif epoch == self.warmup_epochs:
             # Set to target learning rate after warmup
+            optimizer = self.model.optimizer
+            if hasattr(optimizer, '_optimizer'):
+                # This is a LossScaleOptimizer, access the inner optimizer
+                base_optimizer = optimizer._optimizer
+            else:
+                base_optimizer = optimizer
+                
             try:
-                self.model.optimizer.learning_rate.assign(self.target_lr)
+                base_optimizer.learning_rate.assign(self.target_lr)
             except AttributeError:
                 try:
-                    tf.keras.backend.set_value(self.model.optimizer.learning_rate, self.target_lr)
+                    tf.keras.backend.set_value(base_optimizer.learning_rate, self.target_lr)
                 except Exception as e:
                     print(f"Warning: Could not set target learning rate: {e}")
             if self.verbose:

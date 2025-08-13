@@ -608,9 +608,11 @@ def categorical_focal_loss(alpha, gamma=2.):
     :param y_pred: A tensor resulting from a softmax
     :return: Output tensor.
     """
-    # if the dtype of y_true is uint8, cast it to float32
+    # if the dtype of y_true is uint8, cast it to match y_pred dtype for mixed precision compatibility
     if y_true.dtype == 'uint8':
-      y_true = tf.cast(y_true, 'float32')
+      y_true = tf.cast(y_true, y_pred.dtype)
+    # Cast alpha to match prediction dtype for mixed precision compatibility
+    alpha_tensor = tf.constant(alpha, dtype=y_pred.dtype)
     # Clip the prediction value to prevent NaN's and Inf's
     epsilon = tf.keras.backend.epsilon()
     y_pred = tf.clip_by_value(y_pred, epsilon, 1. - epsilon)
@@ -619,7 +621,7 @@ def categorical_focal_loss(alpha, gamma=2.):
     cross_entropy = -y_true * tf.math.log(y_pred)
 
     # Calculate Focal Loss
-    loss = alpha * tf.math.pow(1 - y_pred, gamma) * cross_entropy
+    loss = alpha_tensor * tf.math.pow(1 - y_pred, gamma) * cross_entropy
 
     # Compute mean loss in mini_batch
     return tf.reduce_mean(tf.reduce_sum(loss, axis=-1))
@@ -644,19 +646,21 @@ def SCCE_Dice_loss(y_true, y_pred, cce_weight=1.0, dice_weight=1.0):
   Returns:
     Weighted average of SCCE loss and dice score.
   """
-  # cast y_true to float32
-  y_true = tf.cast(y_true, tf.float32)
+  # cast y_true to match y_pred dtype for mixed precision compatibility
+  y_true = tf.cast(y_true, y_pred.dtype)
   # Calculate SCCE loss
   scce_loss = tf.keras.losses.sparse_categorical_crossentropy(y_true, y_pred)
 
   # Calculate multi-class dice score
-  smooth = 1e-5
+  smooth = tf.cast(1e-5, y_pred.dtype)  # Cast to match prediction dtype
   intersection = tf.reduce_sum(y_true * y_pred, axis=-1)
   union = tf.reduce_sum(y_true, axis=-1) + tf.reduce_sum(y_pred, axis=-1)
   dice_score = (2 * intersection + smooth) / (union + smooth)
   dice_score = tf.reduce_mean(dice_score)
 
-  # Weighted average of SCCE loss and dice score
+  # Weighted average of SCCE loss and dice score - cast weights to match dtype
+  cce_weight = tf.cast(cce_weight, y_pred.dtype)
+  dice_weight = tf.cast(dice_weight, y_pred.dtype)
   return cce_weight * scce_loss + dice_weight * (1 - dice_score)
 #---------------------------------------------------------
 # Custom SCCE loss that penalizes for predicting too many voids
@@ -678,8 +682,10 @@ def SCCE_void_penalty(y_true, y_pred, max_void_fraction=0.7, penalty_factor=5.0)
     void_preds = y_pred[..., 0]  # Void class is index 0
     void_fraction = tf.reduce_mean(void_preds)
     
-    # Heavy penalty for exceeding max void fraction
-    void_penalty = tf.nn.relu(void_fraction - max_void_fraction) * penalty_factor
+    # Heavy penalty for exceeding max void fraction - cast constants to match prediction dtype
+    max_void_fraction_tensor = tf.cast(max_void_fraction, y_pred.dtype)
+    penalty_factor_tensor = tf.cast(penalty_factor, y_pred.dtype)
+    void_penalty = tf.nn.relu(void_fraction - max_void_fraction_tensor) * penalty_factor_tensor
     
     # Additional penalty: punish false positive voids (predicting void when it's not)
     y_true_classes = tf.cast(tf.squeeze(y_true, axis=-1), tf.int64)
@@ -687,14 +693,14 @@ def SCCE_void_penalty(y_true, y_pred, max_void_fraction=0.7, penalty_factor=5.0)
     
     # Penalty for predicting void when true class is not void
     false_void_mask = tf.logical_and(void_predictions == 0, y_true_classes != 0)
-    false_void_penalty = tf.reduce_mean(tf.cast(false_void_mask, tf.float32)) * penalty_factor
+    false_void_penalty = tf.reduce_mean(tf.cast(false_void_mask, y_pred.dtype)) * tf.cast(penalty_factor, y_pred.dtype)
     
     # Reward for correctly predicting non-void classes
     non_void_correct_mask = tf.logical_and(
         tf.logical_and(void_predictions != 0, y_true_classes != 0),
         void_predictions == y_true_classes
     )
-    non_void_reward = -tf.reduce_mean(tf.cast(non_void_correct_mask, tf.float32)) * 0.5
+    non_void_reward = -tf.reduce_mean(tf.cast(non_void_correct_mask, y_pred.dtype)) * tf.cast(0.5, y_pred.dtype)
     
     return scce_loss + void_penalty + false_void_penalty + non_void_reward
 
@@ -721,7 +727,7 @@ def SCCE_Class_Penalty(y_true, y_pred, void_penalty=8.0, minority_boost=3.0):
     
     # Heavy penalty for predicting void when it's not void (combat lazy solution)
     false_void_mask = tf.logical_and(y_pred_classes == 0, y_true_classes != 0)
-    false_void_penalty = tf.reduce_mean(tf.cast(false_void_mask, tf.float32)) * void_penalty
+    false_void_penalty = tf.reduce_mean(tf.cast(false_void_mask, y_pred.dtype)) * tf.cast(void_penalty, y_pred.dtype)
     
     # Class-specific penalties based on importance
     # Filament (class 2) and Halo (class 3) are minority classes - reward correct predictions
@@ -729,10 +735,11 @@ def SCCE_Class_Penalty(y_true, y_pred, void_penalty=8.0, minority_boost=3.0):
     halo_correct = tf.logical_and(y_pred_classes == 3, y_true_classes == 3)
     wall_correct = tf.logical_and(y_pred_classes == 1, y_true_classes == 1)
     
-    # Rewards for minority classes (negative penalty = reward)
-    filament_reward = -tf.reduce_mean(tf.cast(filament_correct, tf.float32)) * minority_boost
-    halo_reward = -tf.reduce_mean(tf.cast(halo_correct, tf.float32)) * minority_boost * 2.0  # Extra boost for rarest class
-    wall_reward = -tf.reduce_mean(tf.cast(wall_correct, tf.float32)) * minority_boost * 0.5
+    # Rewards for minority classes (negative penalty = reward) - cast constants
+    minority_boost_tensor = tf.cast(minority_boost, y_pred.dtype)
+    filament_reward = -tf.reduce_mean(tf.cast(filament_correct, y_pred.dtype)) * minority_boost_tensor
+    halo_reward = -tf.reduce_mean(tf.cast(halo_correct, y_pred.dtype)) * minority_boost_tensor * tf.cast(2.0, y_pred.dtype)  # Extra boost for rarest class
+    wall_reward = -tf.reduce_mean(tf.cast(wall_correct, y_pred.dtype)) * minority_boost_tensor * tf.cast(0.5, y_pred.dtype)
     
     # Additional penalty: missing minority classes when they exist
     # Penalty for predicting void when true class is filament or halo
@@ -740,9 +747,9 @@ def SCCE_Class_Penalty(y_true, y_pred, void_penalty=8.0, minority_boost=3.0):
     missed_halo = tf.logical_and(y_pred_classes == 0, y_true_classes == 3)
     missed_wall = tf.logical_and(y_pred_classes == 0, y_true_classes == 1)
     
-    missed_filament_penalty = tf.reduce_mean(tf.cast(missed_filament, tf.float32)) * minority_boost * 2.0
-    missed_halo_penalty = tf.reduce_mean(tf.cast(missed_halo, tf.float32)) * minority_boost * 3.0
-    missed_wall_penalty = tf.reduce_mean(tf.cast(missed_wall, tf.float32)) * minority_boost
+    missed_filament_penalty = tf.reduce_mean(tf.cast(missed_filament, y_pred.dtype)) * minority_boost_tensor * tf.cast(2.0, y_pred.dtype)
+    missed_halo_penalty = tf.reduce_mean(tf.cast(missed_halo, y_pred.dtype)) * minority_boost_tensor * tf.cast(3.0, y_pred.dtype)
+    missed_wall_penalty = tf.reduce_mean(tf.cast(missed_wall, y_pred.dtype)) * minority_boost_tensor
     
     # Combine all penalties and rewards
     total_penalty = (false_void_penalty + 
@@ -769,18 +776,18 @@ def SCCE_class_proportion_penalty(y_true, y_pred, target_proportions=None, weigh
     if target_proportions is None:
         # Calculate target proportions from true labels
         y_true_flat = tf.reshape(y_true, [-1])
-        n_samples = tf.cast(tf.size(y_true_flat), tf.float32)
+        n_samples = tf.cast(tf.size(y_true_flat), y_pred.dtype)
         target_proportions = []
         for class_idx in range(y_pred.shape[-1]):
-            class_count = tf.reduce_sum(tf.cast(tf.equal(y_true_flat, class_idx), tf.float32))
+            class_count = tf.reduce_sum(tf.cast(tf.equal(y_true_flat, class_idx), y_pred.dtype))
             target_proportions.append(class_count / n_samples)
     else:
-        target_proportions = tf.constant(target_proportions, dtype=tf.float32)
+        target_proportions = tf.constant(target_proportions, dtype=y_pred.dtype)
     
     if weights is None:
-        weights = tf.ones(y_pred.shape[-1], dtype=tf.float32)
+        weights = tf.ones(y_pred.shape[-1], dtype=y_pred.dtype)
     else:
-        weights = tf.constant(weights, dtype=tf.float32)
+        weights = tf.constant(weights, dtype=y_pred.dtype)
     
     # Calculate predicted proportions
     pred_proportions = tf.reduce_mean(y_pred, axis=[0, 1, 2, 3])  # Average over all spatial dimensions
@@ -835,10 +842,10 @@ def SCCE_Balanced_Class_Penalty(y_true, y_pred, void_penalty=1.5, wall_penalty=1
     false_filament_mask = tf.logical_and(y_pred_classes == 2, y_true_classes != 2)
     false_halo_mask = tf.logical_and(y_pred_classes == 3, y_true_classes != 3)
     
-    false_void_penalty = tf.reduce_mean(tf.cast(false_void_mask, tf.float32)) * void_penalty
-    false_wall_penalty = tf.reduce_mean(tf.cast(false_wall_mask, tf.float32)) * wall_penalty
-    false_filament_penalty = tf.reduce_mean(tf.cast(false_filament_mask, tf.float32)) * minority_boost
-    false_halo_penalty = tf.reduce_mean(tf.cast(false_halo_mask, tf.float32)) * minority_boost
+    false_void_penalty = tf.reduce_mean(tf.cast(false_void_mask, y_pred.dtype)) * tf.cast(void_penalty, y_pred.dtype)
+    false_wall_penalty = tf.reduce_mean(tf.cast(false_wall_mask, y_pred.dtype)) * tf.cast(wall_penalty, y_pred.dtype)
+    false_filament_penalty = tf.reduce_mean(tf.cast(false_filament_mask, y_pred.dtype)) * tf.cast(minority_boost, y_pred.dtype)
+    false_halo_penalty = tf.reduce_mean(tf.cast(false_halo_mask, y_pred.dtype)) * tf.cast(minority_boost, y_pred.dtype)
     
     # Modest rewards for correct predictions
     void_correct = tf.logical_and(y_pred_classes == 0, y_true_classes == 0)
@@ -846,11 +853,12 @@ def SCCE_Balanced_Class_Penalty(y_true, y_pred, void_penalty=1.5, wall_penalty=1
     filament_correct = tf.logical_and(y_pred_classes == 2, y_true_classes == 2)
     halo_correct = tf.logical_and(y_pred_classes == 3, y_true_classes == 3)
     
-    # Small rewards - don't make any class too attractive
-    void_reward = -tf.reduce_mean(tf.cast(void_correct, tf.float32)) * 0.1
-    wall_reward = -tf.reduce_mean(tf.cast(wall_correct, tf.float32)) * 0.1
-    filament_reward = -tf.reduce_mean(tf.cast(filament_correct, tf.float32)) * minority_boost * 0.5
-    halo_reward = -tf.reduce_mean(tf.cast(halo_correct, tf.float32)) * minority_boost
+    # Small rewards - don't make any class too attractive - cast constants
+    minority_boost_tensor = tf.cast(minority_boost, y_pred.dtype)
+    void_reward = -tf.reduce_mean(tf.cast(void_correct, y_pred.dtype)) * tf.cast(0.1, y_pred.dtype)
+    wall_reward = -tf.reduce_mean(tf.cast(wall_correct, y_pred.dtype)) * tf.cast(0.1, y_pred.dtype)
+    filament_reward = -tf.reduce_mean(tf.cast(filament_correct, y_pred.dtype)) * minority_boost_tensor * tf.cast(0.5, y_pred.dtype)
+    halo_reward = -tf.reduce_mean(tf.cast(halo_correct, y_pred.dtype)) * minority_boost_tensor
     
     # Combine all penalties and rewards
     total_penalty = (false_void_penalty + false_wall_penalty + false_filament_penalty + false_halo_penalty +
@@ -885,8 +893,8 @@ def SCCE_Class_Penalty_Fixed(y_true, y_pred, void_penalty=2.0, wall_penalty=1.0,
     false_void_mask = tf.logical_and(y_pred_classes == 0, y_true_classes != 0)
     false_wall_mask = tf.logical_and(y_pred_classes == 1, y_true_classes != 1)
     
-    false_void_penalty = tf.reduce_mean(tf.cast(false_void_mask, tf.float32)) * void_penalty
-    false_wall_penalty = tf.reduce_mean(tf.cast(false_wall_mask, tf.float32)) * wall_penalty
+    false_void_penalty = tf.reduce_mean(tf.cast(false_void_mask, y_pred.dtype)) * tf.cast(void_penalty, y_pred.dtype)
+    false_wall_penalty = tf.reduce_mean(tf.cast(false_wall_mask, y_pred.dtype)) * tf.cast(wall_penalty, y_pred.dtype)
     
     # Rewards for correct predictions (but balanced)
     void_correct = tf.logical_and(y_pred_classes == 0, y_true_classes == 0)
@@ -894,18 +902,19 @@ def SCCE_Class_Penalty_Fixed(y_true, y_pred, void_penalty=2.0, wall_penalty=1.0,
     filament_correct = tf.logical_and(y_pred_classes == 2, y_true_classes == 2)
     halo_correct = tf.logical_and(y_pred_classes == 3, y_true_classes == 3)
     
-    # Give modest rewards for correct predictions, higher rewards for minority classes
-    void_reward = -tf.reduce_mean(tf.cast(void_correct, tf.float32)) * 0.1  # Small reward for dominant class
-    wall_reward = -tf.reduce_mean(tf.cast(wall_correct, tf.float32)) * 0.2  # Slightly higher for 2nd class
-    filament_reward = -tf.reduce_mean(tf.cast(filament_correct, tf.float32)) * minority_boost
-    halo_reward = -tf.reduce_mean(tf.cast(halo_correct, tf.float32)) * minority_boost * 2.0
+    # Give modest rewards for correct predictions, higher rewards for minority classes - cast constants
+    minority_boost_tensor = tf.cast(minority_boost, y_pred.dtype)
+    void_reward = -tf.reduce_mean(tf.cast(void_correct, y_pred.dtype)) * tf.cast(0.1, y_pred.dtype)  # Small reward for dominant class
+    wall_reward = -tf.reduce_mean(tf.cast(wall_correct, y_pred.dtype)) * tf.cast(0.2, y_pred.dtype)  # Slightly higher for 2nd class
+    filament_reward = -tf.reduce_mean(tf.cast(filament_correct, y_pred.dtype)) * minority_boost_tensor
+    halo_reward = -tf.reduce_mean(tf.cast(halo_correct, y_pred.dtype)) * minority_boost_tensor * tf.cast(2.0, y_pred.dtype)
     
     # Penalties for missing minority classes
     missed_filament = tf.logical_and(y_pred_classes != 2, y_true_classes == 2)
     missed_halo = tf.logical_and(y_pred_classes != 3, y_true_classes == 3)
     
-    missed_filament_penalty = tf.reduce_mean(tf.cast(missed_filament, tf.float32)) * minority_boost
-    missed_halo_penalty = tf.reduce_mean(tf.cast(missed_halo, tf.float32)) * minority_boost * 1.5
+    missed_filament_penalty = tf.reduce_mean(tf.cast(missed_filament, y_pred.dtype)) * minority_boost_tensor
+    missed_halo_penalty = tf.reduce_mean(tf.cast(missed_halo, y_pred.dtype)) * minority_boost_tensor * tf.cast(1.5, y_pred.dtype)
     
     # Combine all penalties and rewards
     total_penalty = (false_void_penalty + false_wall_penalty +
@@ -931,10 +940,10 @@ def SCCE_Proportion_Aware(y_true, y_pred, target_props=[0.65, 0.25, 0.08, 0.02],
     pred_probs = tf.nn.softmax(y_pred, axis=-1)
     pred_props = tf.reduce_mean(pred_probs, axis=[0, 1, 2, 3])  # Average over all spatial dimensions
     
-    # Calculate proportion penalty
-    target_props_tensor = tf.constant(target_props, dtype=tf.float32)
+    # Calculate proportion penalty - use same dtype as predictions for mixed precision compatibility
+    target_props_tensor = tf.constant(target_props, dtype=y_pred.dtype)
     prop_diff = tf.square(pred_props - target_props_tensor)
-    prop_penalty = tf.reduce_sum(prop_diff) * prop_weight
+    prop_penalty = tf.reduce_sum(prop_diff) * tf.cast(prop_weight, y_pred.dtype)
     
     return scce_loss + prop_penalty
 
