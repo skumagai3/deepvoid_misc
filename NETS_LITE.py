@@ -385,7 +385,7 @@ def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=
 # a total of N_subcubes = 4 * [(GRID/SUBGRID) + (GRID/SUBGRID - 1)]^3
 # NOTE THAT THIS IS FOR TRAINING ONLY!!!
 #---------------------------------------------------------
-def load_dataset_all_overlap(FILE_DEN, FILE_MSK, SUBGRID, OFF, preproc='mm', sigma=None):
+def load_dataset_all_overlap(FILE_DEN, FILE_MSK, SUBGRID, OFF, preproc='mm', sigma=None, preprocessing=None):
   '''
   Function that loads density and mask files, splits into overlapping subcubes.
   Subcubes overlap by OFF, and are of size SUBGRID.
@@ -396,6 +396,7 @@ def load_dataset_all_overlap(FILE_DEN, FILE_MSK, SUBGRID, OFF, preproc='mm', sig
   OFF: int overlap of subcubes.
   preproc: str preprocessing method. 'mm' for minmax, 'std' for standardize.
   sigma: float sigma for Gaussian smoothing. def None.
+  preprocessing: str new preprocessing method. If provided, overrides preproc. Options: 'standard', 'robust', 'log_transform', 'clip_extreme'.
   '''
   print(f'Reading volume: {FILE_DEN}... ')
   den = volumes.read_fvolume(FILE_DEN)
@@ -409,16 +410,59 @@ def load_dataset_all_overlap(FILE_DEN, FILE_MSK, SUBGRID, OFF, preproc='mm', sig
   for val in cnts:
     print(f'% of population: {val/den.shape[0]**3 * 100}')
   summary(den); summary(msk)
-  if preproc == 'mm':
-    den = minmax(den)
-    print('Ran preprocessing to scale density to [0,1]!')
-    print('\nNew summary statistics for density field: ')
-    summary(den)
-  if preproc == 'std':
-    den = standardize(den)
-    print('Ran preprocessing by dividing density/mask by std dev and subtracting by the mean! ')
-    print('\nNew summary statistics for density field: ')
-    summary(den)
+  
+  # Handle new preprocessing methods
+  if preprocessing is not None:
+    if preprocessing == 'standard':
+      # Standard preprocessing (same as 'mm')
+      den = minmax(den)
+      print('Ran standard preprocessing to scale density to [0,1]!')
+      print('\nNew summary statistics: ')
+      summary(den)
+    elif preprocessing == 'robust':
+      # Robust preprocessing with outlier clipping
+      den_clipped = np.clip(den, np.percentile(den, 1), np.percentile(den, 99))
+      std_val = np.std(den_clipped)
+      if std_val == 0:
+        print("Warning: Standard deviation is zero after clipping. Using zeros array.")
+        den = np.zeros_like(den_clipped)
+      else:
+        den = (den_clipped - np.median(den_clipped)) / std_val
+        den = np.clip(den, -3, 3)  # Cap extreme values
+      print('Ran robust preprocessing with outlier clipping and capping!')
+      print('\nNew summary statistics: ')
+      summary(den)
+    elif preprocessing == 'log_transform':
+      # Log transform for density fields
+      den = np.log10(den + 1e-6)  # Add small constant to avoid log(0)
+      std_val = np.std(den)
+      if std_val == 0:
+        print("Warning: Standard deviation is zero after log transform. Using zeros array.")
+        den = np.zeros_like(den)
+      else:
+        den = (den - np.mean(den)) / std_val
+      print('Ran log transform preprocessing!')
+      print('\nNew summary statistics: ')
+      summary(den)
+    elif preprocessing == 'clip_extreme':
+      # Clip extreme values and standardize
+      den = np.clip(den, np.percentile(den, 0.1), np.percentile(den, 99.9))
+      den = standardize(den)
+      print('Ran extreme value clipping and standardization!')
+      print('\nNew summary statistics: ')
+      summary(den)
+  else:
+    # Use legacy preprocessing methods
+    if preproc == 'mm':
+      den = minmax(den)
+      print('Ran preprocessing to scale density to [0,1]!')
+      print('\nNew summary statistics for density field: ')
+      summary(den)
+    if preproc == 'std':
+      den = standardize(den)
+      print('Ran preprocessing by dividing density/mask by std dev and subtracting by the mean! ')
+      print('\nNew summary statistics for density field: ')
+      summary(den)
   nbins = den.shape[0]//SUBGRID + (den.shape[0]//SUBGRID - 1)
   print(f'Number of overlapping subcubes: {4*nbins**3}')
   X_all_overlap = np.ndarray(((nbins**3)*4, SUBGRID, SUBGRID, SUBGRID, 1))
@@ -470,9 +514,35 @@ def load_dataset(file_in, SUBGRID, OFF, preproc='mm',sigma=None,return_int=False
   if preproc == 'mm':
     #den = minmax(np.log10(den)) # MUST MATCH PREPROC METHOD USED IN TRAIN
     den = minmax(den); print('Ran preprocessing to scale density to [0,1]!')
-  if preproc == 'std':
+  elif preproc == 'std':
     den = standardize(den); print('Ran preprocessing to scale density s.t. mean=0 and std dev = 1!')
-  if preproc == None:
+  elif preproc == 'log_transform':
+    # Log transform for density fields
+    den = np.log10(den + 1e-6)  # Add small constant to avoid log(0)
+    std_val = np.std(den)
+    if std_val == 0:
+      print("Warning: Standard deviation is zero after log transform. Using zeros array.")
+      den = np.zeros_like(den)
+    else:
+      den = (den - np.mean(den)) / std_val
+    print('Ran log transform preprocessing!')
+  elif preproc == 'robust':
+    # Robust preprocessing with outlier clipping
+    den_clipped = np.clip(den, np.percentile(den, 1), np.percentile(den, 99))
+    std_val = np.std(den_clipped)
+    if std_val == 0:
+      print("Warning: Standard deviation is zero after clipping. Using zeros array.")
+      den = np.zeros_like(den_clipped)
+    else:
+      den = (den_clipped - np.median(den_clipped)) / std_val
+      den = np.clip(den, -3, 3)  # Cap extreme values
+    print('Ran robust preprocessing with outlier clipping and capping!')
+  elif preproc == 'clip_extreme':
+    # Clip extreme values and standardize
+    den = np.clip(den, np.percentile(den, 0.1), np.percentile(den, 99.9))
+    den = standardize(den)
+    print('Ran extreme value clipping and standardization!')
+  elif preproc == None:
     pass
   #nbins = (den.shape[0] // SUBGRID) + 1 + 1 + 1 # hacky way
   #if den.shape[0] == 640:
@@ -2541,33 +2611,24 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED,
       print('Model not found. Trying without .keras extension...')
       model = load_model(FILE_MODEL, compile=False, custom_objects=CUSTOM_OBJECTS)
 
-  # Convert new preprocessing parameter to old preproc format
+  # Convert new preprocessing parameter to old preproc format and use load_dataset for all
   if preprocessing == 'standard':
     preproc = 'mm'
-    # Use old load_dataset for standard preprocessing only
-    X_test = load_dataset(FILE_DEN,SUBGRID,OFF,preproc=preproc)
-    if EXTRA_INPUTS is not None:
-      # if we have an extra input, load it and concatenate it to X_test
-      X_extra = load_dataset(EXTRA_INPUTS,SUBGRID,OFF,preproc=preproc)
-      X_test = np.concatenate([X_test, X_extra], axis=-1)
-      print(f'Concatenated extra input {EXTRA_INPUTS} to X_test. New shape: {X_test.shape}')
-  elif preprocessing in ['robust', 'log_transform', 'clip_extreme']:
-    # Use load_dataset_all for advanced preprocessing since load_dataset doesn't support it
-    # load_dataset_all returns (features, labels) when classification=True, but we only need features
-    features, _ = load_dataset_all(FILE_DEN, FILE_MSK, SUBGRID, preprocessing=preprocessing, classification=True)
-    X_test = features
-    if EXTRA_INPUTS is not None:
-      extra_features, _ = load_dataset_all(EXTRA_INPUTS, FILE_MSK, SUBGRID, preprocessing=preprocessing, classification=True)
-      X_test = np.concatenate([X_test, extra_features], axis=-1)
-      print(f'Concatenated extra input {EXTRA_INPUTS} to X_test. New shape: {X_test.shape}')
+  elif preprocessing == 'robust':
+    preproc = 'robust'  # Will need to add support in load_dataset
+  elif preprocessing == 'log_transform':
+    preproc = 'log_transform'  # Will need to add support in load_dataset
+  elif preprocessing == 'clip_extreme':
+    preproc = 'clip_extreme'  # Will need to add support in load_dataset
   else:
-    # fallback to default
-    preproc = 'mm'  
-    X_test = load_dataset(FILE_DEN,SUBGRID,OFF,preproc=preproc)
-    if EXTRA_INPUTS is not None:
-      X_extra = load_dataset(EXTRA_INPUTS,SUBGRID,OFF,preproc=preproc)
-      X_test = np.concatenate([X_test, X_extra], axis=-1)
-      print(f'Concatenated extra input {EXTRA_INPUTS} to X_test. New shape: {X_test.shape}')
+    preproc = 'mm'  # fallback
+    
+  # Use load_dataset with OFF parameter for proper assembly with assemble_cube2
+  X_test = load_dataset(FILE_DEN, SUBGRID, OFF, preproc=preproc)
+  if EXTRA_INPUTS is not None:
+    X_extra = load_dataset(EXTRA_INPUTS, SUBGRID, OFF, preproc=preproc)
+    X_test = np.concatenate([X_test, X_extra], axis=-1)
+    print(f'Concatenated extra input {EXTRA_INPUTS} to X_test. New shape: {X_test.shape}')
       
   print(f'Loaded data with preprocessing: {preprocessing}')
   if lambda_value is not None:
@@ -2580,7 +2641,9 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED,
   if isinstance(Y_pred, dict):
     # If model has named outputs, use the first one (usually the main output)
     Y_pred = Y_pred['last_activation']
-  Y_pred = assemble_cube2(Y_pred,GRID,SUBGRID,OFF)
+  
+  # Now all preprocessing methods use overlapping subcubes, so always use assemble_cube2
+  Y_pred = assemble_cube2(Y_pred, GRID, SUBGRID, OFF)
 
   ### write out prediction
   PRED_NAME = MODEL_NAME + f'{PRED_NAME_SUFFIX}-pred.fvol'
@@ -2604,6 +2667,10 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED,
   m = volumes.read_fvolume(FILE_MSK)
   if BINARY:
     m = np.where(m > 0.5, 1, 0)
+  
+  # Debug: print shapes to understand any size mismatch
+  print(f"Debug: d.shape = {d.shape}, Y_pred.shape = {Y_pred.shape}, m.shape = {m.shape}")
+    
   plt.rcParams.update({'font.size': 20})
   fig,ax = plt.subplots(1,3,figsize=(28,12),tight_layout=True)
   i = GRID//3
@@ -2663,7 +2730,7 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED,
 
   # plot vw misclassifications:
   # pick random slice to plot:
-  i = np.random.randint(0,GRID)
+  i = np.random.randint(0, GRID)
   fig = plot_vw_misses(m,Y_pred,idx=i,Nm=GRID,boxsize=BOXSIZE)
   fig.savefig(FILE_FIG+MODEL_NAME+f'-pred-comp-vw-miss-slc={i}.png',facecolor='white',bbox_inches='tight')
   # use save_scores_from_fvol to save scores if we want to run the model on its own training data:
