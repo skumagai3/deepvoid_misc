@@ -2544,35 +2544,27 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED,
   # Convert new preprocessing parameter to old preproc format
   if preprocessing == 'standard':
     preproc = 'mm'
-  elif preprocessing == 'robust':
-    # Use load_dataset_all for robust preprocessing since load_dataset doesn't support it
-    X_test = load_dataset_all(FILE_DEN, FILE_MSK, SUBGRID, preprocessing=preprocessing, classification=False)
-    if EXTRA_INPUTS is not None:
-      X_extra = load_dataset_all(EXTRA_INPUTS, FILE_MSK, SUBGRID, preprocessing=preprocessing, classification=False) 
-      X_test = np.concatenate([X_test, X_extra], axis=-1)
-      print(f'Concatenated extra input {EXTRA_INPUTS} to X_test. New shape: {X_test.shape}')
-  elif preprocessing == 'log_transform':
-    # Use load_dataset_all for log_transform preprocessing since load_dataset doesn't support it
-    X_test = load_dataset_all(FILE_DEN, FILE_MSK, SUBGRID, preprocessing=preprocessing, classification=False)
-    if EXTRA_INPUTS is not None:
-      X_extra = load_dataset_all(EXTRA_INPUTS, FILE_MSK, SUBGRID, preprocessing=preprocessing, classification=False)
-      X_test = np.concatenate([X_test, X_extra], axis=-1)
-      print(f'Concatenated extra input {EXTRA_INPUTS} to X_test. New shape: {X_test.shape}')
-  elif preprocessing == 'clip_extreme':
-    # Use load_dataset_all for clip_extreme preprocessing since load_dataset doesn't support it
-    X_test = load_dataset_all(FILE_DEN, FILE_MSK, SUBGRID, preprocessing=preprocessing, classification=False)
-    if EXTRA_INPUTS is not None:
-      X_extra = load_dataset_all(EXTRA_INPUTS, FILE_MSK, SUBGRID, preprocessing=preprocessing, classification=False)
-      X_test = np.concatenate([X_test, X_extra], axis=-1)
-      print(f'Concatenated extra input {EXTRA_INPUTS} to X_test. New shape: {X_test.shape}')
-  else:
-    preproc = 'mm'  # fallback to default
-    
-  # Use old load_dataset for standard preprocessing only
-  if preprocessing == 'standard':
+    # Use old load_dataset for standard preprocessing only
     X_test = load_dataset(FILE_DEN,SUBGRID,OFF,preproc=preproc)
     if EXTRA_INPUTS is not None:
       # if we have an extra input, load it and concatenate it to X_test
+      X_extra = load_dataset(EXTRA_INPUTS,SUBGRID,OFF,preproc=preproc)
+      X_test = np.concatenate([X_test, X_extra], axis=-1)
+      print(f'Concatenated extra input {EXTRA_INPUTS} to X_test. New shape: {X_test.shape}')
+  elif preprocessing in ['robust', 'log_transform', 'clip_extreme']:
+    # Use load_dataset_all for advanced preprocessing since load_dataset doesn't support it
+    # load_dataset_all returns (features, labels) when classification=True, but we only need features
+    features, _ = load_dataset_all(FILE_DEN, FILE_MSK, SUBGRID, preprocessing=preprocessing, classification=True)
+    X_test = features
+    if EXTRA_INPUTS is not None:
+      extra_features, _ = load_dataset_all(EXTRA_INPUTS, FILE_MSK, SUBGRID, preprocessing=preprocessing, classification=True)
+      X_test = np.concatenate([X_test, extra_features], axis=-1)
+      print(f'Concatenated extra input {EXTRA_INPUTS} to X_test. New shape: {X_test.shape}')
+  else:
+    # fallback to default
+    preproc = 'mm'  
+    X_test = load_dataset(FILE_DEN,SUBGRID,OFF,preproc=preproc)
+    if EXTRA_INPUTS is not None:
       X_extra = load_dataset(EXTRA_INPUTS,SUBGRID,OFF,preproc=preproc)
       X_test = np.concatenate([X_test, X_extra], axis=-1)
       print(f'Concatenated extra input {EXTRA_INPUTS} to X_test. New shape: {X_test.shape}')
