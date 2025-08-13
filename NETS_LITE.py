@@ -80,6 +80,31 @@ def convert_to_binary_mask(mask):
 #---------------------------------------------------------
 # Assemble cube from subcubes
 #---------------------------------------------------------
+def assemble_cube_non_overlapping(Y_pred, GRID, SUBGRID):
+    """
+    Assemble cube from non-overlapping subcubes (for use with load_dataset_all).
+    Y_pred: predicted subcubes from load_dataset_all (shape: N_samples, SUBGRID, SUBGRID, SUBGRID, 1)
+    GRID: size of original cube
+    SUBGRID: size of subcubes
+    Returns: assembled cube of size (GRID, GRID, GRID)
+    """
+    cube = np.zeros(shape=(GRID, GRID, GRID))
+    n_bins = GRID // SUBGRID
+    cont = 0
+    
+    # Only use the first rotation (index 0, 4, 8, 12, ... i.e., every 4th sample)
+    # since load_dataset_all creates 4 rotations per spatial location
+    for i in range(n_bins):
+        for j in range(n_bins):
+            for k in range(n_bins):
+                # Use only the first rotation (cont*4)
+                cube[i*SUBGRID:(i+1)*SUBGRID, 
+                     j*SUBGRID:(j+1)*SUBGRID, 
+                     k*SUBGRID:(k+1)*SUBGRID] = Y_pred[cont*4, :, :, :, 0]
+                cont += 1
+    
+    return cube
+
 def assemble_cube2(Y_pred,GRID,SUBGRID,OFF):
     cube  = np.zeros(shape=(GRID,GRID,GRID))
     #nbins = (GRID // SUBGRID) + 1 + 1 + 1
@@ -2552,6 +2577,11 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED,
       X_test = np.concatenate([X_test, X_extra], axis=-1)
       print(f'Concatenated extra input {EXTRA_INPUTS} to X_test. New shape: {X_test.shape}')
   elif preprocessing in ['robust', 'log_transform', 'clip_extreme']:
+    # For advanced preprocessing, we need to manually handle overlapping subcubes
+    # Since load_dataset_all_overlap doesn't support new preprocessing methods,
+    # we'll load the data using load_dataset_all and then handle assembly differently
+    print(f'Warning: Using non-overlapping subcubes for {preprocessing} preprocessing.')
+    print('This may cause size mismatch issues with assembly. Consider using load_dataset_all_overlap with extended preprocessing support.')
     # Use load_dataset_all for advanced preprocessing since load_dataset doesn't support it
     # load_dataset_all returns (features, labels) when classification=True, but we only need features
     features, _ = load_dataset_all(FILE_DEN, FILE_MSK, SUBGRID, preprocessing=preprocessing, classification=True)
@@ -2580,7 +2610,14 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED,
   if isinstance(Y_pred, dict):
     # If model has named outputs, use the first one (usually the main output)
     Y_pred = Y_pred['last_activation']
-  Y_pred = assemble_cube2(Y_pred,GRID,SUBGRID,OFF)
+  
+  # Use appropriate assembly function based on preprocessing method
+  if preprocessing in ['robust', 'log_transform', 'clip_extreme']:
+    # Non-overlapping subcubes from load_dataset_all
+    Y_pred = assemble_cube_non_overlapping(Y_pred, GRID, SUBGRID)
+  else:
+    # Overlapping subcubes from load_dataset
+    Y_pred = assemble_cube2(Y_pred, GRID, SUBGRID, OFF)
 
   ### write out prediction
   PRED_NAME = MODEL_NAME + f'{PRED_NAME_SUFFIX}-pred.fvol'
@@ -2604,6 +2641,10 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED,
   m = volumes.read_fvolume(FILE_MSK)
   if BINARY:
     m = np.where(m > 0.5, 1, 0)
+  
+  # Debug: print shapes to understand any size mismatch
+  print(f"Debug: d.shape = {d.shape}, Y_pred.shape = {Y_pred.shape}, m.shape = {m.shape}")
+    
   plt.rcParams.update({'font.size': 20})
   fig,ax = plt.subplots(1,3,figsize=(28,12),tight_layout=True)
   i = GRID//3
@@ -2663,7 +2704,7 @@ def save_scores_from_model(FILE_DEN, FILE_MSK, FILE_MODEL, FILE_FIG, FILE_PRED,
 
   # plot vw misclassifications:
   # pick random slice to plot:
-  i = np.random.randint(0,GRID)
+  i = np.random.randint(0, GRID)
   fig = plot_vw_misses(m,Y_pred,idx=i,Nm=GRID,boxsize=BOXSIZE)
   fig.savefig(FILE_FIG+MODEL_NAME+f'-pred-comp-vw-miss-slc={i}.png',facecolor='white',bbox_inches='tight')
   # use save_scores_from_fvol to save scores if we want to run the model on its own training data:
