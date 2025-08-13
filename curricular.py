@@ -124,7 +124,7 @@ if LOSS != 'FOCAL_CCE' and (args.FOCAL_ALPHA != [0.6, 0.3, 0.09, 0.02] or args.F
 
 # use mixed precision if on Picotte
 if ROOT_DIR.startswith('/ifs/groups/vogeleyGrp/'):
-    from tf.keras import mixed_precision
+    from tensorflow.keras import mixed_precision
     mixed_precision.set_global_policy('mixed_float16')
 #================================================================
 # Set up custom objects for model serialization
