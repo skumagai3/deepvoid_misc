@@ -20,6 +20,7 @@ import argparse
 import numpy as np
 import tensorflow as tf
 import NETS_LITE as nets
+import volumes
 # Import validation functions
 from NETS_LITE import MultiScaleValidationCallback
 import absl.logging
@@ -116,6 +117,8 @@ optional.add_argument('--FOCAL_ALPHA', nargs=4, type=float, default=[0.6, 0.3, 0
                       help='Alpha values for focal loss [void, wall, filament, halo]. Default: 0.6 0.3 0.09 0.02')
 optional.add_argument('--FOCAL_GAMMA', type=float, default=1.5,
                       help='Gamma value for focal loss. Default: 1.5')
+optional.add_argument('--NO_OVERLAPPING_SUBCUBES', action='store_true',
+                      help='Disable overlapping subcubes with rotations to save memory. Default is to use overlapping subcubes with rotations for better data augmentation.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 DEPTH = args.DEPTH
@@ -136,12 +139,13 @@ PREPROCESSING = args.PREPROCESSING
 WARMUP_EPOCHS = args.WARMUP_EPOCHS
 FOCAL_ALPHA = args.FOCAL_ALPHA
 FOCAL_GAMMA = args.FOCAL_GAMMA
+USE_OVERLAPPING_SUBCUBES = not args.NO_OVERLAPPING_SUBCUBES  # Default is True unless --NO_OVERLAPPING_SUBCUBES is specified
 
 # Set up validation strategy parameters
 validation_strategy = args.VALIDATION_STRATEGY
 target_lambda = args.TARGET_LAMBDA or args.L_VAL  # Default to L_VAL if not specified
 
-print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, L_VAL={L_VAL}, USE_ATTENTION={USE_ATTENTION}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}, N_EPOCHS_PER_INTER_SEP={N_EPOCHS_PER_INTER_SEP}, VALIDATION_STRATEGY={validation_strategy}, TARGET_LAMBDA={target_lambda}, PREPROCESSING={PREPROCESSING}, WARMUP_EPOCHS={WARMUP_EPOCHS}, FOCAL_ALPHA={FOCAL_ALPHA}, FOCAL_GAMMA={FOCAL_GAMMA}')
+print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, L_VAL={L_VAL}, USE_ATTENTION={USE_ATTENTION}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}, N_EPOCHS_PER_INTER_SEP={N_EPOCHS_PER_INTER_SEP}, VALIDATION_STRATEGY={validation_strategy}, TARGET_LAMBDA={target_lambda}, PREPROCESSING={PREPROCESSING}, WARMUP_EPOCHS={WARMUP_EPOCHS}, FOCAL_ALPHA={FOCAL_ALPHA}, FOCAL_GAMMA={FOCAL_GAMMA}, USE_OVERLAPPING_SUBCUBES={USE_OVERLAPPING_SUBCUBES}')
 
 # Validate focal loss parameters
 if LOSS != 'FOCAL_CCE' and (args.FOCAL_ALPHA != [0.6, 0.3, 0.09, 0.02] or args.FOCAL_GAMMA != 1.5):
@@ -258,18 +262,89 @@ def load_data(inter_sep, extra_inputs=None, verbose=True, preprocessing='standar
         except:
             pass  # Memory info may not be available on all systems
     
-    features, labels = nets.load_dataset_all(
-        FILE_DEN=data_file,
-        FILE_MASK=FILE_MASK,
-        SUBGRID=SUBGRID,
-        verbose=verbose,
-        preprocessing=preprocessing
-    )
+    # Choose consistent subcube extraction method based on USE_OVERLAPPING_SUBCUBES flag
+    if USE_OVERLAPPING_SUBCUBES:
+        # Use overlapping subcubes with rotations for maximum data augmentation
+        features, labels = nets.load_dataset_all_overlap(
+            FILE_DEN=data_file,
+            FILE_MSK=FILE_MASK,
+            SUBGRID=SUBGRID,
+            OFF=OFF,
+            preprocessing=preprocessing
+        )
+        if verbose:
+            print(f'Using overlapping subcubes with rotations for main features')
+    else:
+        # Use non-overlapping subcubes with rotations for memory efficiency
+        features, labels = nets.load_dataset_all(
+            FILE_DEN=data_file,
+            FILE_MASK=FILE_MASK,
+            SUBGRID=SUBGRID,
+            verbose=verbose,
+            preprocessing=preprocessing
+        )
+        if verbose:
+            print(f'Using non-overlapping subcubes with rotations for main features')
+    
     if extra_inputs is not None:
         extra_input_file = DATA_PATH + EXTRA_INPUTS_INFO[inter_sep]
         if verbose:
             print(f'Loading extra inputs from {extra_input_file}')
-        extra_input = nets.load_dataset(extra_input_file, SUBGRID, OFF, preprocessing)
+        
+        # Use the same subcube method for consistency
+        if USE_OVERLAPPING_SUBCUBES:
+            # Use overlapping subcubes (like load_dataset) but ensure same number of samples as features
+            extra_input = nets.load_dataset(extra_input_file, SUBGRID, OFF, preprocessing)
+            
+            # We need to replicate the data to match the 4 rotations in load_dataset_all_overlap
+            # load_dataset_all_overlap produces nbins³ × 4 samples, but load_dataset produces nbins³ samples
+            # So we need to replicate each sample 4 times to match the rotation augmentation
+            n_samples = extra_input.shape[0]
+            extra_input_rotated = np.zeros((n_samples * 4, SUBGRID, SUBGRID, SUBGRID, 1), dtype=extra_input.dtype)
+            
+            for i in range(n_samples):
+                # Original
+                extra_input_rotated[i*4, :, :, :, 0] = extra_input[i, :, :, :, 0]
+                # 3 rotations (matching the rotation pattern in load_dataset_all_overlap)
+                extra_input_rotated[i*4+1, :, :, :, 0] = volumes.rotate_cube(extra_input[i, :, :, :, 0], 2)
+                extra_input_rotated[i*4+2, :, :, :, 0] = volumes.rotate_cube(extra_input[i, :, :, :, 0], 1) 
+                extra_input_rotated[i*4+3, :, :, :, 0] = volumes.rotate_cube(extra_input[i, :, :, :, 0], 0)
+            
+            extra_input = extra_input_rotated
+            if verbose:
+                print(f'Applied 4 rotations to extra inputs to match main features')
+        else:
+            # Use non-overlapping subcubes - need to create a custom loader for extra inputs
+            # that matches the non-overlapping pattern of load_dataset_all but for single files
+            den = volumes.read_fvolume(extra_input_file)
+            
+            # Apply preprocessing
+            if preprocessing == 'log_transform':
+                den = np.log10(den + 1e-6)
+                den = (den - np.mean(den)) / (np.std(den) + 1e-8)
+            elif preprocessing == 'standard' or preprocessing is None:
+                den = nets.minmax(den)
+            # Add other preprocessing methods as needed
+            
+            # Extract non-overlapping subcubes with 4 rotations (matching load_dataset_all pattern)
+            n_bins = den.shape[0] // SUBGRID
+            extra_input = np.zeros(((n_bins**3)*4, SUBGRID, SUBGRID, SUBGRID, 1), dtype=np.float32)
+            
+            cont = 0
+            for i in range(n_bins):
+                for j in range(n_bins):
+                    for k in range(n_bins):
+                        sub_den = den[i*SUBGRID:(i+1)*SUBGRID, j*SUBGRID:(j+1)*SUBGRID, k*SUBGRID:(k+1)*SUBGRID]
+                        # Original + 3 rotations (matching load_dataset_all pattern exactly)
+                        extra_input[cont,:,:,:,0] = sub_den
+                        extra_input[cont+1,:,:,:,0] = volumes.rotate_cube(sub_den, 2)
+                        extra_input[cont+2,:,:,:,0] = volumes.rotate_cube(sub_den, 1)
+                        extra_input[cont+3,:,:,:,0] = volumes.rotate_cube(sub_den, 0)
+                        cont += 4
+            
+            if verbose:
+                print(f'Extracted non-overlapping subcubes with 4 rotations for extra inputs')
+        
         if verbose:
             print(f'Extra input shape: {extra_input.shape}')
         # Concatenate extra inputs to features
@@ -278,7 +353,9 @@ def load_data(inter_sep, extra_inputs=None, verbose=True, preprocessing='standar
             print(f'Features shape after concatenation: {features.shape}')
     
     if verbose:
-        print(f'Data loaded successfully. Features: {features.shape}, Labels: {labels.shape}')
+        subcube_method = "overlapping with rotations" if USE_OVERLAPPING_SUBCUBES else "non-overlapping with rotations"
+        print(f'Data loaded successfully using {subcube_method} subcubes.')
+        print(f'Final features: {features.shape}, Labels: {labels.shape}')
     
     return features, labels
 
