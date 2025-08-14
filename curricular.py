@@ -562,17 +562,7 @@ elif LOSS == 'FOCAL_CCE':
     loss_fn = nets.categorical_focal_loss(alpha=alpha, gamma=gamma)
     print(f'Using Focal Loss with alpha={alpha} and gamma={gamma}')
 elif LOSS == 'SCCE':
-    base_loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
-    
-    # Wrap SCCE with NaN detection for Picotte V100 numerical stability
-    def nan_safe_scce_loss(y_true, y_pred):
-        loss = base_loss_fn(y_true, y_pred)
-        # Replace NaN values with a reasonable fallback loss value
-        safe_loss = tf.where(tf.math.is_finite(loss), loss, tf.constant(2.0, dtype=loss.dtype))
-        return safe_loss
-    
-    loss_fn = nan_safe_scce_loss
-    CUSTOM_OBJECTS['nan_safe_scce_loss'] = nan_safe_scce_loss
+    loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
 elif LOSS == 'SCCE_Void_Penalty':
     loss_fn = nets.SCCE_void_penalty
 elif LOSS == 'SCCE_Class_Penalty':
@@ -640,11 +630,10 @@ with strategy.scope():
             model_name=MODEL_NAME,
             lambda_conditioning=LAMBDA_CONDITIONING
         )
-    # Create optimizer with aggressive gradient clipping to prevent NaN losses
+    # Create optimizer with gradient clipping to prevent NaN losses
     base_optimizer = tf.keras.optimizers.Adam(
         learning_rate=LEARNING_RATE, 
-        clipnorm=0.5,  # Reduced from 1.0 to 0.5 for more aggressive clipping
-        clipvalue=0.5  # Additional gradient value clipping
+        clipnorm=1.0  # Use gradient norm clipping only
     )
     optimizer = mixed_precision.LossScaleOptimizer(base_optimizer)
     
