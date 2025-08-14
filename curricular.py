@@ -39,7 +39,7 @@ warnings.filterwarnings('ignore')
 import NETS_LITE as nets
 import volumes
 # Import validation functions
-from NETS_LITE import MultiScaleValidationCallback
+from NETS_LITE import MultiScaleValidationCallback, HybridValidationCallback
 import plotter
 import datetime
 import gc
@@ -536,8 +536,8 @@ elif validation_strategy == 'gradual':
     val_dataset = create_validation_dataset(initial_val_lambda)
     
 else:  # hybrid
-    print(f'Using hybrid validation: both target (L={target_lambda}) and stage-based')
-    # For hybrid, start with target validation and create stage datasets lazily during training
+    print(f'Using hybrid validation: weighted combination of target (L={target_lambda}) and stage-based')
+    # Create target validation dataset
     val_dataset = create_validation_dataset(target_lambda)
     target_val_dataset = val_dataset
 #================================================================
@@ -743,38 +743,20 @@ print('>>> Starting training loop over interparticle separations...')
 # Initialize validation callback for hybrid strategy
 validation_callback = None
 if validation_strategy == 'hybrid':
-    class LazyMultiScaleValidationCallback(tf.keras.callbacks.Callback):
-        def __init__(self, target_dataset, target_lambda, inter_seps, extra_inputs, batch_size, one_hot, lambda_conditioning, preprocessing):
-            self.target_dataset = target_dataset
-            self.target_lambda = target_lambda
-            self.inter_seps = inter_seps
-            self.extra_inputs = extra_inputs
-            self.batch_size = batch_size
-            self.one_hot = one_hot
-            self.lambda_conditioning = lambda_conditioning
-            self.preprocessing = preprocessing
-            self.current_stage_dataset = None
-            
-        def update_stage_dataset(self, stage_lambda):
-            """Create stage validation dataset on demand"""
-            if self.current_stage_dataset is not None:
-                del self.current_stage_dataset
-                # Force GPU memory clearing
-                tf.keras.backend.clear_session()
-                gc.collect()
-                print(f'Cleared previous stage validation dataset from GPU memory')
-            self.current_stage_dataset = create_validation_dataset(stage_lambda)
-    
-    validation_callback = LazyMultiScaleValidationCallback(
+    # Pre-create stage validation datasets for all interparticle separations
+    stage_datasets = {}
+    print('Creating stage validation datasets for hybrid validation...')
+    for sep in inter_seps:
+        print(f'  Creating validation dataset for L={sep} Mpc/h...')
+        stage_datasets[sep] = create_validation_dataset(float(sep))
+        
+    validation_callback = HybridValidationCallback(
         target_dataset=target_val_dataset,
-        target_lambda=target_lambda,
+        stage_datasets=stage_datasets,
         inter_seps=inter_seps,
-        extra_inputs=EXTRA_INPUTS,
-        batch_size=BATCH_SIZE,
-        one_hot=ONE_HOT,
-        lambda_conditioning=LAMBDA_CONDITIONING,
-        preprocessing=PREPROCESSING
+        verbose=1
     )
+    print(f'Initialized HybridValidationCallback with {len(stage_datasets)} stage datasets')
 
 epoch_offset = 0
 for i, inter_sep in enumerate(inter_seps):
@@ -838,10 +820,10 @@ for i, inter_sep in enumerate(inter_seps):
         else:
             print(f'Keeping current validation dataset: training L={inter_sep} -> validation L={current_val_lambda} Mpc/h')
     
-    # Update stage dataset for hybrid validation
+    # Update stage for hybrid validation
     elif validation_strategy == 'hybrid' and validation_callback is not None:
-        print(f'Updating stage validation dataset for hybrid validation: L={inter_sep} Mpc/h')
-        validation_callback.update_stage_dataset(inter_sep)
+        print(f'Updating hybrid validation stage: L={inter_sep} Mpc/h')
+        validation_callback.update_stage(i, inter_sep)
     # freeze layers based on interparticle separation. freeze more layers for larger interparticle separations:
     nets.freeze_encoder_blocks(
         model,

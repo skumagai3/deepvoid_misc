@@ -3121,43 +3121,138 @@ def chunk_array(arr_path, SUBGRID, scale=False):
 # Curricular Training Validation Strategies
 #---------------------------------------------------------
 class MultiScaleValidationCallback(tf.keras.callbacks.Callback):
-    """
-    Callback for multi-scale validation during curricular training.
-    Tracks performance on both current stage and target lambda.
-    """
-    def __init__(self, val_datasets_dict, target_lambda, validation_freq=1):
+    def __init__(self, stage_datasets, verbose=1):
         super().__init__()
-        self.val_datasets = val_datasets_dict  # Dict of {lambda: dataset}
-        self.target_lambda = target_lambda
-        self.validation_freq = validation_freq
-        self.history = {}
+        self.stage_datasets = stage_datasets
+        self.verbose = verbose
+        self.current_stage = 0
         
     def on_epoch_end(self, epoch, logs=None):
-        if epoch % self.validation_freq == 0:
-            logs = logs or {}
+        if logs is None:
+            logs = {}
             
-            for lambda_val, dataset in self.val_datasets.items():
-                try:
-                    results = self.model.evaluate(dataset, verbose=0, return_dict=True)
-                    
-                    # Add results to logs with proper naming
-                    for metric_name, value in results.items():
-                        if lambda_val == self.target_lambda:
-                            key = f"target_{metric_name}"
-                        else:
-                            key = f"stage_{metric_name}"
-                        logs[key] = value
+        # Evaluate on current stage dataset if available
+        if self.current_stage < len(self.stage_datasets):
+            current_dataset = self.stage_datasets[self.current_stage]
+            if current_dataset is not None:
+                stage_metrics = self.model.evaluate(current_dataset, verbose=0)
+                
+                # Add stage metrics to logs
+                metric_names = ['loss', 'accuracy', 'mcc', 'f1_micro', 'void_f1']
+                for i, name in enumerate(metric_names):
+                    if i < len(stage_metrics):
+                        logs[f'val_stage_{name}'] = stage_metrics[i]
                         
-                        # Store in history
-                        if key not in self.history:
-                            self.history[key] = []
-                        self.history[key].append(value)
-                        
-                except Exception as e:
-                    print(f"Warning: Validation failed for lambda {lambda_val}: {e}")
+                if self.verbose > 0:
+                    print(f' - val_stage_loss: {stage_metrics[0]:.4f}')
     
-    def update_stage_dataset(self, new_lambda, new_dataset):
-        """Update the stage dataset when moving to next interparticle separation"""
+    def update_stage(self, new_stage):
+        self.current_stage = new_stage
+        if self.verbose > 0:
+            print(f'Updated validation callback to stage {new_stage}')
+
+class HybridValidationCallback(tf.keras.callbacks.Callback):
+    """
+    Comprehensive hybrid validation that evaluates on both target and stage datasets,
+    computes weighted hybrid loss, and uses it for model selection and training decisions.
+    """
+    def __init__(self, target_dataset, stage_datasets, inter_seps, alpha_schedule=None, verbose=1):
+        super().__init__()
+        self.target_dataset = target_dataset
+        self.stage_datasets = stage_datasets  # Dict mapping stage names to datasets
+        self.inter_seps = inter_seps
+        self.verbose = verbose
+        self.current_stage = 0
+        self.current_stage_name = inter_seps[0]
+        
+        # Default alpha schedule: gradually shift focus from stage to target
+        if alpha_schedule is None:
+            # Early stages focus more on current stage, later stages focus more on target
+            self.alpha_schedule = {
+                '0.33': 0.3,  # 30% target, 70% stage
+                '3': 0.4,     # 40% target, 60% stage  
+                '5': 0.5,     # 50% target, 50% stage
+                '7': 0.7,     # 70% target, 30% stage
+                '10': 0.8     # 80% target, 20% stage
+            }
+        else:
+            self.alpha_schedule = alpha_schedule
+            
+        # Track best hybrid loss for model checkpointing
+        self.best_hybrid_loss = float('inf')
+        self.best_hybrid_epoch = 0
+    
+    def on_epoch_end(self, epoch, logs=None):
+        if logs is None:
+            logs = {}
+            
+        # Evaluate on target dataset
+        target_metrics = self.model.evaluate(self.target_dataset, verbose=0)
+        target_loss = target_metrics[0]
+        
+        # Evaluate on current stage dataset
+        current_stage_dataset = self.stage_datasets.get(self.current_stage_name)
+        if current_stage_dataset is not None:
+            stage_metrics = self.model.evaluate(current_stage_dataset, verbose=0)
+            stage_loss = stage_metrics[0]
+        else:
+            # Fallback to target dataset if stage dataset not available
+            stage_metrics = target_metrics
+            stage_loss = target_loss
+            
+        # Compute weighted hybrid loss
+        alpha = self.alpha_schedule.get(self.current_stage_name, 0.5)
+        hybrid_loss = alpha * target_loss + (1 - alpha) * stage_loss
+        
+        # Update logs with all metrics
+        logs['val_hybrid_loss'] = hybrid_loss
+        logs['val_target_loss'] = target_loss
+        logs['val_stage_loss'] = stage_loss
+        logs['val_hybrid_alpha'] = alpha
+        
+        # Add detailed metrics for both datasets
+        metric_names = ['loss', 'accuracy', 'mcc', 'f1_micro', 'void_f1']
+        for i, name in enumerate(metric_names):
+            if i < len(target_metrics):
+                logs[f'val_target_{name}'] = target_metrics[i]
+            if i < len(stage_metrics):
+                logs[f'val_stage_{name}'] = stage_metrics[i]
+        
+        # Track best hybrid performance
+        if hybrid_loss < self.best_hybrid_loss:
+            self.best_hybrid_loss = hybrid_loss
+            self.best_hybrid_epoch = epoch
+            
+        # Compute divergence metrics for curriculum health monitoring
+        loss_divergence = abs(target_loss - stage_loss) / max(target_loss, stage_loss, 1e-8)
+        logs['val_loss_divergence'] = loss_divergence
+        
+        if self.verbose > 0:
+            print(f' - val_hybrid_loss: {hybrid_loss:.4f} (α={alpha:.1f}) '
+                  f'[target: {target_loss:.4f}, stage: {stage_loss:.4f}]')
+            
+            # Warn about potential curriculum issues
+            if loss_divergence > 0.5:  # More than 50% difference
+                if target_loss > stage_loss * 1.5:
+                    print(f'   ⚠️  High target loss suggests model may be overfitting to current stage')
+                elif stage_loss > target_loss * 1.5:
+                    print(f'   ⚠️  High stage loss suggests model may be skipping intermediate learning')
+    
+    def update_stage(self, new_stage_idx, new_stage_name):
+        """Update the current stage for validation"""
+        self.current_stage = new_stage_idx
+        self.current_stage_name = new_stage_name
+        
+        if self.verbose > 0:
+            alpha = self.alpha_schedule.get(new_stage_name, 0.5)
+            print(f'Updated hybrid validation to stage {new_stage_name} (α={alpha:.1f})')
+    
+    def get_best_hybrid_info(self):
+        """Get information about the best hybrid performance"""
+        return {
+            'best_hybrid_loss': self.best_hybrid_loss,
+            'best_hybrid_epoch': self.best_hybrid_epoch
+        }
         # Remove old stage dataset (keep target dataset)
         keys_to_remove = [k for k in self.val_datasets.keys() if k != self.target_lambda]
         for key in keys_to_remove:
