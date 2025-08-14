@@ -36,26 +36,14 @@ print('GPUs available:', gpus)
 for gpu in gpus:
     tf.config.experimental.set_memory_growth(gpu, True)
 
-# Universal GPU memory management for different GPU types
+# Log GPU info without setting limits
 if gpus:
     try:
         gpu_info = tf.config.experimental.get_device_details(gpus[0])
         device_name = gpu_info.get('device_name', 'Unknown')
         print(f'GPU device name: {device_name}')
-        
-        # Set conservative memory limits based on GPU type
-        if 'L4' in device_name:
-            tf.config.experimental.set_memory_limit(gpus[0], 18 * 1024)  # 18GB limit
-            print('Set conservative memory limit for L4 GPU')
-        elif 'T4' in device_name:
-            tf.config.experimental.set_memory_limit(gpus[0], 12 * 1024)  # 12GB limit
-            print('Set conservative memory limit for T4 GPU')
-        elif 'V100' in device_name:
-            tf.config.experimental.set_memory_limit(gpus[0], 30 * 1024)  # 30GB limit
-            print('Set conservative memory limit for V100 GPU')
     except Exception as e:
-        print(f'Could not set GPU memory limit: {e}')
-        print('Continuing with memory growth enabled')
+        print(f'Could not get GPU info: {e}')
 nets.K.set_image_data_format('channels_last')
 # NOTE turning off XLA JIT compilation for now, as it can cause issues with some models
 tf.config.optimizer.set_jit(False)  # if you're using XLA
