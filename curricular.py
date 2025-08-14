@@ -761,7 +761,9 @@ elif LOSS == 'SCCE_Proportion_Aware':
     CUSTOM_OBJECTS['scce_proportion_aware_loss'] = scce_proportion_aware_loss
 # Make tensorboard directory
 log_dir = ROOT_DIR + 'logs/fit/' + MODEL_NAME + '_' + datetime.datetime.now().strftime("%Y%m%d-%H%M") + '/'
+print(f"DEBUG: Creating log directory: {log_dir}")
 os.makedirs(log_dir, exist_ok=True)
+print("DEBUG: Log directory created successfully")
 #================================================================
 # Create the model
 #================================================================
@@ -813,9 +815,11 @@ with strategy.scope():
             metrics=metrics
         )
 print(model.summary())
+print("DEBUG: Model summary completed successfully")
 #================================================================
 # Learning Rate Warmup Callback
 #================================================================
+print("DEBUG: Defining WarmupLearningRateScheduler class...")
 class WarmupLearningRateScheduler(tf.keras.callbacks.Callback):
     def __init__(self, warmup_epochs, target_lr, verbose=1):
         super(WarmupLearningRateScheduler, self).__init__()
@@ -857,10 +861,12 @@ class WarmupLearningRateScheduler(tf.keras.callbacks.Callback):
             if self.verbose:
                 print(f'\nWarmup complete. Learning rate set to target: {self.target_lr:.6f}')
 
+print("DEBUG: WarmupLearningRateScheduler class defined successfully")
 #================================================================
 # Training loop
 #================================================================
 print('>>> Starting curricular training...')
+print("DEBUG: About to create ReduceLROnPlateau callback...")
 reduce_LR = ReduceLROnPlateau(
             patience=LEARNING_RATE_PATIENCE,
             factor=0.5,
@@ -869,7 +875,9 @@ reduce_LR = ReduceLROnPlateau(
             verbose=1,
             min_lr=1e-6
 )
+print("DEBUG: ReduceLROnPlateau callback created successfully")
 # set freezing scheme:
+print("DEBUG: Setting up density_to_freeze_map...")
 density_to_freeze_map = {
     '0.33': 0,  # No freezing for the lowest interparticle separation
     '3': 0,     # Freeze first block for L=3 Mpc/h
@@ -877,7 +885,9 @@ density_to_freeze_map = {
     '7': 2,     # Freeze first three blocks for L=7 Mpc/h
     '10': 3     # Freeze first four blocks for L=10 Mpc/h
 }
+print("DEBUG: density_to_freeze_map created successfully")
 # create combined history object to store metrics for all interparticle separations
+print("DEBUG: Creating combined_history object...")
 combined_history = {
     'loss': [],
     'val_loss': [],
@@ -894,20 +904,26 @@ combined_history = {
     'lr': [],
     'epoch': []
 }
+print("DEBUG: combined_history created successfully")
+print("DEBUG: Creating TensorBoard callback...")
 tensor_board_callback = TensorBoard(
     log_dir=log_dir,
     histogram_freq=1,
     write_graph=False,
     update_freq='epoch',
 )
+print("DEBUG: TensorBoard callback created successfully")
 #================================================================
 # Training loop over interparticle separations
 #================================================================
 print('>>> Starting training loop over interparticle separations...')
+print("DEBUG: About to check validation strategy for hybrid initialization...")
 
 # Initialize validation callback for hybrid strategy
 validation_callback = None
+print(f"DEBUG: Current validation_strategy = '{validation_strategy}'")
 if validation_strategy == 'hybrid':
+    print("DEBUG: Entering hybrid validation setup...")
     # Pre-create stage validation datasets for all interparticle separations
     stage_datasets = {}
     print('Creating stage validation datasets for hybrid validation...')
@@ -922,7 +938,10 @@ if validation_strategy == 'hybrid':
         verbose=1
     )
     print(f'Initialized HybridValidationCallback with {len(stage_datasets)} stage datasets')
+else:
+    print(f"DEBUG: Skipping hybrid validation setup for strategy '{validation_strategy}'")
 
+print("DEBUG: About to start main training loop...")
 epoch_offset = 0
 for i, inter_sep in enumerate(inter_seps):
     print(f'Starting training for interparticle separation L={inter_sep} Mpc/h (stage {i+1}/{len(inter_seps)})...')
