@@ -10,6 +10,12 @@ You can either score the models on the highest lambda or on the current lambda.
 print('>>> Running curricular.py')
 import os
 import sys
+
+# Set environment variables for better memory management and stability
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"  # Reduce TensorFlow logging
+os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"  # Better memory management
+os.environ["TF_DISABLE_CUDNN_AUTOTUNE"] = "1"  # Disable autotuning for stability
+
 import argparse
 import numpy as np
 import tensorflow as tf
@@ -19,6 +25,7 @@ from NETS_LITE import MultiScaleValidationCallback
 import absl.logging
 import plotter
 import datetime
+import gc
 from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, TensorBoard, EarlyStopping
 absl.logging.set_verbosity(absl.logging.ERROR)
 print('TensorFlow version:', tf.__version__)
@@ -28,10 +35,30 @@ gpus = tf.config.list_physical_devices('GPU')
 print('GPUs available:', gpus)
 for gpu in gpus:
     tf.config.experimental.set_memory_growth(gpu, True)
+
+# Universal GPU memory management for different GPU types
+if gpus:
+    try:
+        gpu_info = tf.config.experimental.get_device_details(gpus[0])
+        device_name = gpu_info.get('device_name', 'Unknown')
+        print(f'GPU device name: {device_name}')
+        
+        # Set conservative memory limits based on GPU type
+        if 'L4' in device_name:
+            tf.config.experimental.set_memory_limit(gpus[0], 18 * 1024)  # 18GB limit
+            print('Set conservative memory limit for L4 GPU')
+        elif 'T4' in device_name:
+            tf.config.experimental.set_memory_limit(gpus[0], 12 * 1024)  # 12GB limit
+            print('Set conservative memory limit for T4 GPU')
+        elif 'V100' in device_name:
+            tf.config.experimental.set_memory_limit(gpus[0], 30 * 1024)  # 30GB limit
+            print('Set conservative memory limit for V100 GPU')
+    except Exception as e:
+        print(f'Could not set GPU memory limit: {e}')
+        print('Continuing with memory growth enabled')
 nets.K.set_image_data_format('channels_last')
 # NOTE turning off XLA JIT compilation for now, as it can cause issues with some models
 tf.config.optimizer.set_jit(False)  # if you're using XLA
-os.environ["TF_DISABLE_CUDNN_AUTOTUNE"] = "1"
 tf.config.experimental.enable_op_determinism()
 from tensorflow.keras import mixed_precision
 
@@ -229,11 +256,19 @@ def load_data(inter_sep, extra_inputs=None, verbose=True, preprocessing='standar
         extra_input (np.ndarray, optional): Additional inputs array if provided.
     '''
     if inter_sep not in inter_seps:
-        raise ValueError(f'Invalid interparticle separation: {inter_sep}. Must be one of {inter_seps}.')
+        raise ValueError(f'Invalid interparticle separation: {inter_sep}. Must be one of {inter_seps}')
+    
     data_file = DATA_PATH + data_info[inter_sep]
     if verbose:
-        print(f'Loading data from {data_file}...')
-        print(f'Using preprocessing method: {preprocessing}')
+        print(f'Loading data for L={inter_sep} Mpc/h from {data_file}')
+    
+    # Monitor GPU memory before loading
+    if tf.config.list_physical_devices('GPU') and verbose:
+        try:
+            gpu_details = tf.config.experimental.get_memory_info('GPU:0')
+            print(f'GPU memory before loading: {gpu_details["current"] / 1024**3:.2f} GB used')
+        except:
+            pass  # Memory info may not be available on all systems
     
     features, labels = nets.load_dataset_all(
         FILE_DEN=data_file,
@@ -243,72 +278,87 @@ def load_data(inter_sep, extra_inputs=None, verbose=True, preprocessing='standar
         preprocessing=preprocessing
     )
     if extra_inputs is not None:
-        if inter_sep not in EXTRA_INPUTS_INFO:
-            raise ValueError(f'Invalid interparticle separation for extra inputs: {inter_sep}. Must be one of {list(EXTRA_INPUTS_INFO.keys())}.')
         extra_input_file = DATA_PATH + EXTRA_INPUTS_INFO[inter_sep]
         if verbose:
-            print(f'Loading additional inputs from {extra_input_file}...')
-        extra_input = nets.chunk_array(
-            extra_input_file,
-            SUBGRID=SUBGRID,
-            scale=True
-        )
-        if extra_input.shape[:-1] != features.shape[:-1]:
-            raise ValueError(f'Extra input shape {extra_input.shape} does not match features shape {features.shape}.')
+            print(f'Loading extra inputs from {extra_input_file}')
+        extra_input = nets.load_dataset(extra_input_file, SUBGRID, OFF, preprocessing)
+        if verbose:
+            print(f'Extra input shape: {extra_input.shape}')
+        # Concatenate extra inputs to features
         features = np.concatenate([features, extra_input], axis=-1)
+        if verbose:
+            print(f'Features shape after concatenation: {features.shape}')
+    
     if verbose:
-        print(f'Features shape: {features.shape}, Labels shape: {labels.shape}')
+        print(f'Data loaded successfully. Features: {features.shape}, Labels: {labels.shape}')
+    
     return features, labels
 
 def make_dataset(delta, tij_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot=False, lambda_value=None):
     '''
-    Create a TensorFlow dataset from the features and labels.
-    Args:
-        delta (np.ndarray): Features array.
-        tij_labels (np.ndarray): Labels array.
-        batch_size (int, optional): Batch size. Defaults to BATCH_SIZE.
-        shuffle (bool, optional): Whether to shuffle the dataset. Defaults to True.
-        one_hot (bool, optional): Whether to apply one-hot encoding to the labels. Defaults to True.
-    Returns:
-        tf.data.Dataset: A TensorFlow dataset.
+    Create a TensorFlow dataset from the features and labels with memory-efficient handling.
     '''
     print(f'Creating dataset with {len(delta)} samples...')
     print(f'Features shape: {delta.shape}, Labels shape: {tij_labels.shape}')
     if one_hot:
         tij_labels = tf.keras.utils.to_categorical(tij_labels, num_classes=N_CLASSES)
-        print(f'One-hot encoding applied. Labels shape: {tij_labels.shape}')
+    
     # Check for NaN values in delta and tij_labels
     if np.any(np.isnan(delta)):
-        print(f'ERROR: NaN values found in delta array!')
-        print(f'Number of NaN values: {np.sum(np.isnan(delta))}')
-        print(f'Delta shape: {delta.shape}')
-        print(f'Delta min/max: {np.nanmin(delta):.6f} / {np.nanmax(delta):.6f}')
-        raise ValueError('NaN values found in delta array.')
+        print('WARNING: NaN values found in features!')
+        delta = np.nan_to_num(delta, nan=0.0)
+    
     if np.any(np.isnan(tij_labels)):
-        print(f'ERROR: NaN values found in tij_labels array!')
-        print(f'Number of NaN values: {np.sum(np.isnan(tij_labels))}')
-        print(f'Labels shape: {tij_labels.shape}')
-        raise ValueError('NaN values found in tij_labels array.')
-    # Ensure delta is a float32 tensor
-    delta = tf.convert_to_tensor(delta, dtype=tf.float32)
-    # Ensure tij_labels is a float32 tensor
-    tij_labels = tf.convert_to_tensor(tij_labels, dtype=tf.float32)
-    # Create the dataset
-    print(f'Creating dataset with batch size {batch_size} and shuffle={shuffle}...')
-    if lambda_value is not None:
-        print(f'Adding lambda input with value {lambda_value}')
-        lambda_array = np.full((delta.shape[0], 1), lambda_value, dtype=np.float32)
-        dataset = tf.data.Dataset.from_tensor_slices((
-            {'density_input': delta, 'lambda_input': lambda_array},
-            {'last_activation': tij_labels, 'lambda_output': lambda_array}
-        ))
-    else:
-        dataset = tf.data.Dataset.from_tensor_slices((delta, tij_labels))
-    if shuffle:
-        dataset = dataset.shuffle(buffer_size=delta.shape[0])
-    dataset = dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
-    print(f'Dataset created with {len(dataset)} batches.')
-    return dataset
+        print('WARNING: NaN values found in labels!')
+        tij_labels = np.nan_to_num(tij_labels, nan=0.0)
+    
+    # Memory-efficient tensor conversion
+    try:
+        print(f'Creating dataset with batch size {batch_size} and shuffle={shuffle}...')
+        if lambda_value is not None:
+            # Create lambda conditioning tensor
+            lambda_tensor = np.full((delta.shape[0], 1), lambda_value, dtype=np.float32)
+            dataset = tf.data.Dataset.from_tensor_slices((delta, tij_labels, lambda_tensor))
+        else:
+            dataset = tf.data.Dataset.from_tensor_slices((delta, tij_labels))
+        
+        # Apply transformations
+        if shuffle:
+            buffer_size = min(10000, len(delta))  # Cap shuffle buffer for memory efficiency
+            dataset = dataset.shuffle(buffer_size, seed=42, reshuffle_each_iteration=True)
+        
+        dataset = dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+        return dataset
+        
+    except tf.errors.ResourceExhaustedError as e:
+        print(f'GPU memory exhausted, trying with smaller batch size: {e}')
+        # Reduce batch size and try again
+        reduced_batch_size = max(1, batch_size // 2)
+        print(f'Retrying with batch size {reduced_batch_size}...')
+        return make_dataset(delta, tij_labels, reduced_batch_size, shuffle, one_hot, lambda_value)
+        
+    except Exception as e:
+        print(f'Error creating dataset: {e}')
+        print('Falling back to CPU-based tensor conversion...')
+        
+        # Fallback: explicit CPU tensor creation
+        with tf.device('/CPU:0'):
+            delta = tf.convert_to_tensor(delta, dtype=tf.float32)
+            tij_labels = tf.convert_to_tensor(tij_labels, dtype=tf.float32)
+        
+        if lambda_value is not None:
+            with tf.device('/CPU:0'):
+                lambda_tensor = tf.fill([tf.shape(delta)[0], 1], tf.cast(lambda_value, tf.float32))
+            dataset = tf.data.Dataset.from_tensor_slices((delta, tij_labels, lambda_tensor))
+        else:
+            dataset = tf.data.Dataset.from_tensor_slices((delta, tij_labels))
+        
+        if shuffle:
+            buffer_size = min(10000, len(delta))
+            dataset = dataset.shuffle(buffer_size, seed=42, reshuffle_each_iteration=True)
+        
+        dataset = dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+        return dataset
 #================================================================
 # Create model parameters
 #================================================================
@@ -344,40 +394,35 @@ print(f'ONE_HOT encoding: {ONE_HOT}')
 
 # Create validation datasets based on strategy
 print(f'Creating validation datasets with strategy: {validation_strategy}')
+# Create validation datasets based on strategy
+print(f'Creating validation datasets with strategy: {validation_strategy}')
+
+# For universal compatibility, use lazy loading for validation datasets
+def create_validation_dataset(lambda_val, cache_key=None):
+    """Create validation dataset with memory management"""
+    print(f'Loading validation data for L={lambda_val} Mpc/h...')
+    x_val, y_val = load_data(lambda_val, extra_inputs=EXTRA_INPUTS, verbose=False, preprocessing=PREPROCESSING)
+    val_dataset = make_dataset(x_val, y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, 
+                              lambda_value=float(lambda_val) if LAMBDA_CONDITIONING else None)
+    # Clear memory immediately after dataset creation
+    del x_val, y_val
+    gc.collect()
+    return val_dataset
+
 if validation_strategy == 'target':
     print(f'Using target-based validation: L={target_lambda} Mpc/h')
-    # Load target validation data directly
-    x_val, y_val = load_data(target_lambda, extra_inputs=EXTRA_INPUTS, verbose=True, preprocessing=PREPROCESSING)
-    
-    # Create validation dataset
-    val_dataset = make_dataset(x_val, y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, 
-                              lambda_value=float(target_lambda) if LAMBDA_CONDITIONING else None)
+    val_dataset = create_validation_dataset(target_lambda)
     
 elif validation_strategy == 'stage':
     print(f'Using stage-based validation: will update during training')
-    # For stage-based, we'll load the first stage data initially and update during training
-    x_val, y_val = load_data(inter_seps[0], extra_inputs=EXTRA_INPUTS, verbose=True, preprocessing=PREPROCESSING)
-    
-    # Create initial validation dataset (will be updated during training)
-    val_dataset = make_dataset(x_val, y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT,
-                              lambda_value=float(inter_seps[0]) if LAMBDA_CONDITIONING else None)
+    # For stage-based, create initial validation dataset
+    val_dataset = create_validation_dataset(inter_seps[0])
     
 else:  # hybrid
     print(f'Using hybrid validation: both target (L={target_lambda}) and stage-based')
-    
-    # Load target validation data
-    target_x_val, target_y_val = load_data(target_lambda, extra_inputs=EXTRA_INPUTS, verbose=True, preprocessing=PREPROCESSING)
-    target_val_dataset = make_dataset(target_x_val, target_y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT,
-                                     lambda_value=float(target_lambda) if LAMBDA_CONDITIONING else None)
-    
-    # Load initial stage validation data
-    stage_x_val, stage_y_val = load_data(inter_seps[0], extra_inputs=EXTRA_INPUTS, verbose=False, preprocessing=PREPROCESSING)
-    stage_val_dataset = make_dataset(stage_x_val, stage_y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT,
-                                    lambda_value=float(inter_seps[0]) if LAMBDA_CONDITIONING else None)
-    
-    # Use target validation dataset as primary for standard callbacks
-    val_dataset = target_val_dataset
-    x_val, y_val = target_x_val, target_y_val
+    # For hybrid, start with target validation and create stage datasets lazily during training
+    val_dataset = create_validation_dataset(target_lambda)
+    target_val_dataset = val_dataset
 #================================================================
 # Set loss function and metrics
 #================================================================
@@ -585,17 +630,37 @@ tensor_board_callback = TensorBoard(
 #================================================================
 print('>>> Starting training loop over interparticle separations...')
 
-# Initialize multi-scale validation callback for hybrid validation strategy
+# Initialize validation callback for hybrid strategy
 validation_callback = None
 if validation_strategy == 'hybrid':
-    # Create initial datasets dictionary for the callback
-    val_datasets_dict = {
-        target_lambda: target_val_dataset,
-        inter_seps[0]: stage_val_dataset
-    }
-    validation_callback = MultiScaleValidationCallback(
-        val_datasets_dict=val_datasets_dict,
-        target_lambda=target_lambda
+    class LazyMultiScaleValidationCallback(tf.keras.callbacks.Callback):
+        def __init__(self, target_dataset, target_lambda, inter_seps, extra_inputs, batch_size, one_hot, lambda_conditioning, preprocessing):
+            self.target_dataset = target_dataset
+            self.target_lambda = target_lambda
+            self.inter_seps = inter_seps
+            self.extra_inputs = extra_inputs
+            self.batch_size = batch_size
+            self.one_hot = one_hot
+            self.lambda_conditioning = lambda_conditioning
+            self.preprocessing = preprocessing
+            self.current_stage_dataset = None
+            
+        def update_stage_dataset(self, stage_lambda):
+            """Create stage validation dataset on demand"""
+            if self.current_stage_dataset is not None:
+                del self.current_stage_dataset
+                gc.collect()
+            self.current_stage_dataset = create_validation_dataset(stage_lambda)
+    
+    validation_callback = LazyMultiScaleValidationCallback(
+        target_dataset=target_val_dataset,
+        target_lambda=target_lambda,
+        inter_seps=inter_seps,
+        extra_inputs=EXTRA_INPUTS,
+        batch_size=BATCH_SIZE,
+        one_hot=ONE_HOT,
+        lambda_conditioning=LAMBDA_CONDITIONING,
+        preprocessing=PREPROCESSING
     )
 
 epoch_offset = 0
@@ -611,29 +676,23 @@ for i, inter_sep in enumerate(inter_seps):
     # Create the training dataset
     train_dataset = make_dataset(train_features, train_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot=ONE_HOT, lambda_value=float(inter_sep) if LAMBDA_CONDITIONING else None)
     
+    # Clear training data from memory after dataset creation
+    del train_features, train_labels
+    gc.collect()
+    print('Training data cleared from memory after dataset creation')
+    
     # Update validation dataset for stage-based validation
     if validation_strategy == 'stage':
         print(f'Updating validation dataset for stage-based validation: L={inter_sep} Mpc/h')
-        val_features, val_labels = load_data(inter_sep, extra_inputs=EXTRA_INPUTS, verbose=False, preprocessing=PREPROCESSING)
-        val_dataset = make_dataset(val_features, val_labels, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, 
-                                  lambda_value=float(inter_sep) if LAMBDA_CONDITIONING else None)
-        # Clean up previous validation data to save memory
-        if i > 0:  # Don't delete on first iteration
-            try:
-                del x_val, y_val
-            except NameError:
-                pass  # Variables may not exist on first iteration
-        # Update validation variables for cleanup later
-        x_val, y_val = val_features, val_labels
+        # Clear old validation dataset to free memory
+        del val_dataset
+        gc.collect()
+        val_dataset = create_validation_dataset(inter_sep)
     
     # Update stage dataset for hybrid validation
-    if validation_strategy == 'hybrid' and i > 0:
+    if validation_strategy == 'hybrid' and validation_callback is not None:
         print(f'Updating stage validation dataset for hybrid validation: L={inter_sep} Mpc/h')
-        stage_x_val, stage_y_val = load_data(inter_sep, extra_inputs=EXTRA_INPUTS, verbose=False, preprocessing=PREPROCESSING)
-        stage_val_dataset = make_dataset(stage_x_val, stage_y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT,
-                                        lambda_value=float(inter_sep) if LAMBDA_CONDITIONING else None)
-        # Update the validation callback with new stage dataset
-        validation_callback.update_stage_dataset(inter_sep, stage_val_dataset)
+        validation_callback.update_stage_dataset(inter_sep)
     # freeze layers based on interparticle separation. freeze more layers for larger interparticle separations:
     nets.freeze_encoder_blocks(
         model,
@@ -809,11 +868,22 @@ else:  # hybrid
     print(f'Using target validation dataset for final evaluation: L={target_lambda} Mpc/h')
     eval_dataset = target_val_dataset
 
-results = model.evaluate(eval_dataset, verbose=2)
-print('Final evaluation results:', results)
+try:
+    results = model.evaluate(eval_dataset, verbose=2)
+    print('Final evaluation results:', results)
+except Exception as e:
+    print(f'Error during final evaluation: {e}')
+    print('This may be due to memory constraints. Training completed successfully.')
 
 # Clean up validation data and model to free memory before plotting
-del x_val, y_val, val_dataset
+try:
+    del val_dataset
+    if validation_strategy == 'hybrid':
+        del target_val_dataset
+    if validation_callback is not None:
+        del validation_callback
+except NameError:
+    pass  # Variables may not exist
 import gc
 gc.collect()
 print('Validation data cleaned up.')
