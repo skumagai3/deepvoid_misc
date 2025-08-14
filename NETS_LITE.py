@@ -995,12 +995,21 @@ class VoidFractionMonitor(Callback):
 
             if isinstance(y_batch, dict):
               y_batch_main = y_batch.get('last_activation')
+            elif isinstance(y_batch, tuple) or isinstance(y_batch, list):
+              # For lambda conditioning: (segmentation_labels, lambda_labels)
+              y_batch_main = y_batch[0]
             else:
               y_batch_main = y_batch
-            if y_batch_main.shape[-1] > 1:
-                y_true_cls = np.argmax(y_batch_main, axis=-1)
+              
+            # Handle different label formats
+            if hasattr(y_batch_main, 'shape'):
+                if y_batch_main.shape[-1] > 1:
+                    y_true_cls = np.argmax(y_batch_main, axis=-1)
+                else:
+                    y_true_cls = y_batch_main.numpy() if hasattr(y_batch_main, 'numpy') else y_batch_main
             else:
-                y_true_cls = y_batch_main.numpy()
+                # If y_batch_main is already a tensor/array, convert appropriately
+                y_true_cls = y_batch_main.numpy() if hasattr(y_batch_main, 'numpy') else y_batch_main
 
             pred_classes.append(y_pred_cls.flatten())
             true_classes.append(y_true_cls.flatten())
@@ -1882,6 +1891,11 @@ class ComputeMetrics(Callback):
     if epoch % self.N_epochs == 0:
       X_test = self.validation_data[0]; Y_test = self.validation_data[1]
       Y_pred = self.model.predict(X_test,verbose=0) # last axis has 4 channels
+      
+      # Handle lambda conditioning: extract segmentation predictions
+      if isinstance(Y_pred, (list, tuple)):
+        Y_pred = Y_pred[0]  # Take only segmentation predictions, ignore lambda predictions
+        
       #_val_loss, _val_acc = self.model.evaluate(X_test,Y_test,verbose=0)
       # ROC_AUC needs to be ran on one-hot encoded data
       if not self.one_hot:
