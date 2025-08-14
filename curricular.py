@@ -52,9 +52,8 @@ tf.config.experimental.enable_op_determinism()
 
 # Additional workaround for libdevice issues on Picotte V100s
 import os
-os.environ['TF_XLA_FLAGS'] = '--tf_xla_enable_xla_devices=false'
 os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Reduce TF warnings
-# Disable XLA clustering to avoid libdevice dependency
+# Disable XLA clustering to avoid libdevice dependency while keeping GPUs enabled
 tf.config.optimizer.set_experimental_options({'disable_meta_optimizer': True})
 from tensorflow.keras import mixed_precision
 
