@@ -56,18 +56,18 @@ def analyze_predictions(log_file_path):
             print(f"Loss function: {loss_line[0].split('LOSS=')[1].split(',')[0].strip()}")
     
     if "void_penalty" in log_content.lower():
-        print("⚠️  Custom void penalty detected in loss function")
+        print("WARNING: Custom void penalty detected in loss function")
         print("   This may be causing the model to avoid predicting voids")
     
     # Check for attention mechanism
     if "USE_ATTENTION=True" in log_content:
-        print("✓ Using attention U-Net")
+        print("Using attention U-Net")
     else:
         print("○ Using standard U-Net")
     
     # Check for lambda conditioning
     if "LAMBDA_CONDITIONING=True" in log_content:
-        print("✓ Using lambda conditioning")
+        print("Using lambda conditioning")
     else:
         print("○ No lambda conditioning")
 

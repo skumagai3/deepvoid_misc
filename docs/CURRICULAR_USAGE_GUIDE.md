@@ -514,7 +514,7 @@ python curricular_pred.py MODEL_NAME L_PRED [OPTIONS]
 - **Features**: Specifically targets void over-prediction
 - **Parameters**: `max_void_fraction=0.7`, `penalty_factor=5.0`
 
-### 🧪 Experimental Loss Functions
+### Experimental Loss Functions
 
 #### 7. `FOCAL_CCE`
 - **Features**: Focal loss for handling class imbalance

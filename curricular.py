@@ -171,7 +171,7 @@ EXTRA_AUGMENTATION = args.EXTRA_AUGMENTATION  # Default is False unless --EXTRA_
 # Make RSD-preserving rotations the default when ADD_RSD is enabled (unless explicitly overridden)
 if ADD_RSD and not args.RSD_PRESERVING_ROTATIONS and 'RSD_PRESERVING_ROTATIONS' not in sys.argv:
     RSD_PRESERVING_ROTATIONS = True
-    print("🔄 Auto-enabling RSD-preserving rotations since --ADD_RSD is used")
+    print("Auto-enabling RSD-preserving rotations since --ADD_RSD is used")
 
 # Set up validation strategy parameters
 validation_strategy = args.VALIDATION_STRATEGY
@@ -181,15 +181,15 @@ print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS},
 
 # Validate RSD-related arguments
 if RSD_PRESERVING_ROTATIONS and not ADD_RSD:
-    print("⚠️  WARNING: --RSD_PRESERVING_ROTATIONS is enabled but --ADD_RSD is not.")
+    print("WARNING: --RSD_PRESERVING_ROTATIONS is enabled but --ADD_RSD is not.")
     print("   RSD-preserving rotations are mainly beneficial when training with Redshift Space Distortions.")
     print("   Consider adding --ADD_RSD if your data contains line-of-sight distortions.")
     
 if RSD_PRESERVING_ROTATIONS:
-    print("🔄 Using RSD-preserving rotations: only z-axis rotations (90°, 180°, 270°) + xy-flips")
+    print("Using RSD-preserving rotations: only z-axis rotations (90°, 180°, 270°) + xy-flips")
     print("   This preserves line-of-sight anisotropy but doubles the number of augmented samples (8x vs 4x)")
 else:
-    print("🔄 Using standard 3D rotations: rotations around all three axes (may disrupt RSD anisotropy)")
+    print("Using standard 3D rotations: rotations around all three axes (may disrupt RSD anisotropy)")
     
 # Validate focal loss parameters
 if LOSS != 'FOCAL_CCE' and (args.FOCAL_ALPHA != [0.6, 0.3, 0.09, 0.02] or args.FOCAL_GAMMA != 1.5):

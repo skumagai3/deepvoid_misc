@@ -4073,9 +4073,9 @@ class HybridValidationCallback(tf.keras.callbacks.Callback):
             # Warn about potential curriculum issues
             if loss_divergence > 0.5:  # More than 50% difference
                 if target_loss > stage_loss * 1.5:
-                    print(f'   ⚠️  High target loss suggests model may be overfitting to current stage')
+                    print(f'   WARNING: High target loss suggests model may be overfitting to current stage')
                 elif stage_loss > target_loss * 1.5:
-                    print(f'   ⚠️  High stage loss suggests model may be skipping intermediate learning')
+                    print(f'   WARNING: High stage loss suggests model may be skipping intermediate learning')
     
     def update_stage(self, new_stage_idx, new_stage_name):
         """Update the current stage for validation"""
