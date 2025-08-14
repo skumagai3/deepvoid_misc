@@ -109,8 +109,8 @@ optional.add_argument('--ADD_RSD', action='store_true',
 optional.add_argument('--L_VAL', type=str, default='10',
                       help='Interparticle separation for validation dataset. Default is 10.')
 optional.add_argument('--VALIDATION_STRATEGY', type=str, default='target',
-                      choices=['target', 'stage', 'hybrid'],
-                      help='Validation strategy: target (validate on final goal), stage (validate on current training stage), or hybrid (both). Default is target.')
+                      choices=['target', 'stage', 'hybrid', 'gradual'],
+                      help='Validation strategy: target (validate on final goal), stage (validate on current training stage), hybrid (both), or gradual (progressive validation complexity). Default is target.')
 optional.add_argument('--TARGET_LAMBDA', type=str, default=None,
                       help='Target lambda for final model performance (defaults to L_VAL if not specified).')
 optional.add_argument('--USE_ATTENTION', action='store_true',
@@ -409,6 +409,20 @@ def create_validation_dataset(lambda_val, cache_key=None):
     gc.collect()
     return val_dataset
 
+# Define gradual validation mapping: stage lambda -> validation lambda
+gradual_validation_map = {
+    '0.33': '0.33',  # Base density validates on base density
+    '3': '5',        # First subhalo stage validates on intermediate complexity
+    '5': '5',        # Intermediate stage validates on itself
+    '7': '10',       # Higher stages validate on final complexity
+    '10': '10'       # Final stage validates on final complexity
+}
+
+if validation_strategy == 'gradual':
+    print('Gradual validation mapping:')
+    for stage_lambda, val_lambda in gradual_validation_map.items():
+        print(f'  Training L={stage_lambda} -> Validation L={val_lambda}')
+
 if validation_strategy == 'target':
     print(f'Using target-based validation: L={target_lambda} Mpc/h')
     val_dataset = create_validation_dataset(target_lambda)
@@ -417,6 +431,13 @@ elif validation_strategy == 'stage':
     print(f'Using stage-based validation: will update during training')
     # For stage-based, create initial validation dataset
     val_dataset = create_validation_dataset(inter_seps[0])
+    
+elif validation_strategy == 'gradual':
+    print(f'Using gradual validation: progressive complexity increase')
+    # Start with validation for the first stage
+    initial_val_lambda = gradual_validation_map[inter_seps[0]]
+    print(f'Initial gradual validation: training L={inter_seps[0]} -> validation L={initial_val_lambda}')
+    val_dataset = create_validation_dataset(initial_val_lambda)
     
 else:  # hybrid
     print(f'Using hybrid validation: both target (L={target_lambda}) and stage-based')
@@ -689,8 +710,20 @@ for i, inter_sep in enumerate(inter_seps):
         gc.collect()
         val_dataset = create_validation_dataset(inter_sep)
     
+    # Update validation dataset for gradual validation strategy
+    elif validation_strategy == 'gradual':
+        current_val_lambda = gradual_validation_map[inter_sep]
+        if i == 0 or current_val_lambda != gradual_validation_map[inter_seps[i-1]]:
+            print(f'Updating validation dataset for gradual validation: training L={inter_sep} -> validation L={current_val_lambda} Mpc/h')
+            # Clear old validation dataset to free memory
+            del val_dataset
+            gc.collect()
+            val_dataset = create_validation_dataset(current_val_lambda)
+        else:
+            print(f'Keeping current validation dataset: training L={inter_sep} -> validation L={current_val_lambda} Mpc/h')
+    
     # Update stage dataset for hybrid validation
-    if validation_strategy == 'hybrid' and validation_callback is not None:
+    elif validation_strategy == 'hybrid' and validation_callback is not None:
         print(f'Updating stage validation dataset for hybrid validation: L={inter_sep} Mpc/h')
         validation_callback.update_stage_dataset(inter_sep)
     # freeze layers based on interparticle separation. freeze more layers for larger interparticle separations:
@@ -864,6 +897,10 @@ if validation_strategy == 'target':
 elif validation_strategy == 'stage':
     print(f'Using final stage validation dataset: L={inter_seps[-1]} Mpc/h')
     eval_dataset = val_dataset  # Already updated to final stage in the loop
+elif validation_strategy == 'gradual':
+    final_val_lambda = gradual_validation_map[inter_seps[-1]]
+    print(f'Using final gradual validation dataset: L={final_val_lambda} Mpc/h')
+    eval_dataset = val_dataset  # Already updated to final gradual stage in the loop
 else:  # hybrid
     print(f'Using target validation dataset for final evaluation: L={target_lambda} Mpc/h')
     eval_dataset = target_val_dataset
@@ -878,7 +915,7 @@ except Exception as e:
 # Clean up validation data and model to free memory before plotting
 try:
     del val_dataset
-    if validation_strategy == 'hybrid':
+    if validation_strategy == 'hybrid' and 'target_val_dataset' in locals():
         del target_val_dataset
     if validation_callback is not None:
         del validation_callback
