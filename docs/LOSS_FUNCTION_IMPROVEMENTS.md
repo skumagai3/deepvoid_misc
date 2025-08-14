@@ -36,17 +36,23 @@ Added new improved loss functions in a dedicated section:
 
 ### Option 1: Use the fixed class penalty (recommended)
 ```bash
-python curricular.py /content/drive/MyDrive/ 4 16 SCCE_Class_Penalty_Fixed --BATCH_SIZE 8 --USE_ATTENTION --LAMBDA_CONDITIONING --L_VAL 10
+python curricular.py /content/drive/MyDrive/ 4 16 SCCE_Class_Penalty_Fixed \
+    --BATCH_SIZE 8 --USE_ATTENTION --LAMBDA_CONDITIONING --L_VAL 10 \
+    --VALIDATION_STRATEGY gradual --PREPROCESSING robust --WARMUP_EPOCHS 5
 ```
 
 ### Option 2: Use proportion-aware loss
 ```bash
-python curricular.py /content/drive/MyDrive/ 4 16 SCCE_Proportion_Aware --BATCH_SIZE 8 --USE_ATTENTION --LAMBDA_CONDITIONING --L_VAL 10
+python curricular.py /content/drive/MyDrive/ 4 16 SCCE_Proportion_Aware \
+    --BATCH_SIZE 8 --USE_ATTENTION --LAMBDA_CONDITIONING --L_VAL 10 \
+    --VALIDATION_STRATEGY target --PREPROCESSING standard
 ```
 
 ### Option 3: Use standard SCCE (simplest)
 ```bash
-python curricular.py /content/drive/MyDrive/ 4 16 SCCE --BATCH_SIZE 8 --USE_ATTENTION --LAMBDA_CONDITIONING --L_VAL 10
+python curricular.py /content/drive/MyDrive/ 4 16 SCCE \
+    --BATCH_SIZE 8 --USE_ATTENTION --LAMBDA_CONDITIONING --L_VAL 10 \
+    --PREPROCESSING clip_extreme --WARMUP_EPOCHS 15
 ```
 
 ## Expected Improvements
@@ -56,3 +62,35 @@ python curricular.py /content/drive/MyDrive/ 4 16 SCCE --BATCH_SIZE 8 --USE_ATTE
 - More balanced confusion matrix
 
 The loss function improvements are now integrated into your existing codebase and ready for training!
+
+## New Features in 2025 Update
+
+In addition to the improved loss functions, the following new features have been added:
+
+### Advanced Validation Strategies
+- **Gradual Validation**: Progressive validation complexity increase
+- **Hybrid Validation**: Monitor both target and stage performance
+- **Stage Validation**: Dynamic validation matching training stage
+
+### Advanced Preprocessing Methods
+- **Robust**: Outlier clipping with median centering and scaling
+- **Log Transform**: Log10 transformation with standardization
+- **Clip Extreme**: Conservative outlier clipping with standardization
+
+### Memory Optimization
+- **Overlapping Subcubes**: Configurable data augmentation with spatial overlaps
+- **Memory-Efficient Prediction**: Smaller batch sizes and streaming for large datasets
+
+### Training Stability Features
+- **Learning Rate Warmup**: Gradual learning rate increase to prevent early instability
+- **TEST_MODE**: Quick testing with reduced data for debugging
+
+### Example with All New Features
+```bash
+python curricular.py /content/drive/MyDrive/ 4 16 SCCE_Class_Penalty_Fixed \
+    --USE_ATTENTION --LAMBDA_CONDITIONING --BATCH_SIZE 8 \
+    --VALIDATION_STRATEGY gradual --PREPROCESSING robust \
+    --WARMUP_EPOCHS 10 --L_VAL 10
+```
+
+This comprehensive update addresses the major issues identified and provides much more flexibility for different training scenarios.

@@ -23,10 +23,13 @@ Complete documentation for the DeepVoid cosmic void detection project.
 - **Attention U-Net** - Improved feature extraction with attention gates
 - **Lambda Conditioning** - Scale-aware training and prediction
 - **Redshift Space Distortions** - Realistic observational effects
-- **Curricular Training** - Progressive multi-scale training
+- **Curricular Training** - Progressive multi-scale training with 4 validation strategies
 - **Extra Inputs** - Galaxy colors and flux density integration
 - **Transfer Learning** - Efficient adaptation between scales
 - **Bias Diagnosis** - Automated tools to detect prediction issues
+- **Advanced Preprocessing** - 4 preprocessing methods for difficult data
+- **Learning Rate Warmup** - Gradual learning rate increase for stability
+- **Memory Optimization** - Configurable overlapping subcubes and data augmentation
 
 #### Quick Start Commands
 
@@ -39,7 +42,8 @@ python DV_MULTI_TRAIN.py /content/drive/MyDrive/ TNG 0.33 4 16 SCCE_Class_Penalt
 **Curricular Training**:
 ```bash
 python curricular.py /content/drive/MyDrive/ 4 16 SCCE_Class_Penalty_Fixed \
-    --USE_ATTENTION --LAMBDA_CONDITIONING --BATCH_SIZE 8
+    --USE_ATTENTION --LAMBDA_CONDITIONING --BATCH_SIZE 8 \
+    --VALIDATION_STRATEGY gradual --PREPROCESSING robust --WARMUP_EPOCHS 10
 ```
 
 **Transfer Learning**:

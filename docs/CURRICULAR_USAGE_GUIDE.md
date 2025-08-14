@@ -6,13 +6,51 @@ This guide covers the usage of `curricular.py` for training and `curricular_pred
 
 ## Table of Contents
 
-1. [Curricular Training (`curricular.py`)](#curricular-training)
-2. [Prediction (`curricular_pred.py`)](#prediction)
-3. [Loss Functions Guide](#loss-functions-guide)
-4. [Common Usage Examples](#common-usage-examples)
-5. [File Output Strategy](#file-output-strategy)
-6. [Troubleshooting](#troubleshooting)
-7. [Log Transform Preprocessing Explained](#log-transform-preprocessing-explained)
+1. [Key Features Summary](#key-features-summary)
+2. [Curricular Training (`curricular.py`)](#curricular-training)
+3. [Validation Strategies](#validation-strategies)
+4. [Preprocessing Methods](#preprocessing-methods)
+5. [Memory Optimization](#memory-optimization)
+6. [Prediction (`curricular_pred.py`)](#prediction)
+7. [Loss Functions Guide](#loss-functions-guide)
+8. [Common Usage Examples](#common-usage-examples)
+9. [File Output Strategy](#file-output-strategy)
+10. [Troubleshooting](#troubleshooting)
+11. [Log Transform Preprocessing Explained](#log-transform-preprocessing-explained)
+
+---
+
+## Key Features Summary
+
+The DeepVoid curricular training system includes these advanced features:
+
+### Core Features
+- **Multi-scale Curricular Learning**: Progressive training from 0.33 to 10 Mpc/h
+- **Attention U-Net Architecture**: Enhanced feature extraction with attention gates
+- **Lambda Conditioning**: Scale-aware training that adapts to different interparticle separations
+
+### Advanced Validation (4 Strategies)
+- **Target**: Validate on final goal (L=10) throughout training
+- **Stage**: Validate on current training stage (dynamic)
+- **Hybrid**: Monitor both target and stage performance
+- **Gradual**: Progressive validation complexity matching curriculum progression
+
+### Data Processing (4 Methods)
+- **Standard**: Min-max normalization to [0,1] (default)
+- **Robust**: Outlier clipping + median centering + standard scaling
+- **Log Transform**: Log10 transformation + standardization (for extreme distributions)
+- **Clip Extreme**: Conservative outlier clipping + standardization
+
+### Training Stability
+- **Learning Rate Warmup**: Gradual LR increase (0-20 epochs) for stable initialization
+- **Memory Optimization**: Configurable overlapping subcubes and rotations
+- **Improved Loss Functions**: Fixed void/wall prediction bias
+
+### Additional Features
+- **Redshift Space Distortions**: Realistic observational effects
+- **Extra Inputs**: Galaxy colors (g-r) and flux density
+- **TEST_MODE**: Quick testing with reduced datasets
+- **Comprehensive Logging**: Detailed training metrics and validation tracking
 
 ---
 
@@ -41,7 +79,7 @@ python curricular.py ROOT_DIR DEPTH FILTERS LOSS [OPTIONS]
 | `--LEARNING_RATE_PATIENCE` | 10 | Patience for learning rate reduction |
 | `--EARLY_STOP_PATIENCE` | 10 | Patience for early stopping |
 | `--L_VAL` | "10" | Interparticle separation for validation dataset |
-| `--VALIDATION_STRATEGY` | "target" | Validation strategy: 'target', 'stage', or 'hybrid' |
+| `--VALIDATION_STRATEGY` | "target" | Validation strategy: 'target', 'stage', 'hybrid', or 'gradual' |
 | `--TARGET_LAMBDA` | None | Target lambda for validation (defaults to L_VAL) |
 | `--USE_ATTENTION` | False | Use attention U-Net architecture |
 | `--LAMBDA_CONDITIONING` | False | Use lambda conditioning in the model |
@@ -50,6 +88,7 @@ python curricular.py ROOT_DIR DEPTH FILTERS LOSS [OPTIONS]
 | `--ADD_RSD` | False | Add Redshift Space Distortion to inputs |
 | `--PREPROCESSING` | "standard" | Preprocessing method: 'standard', 'robust', 'log_transform', 'clip_extreme' |
 | `--WARMUP_EPOCHS` | 0 | Number of warmup epochs with gradual learning rate increase |
+| `--NO_OVERLAPPING_SUBCUBES` | False | Disable overlapping subcubes to save memory |
 | `--FOCAL_ALPHA` | [0.6, 0.3, 0.09, 0.02] | Alpha values for focal loss [void, wall, filament, halo] |
 | `--FOCAL_GAMMA` | 1.5 | Gamma value for focal loss |
 
@@ -64,7 +103,7 @@ Curricular training progressively trains on different interparticle separations:
 
 ### Validation Strategies
 
-DeepVoid supports three different validation strategies during curricular training:
+DeepVoid supports four different validation strategies during curricular training:
 
 #### 1. Target-based Validation (Default)
 - **Purpose**: Evaluates model performance on the final goal (typically L=10 Mpc/h)
@@ -84,6 +123,17 @@ DeepVoid supports three different validation strategies during curricular traini
 - **Best for**: Comprehensive monitoring of both current and final performance
 - **Behavior**: Tracks metrics for both target dataset and current stage dataset
 
+#### 4. Gradual Validation
+- **Purpose**: Progressive validation complexity that gradually increases validation difficulty
+- **Usage**: `--VALIDATION_STRATEGY gradual`
+- **Best for**: Smoother performance transitions and reduced validation shock
+- **Behavior**: Intelligent mapping between training and validation stages:
+  - Training L=0.33 → Validation L=0.33 (base density on base density)
+  - Training L=3 → Validation L=5 (first subhalo stage on intermediate complexity)
+  - Training L=5 → Validation L=5 (intermediate stage on itself)
+  - Training L=7 → Validation L=10 (higher stages on final complexity)
+  - Training L=10 → Validation L=10 (final stage on final complexity)
+
 ### Validation Strategy Examples
 
 ```bash
@@ -95,6 +145,9 @@ python curricular.py /ifs/groups/vogeleyGrp/ 4 16 SCCE_Class_Penalty_Fixed --VAL
 
 # Hybrid: track both target and stage performance
 python curricular.py /ifs/groups/vogeleyGrp/ 4 16 SCCE_Class_Penalty_Fixed --VALIDATION_STRATEGY hybrid --TARGET_LAMBDA 10
+
+# Gradual: progressive validation complexity
+python curricular.py /ifs/groups/vogeleyGrp/ 4 16 SCCE_Class_Penalty_Fixed --VALIDATION_STRATEGY gradual
 ```
 
 ### Preprocessing Options
@@ -135,6 +188,30 @@ python curricular.py /ifs/groups/vogeleyGrp/ 4 16 SCCE --WARMUP_EPOCHS 10 --LEAR
 - Prevents early training instability
 - Helps with convergence when using large learning rates
 - Particularly useful with complex loss functions
+
+---
+
+## Memory Optimization
+
+### Overlapping Subcubes with Rotations
+
+By default, curricular training uses overlapping subcubes with rotations for better data augmentation. This can be disabled to save memory:
+
+#### Usage
+```bash
+# Disable overlapping subcubes to save memory (may reduce model performance)
+python curricular.py /ifs/groups/vogeleyGrp/ 4 16 SCCE --NO_OVERLAPPING_SUBCUBES
+```
+
+#### Benefits of Default (Overlapping) Approach:
+- Better data augmentation through spatial overlaps
+- Improved model generalization
+- More robust training with limited data
+
+#### Benefits of Disabled Approach:
+- Reduced memory usage (useful for large models or limited GPU memory)
+- Faster data loading
+- Simpler data pipeline
 
 ---
 
@@ -379,6 +456,57 @@ python curricular_pred.py MODEL_NAME L_PRED [OPTIONS]
 ---
 
 ## Common Usage Examples
+
+### 1. Production Training (Recommended)
+```bash
+# Best practices with all recommended features
+python curricular.py /ifs/groups/vogeleyGrp/ 4 16 SCCE_Class_Penalty_Fixed \
+    --USE_ATTENTION --LAMBDA_CONDITIONING --BATCH_SIZE 8 \
+    --VALIDATION_STRATEGY gradual --PREPROCESSING robust \
+    --WARMUP_EPOCHS 10 --L_VAL 10
+```
+
+### 2. Fast Experimental Training
+```bash
+# Quick testing with reduced complexity
+python curricular.py /ifs/groups/vogeleyGrp/ 3 8 SCCE \
+    --BATCH_SIZE 16 --VALIDATION_STRATEGY stage \
+    --N_EPOCHS_PER_INTER_SEP 20
+```
+
+### 3. Memory-Constrained Training
+```bash
+# For limited GPU memory
+python curricular.py /ifs/groups/vogeleyGrp/ 4 16 SCCE_Class_Penalty_Fixed \
+    --BATCH_SIZE 4 --NO_OVERLAPPING_SUBCUBES \
+    --VALIDATION_STRATEGY target --L_VAL 10
+```
+
+### 4. Difficult Data with Extreme Values
+```bash
+# For data with outliers or extreme distributions
+python curricular.py /ifs/groups/vogeleyGrp/ 4 16 SCCE \
+    --PREPROCESSING log_transform --WARMUP_EPOCHS 20 \
+    --LEARNING_RATE 1e-5 --VALIDATION_STRATEGY hybrid
+```
+
+### 5. Comprehensive Monitoring Training
+```bash
+# With hybrid validation and all stability features
+python curricular.py /ifs/groups/vogeleyGrp/ 4 16 SCCE_Proportion_Aware \
+    --USE_ATTENTION --LAMBDA_CONDITIONING --BATCH_SIZE 8 \
+    --VALIDATION_STRATEGY hybrid --TARGET_LAMBDA 10 \
+    --PREPROCESSING clip_extreme --WARMUP_EPOCHS 5
+```
+
+### 6. Conservative Stable Training
+```bash
+# Maximum stability for problematic datasets
+python curricular.py /ifs/groups/vogeleyGrp/ 3 16 SCCE \
+    --BATCH_SIZE 16 --LEARNING_RATE 1e-5 \
+    --PREPROCESSING standard --WARMUP_EPOCHS 25 \
+    --VALIDATION_STRATEGY target --L_VAL 10
+```
 
 ### Basic Training (Recommended)
 
