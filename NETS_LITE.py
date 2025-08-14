@@ -517,8 +517,15 @@ def load_dataset(file_in, SUBGRID, OFF, preproc='mm',sigma=None,return_int=False
   elif preproc == 'std':
     den = standardize(den); print('Ran preprocessing to scale density s.t. mean=0 and std dev = 1!')
   elif preproc == 'log_transform':
-    # Log transform for density fields
-    den = np.log10(den + 1e-6)  # Add small constant to avoid log(0)
+    # Log transform for density fields - handle zeros and negative values properly
+    den = np.where(den <= 0, 1e-6, den)  # Replace zeros/negatives with small positive value
+    den = np.log10(den)  # Safe log transform
+    
+    # Check for any remaining inf/nan values
+    if np.any(np.isinf(den)) or np.any(np.isnan(den)):
+      print("Warning: inf/nan values found after log transform. Replacing with safe values.")
+      den = np.where(np.isinf(den) | np.isnan(den), np.log10(1e-6), den)
+    
     std_val = np.std(den)
     if std_val == 0:
       print("Warning: Standard deviation is zero after log transform. Using zeros array.")

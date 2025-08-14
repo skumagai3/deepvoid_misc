@@ -49,6 +49,13 @@ nets.K.set_image_data_format('channels_last')
 # NOTE turning off XLA JIT compilation for now, as it can cause issues with some models
 tf.config.optimizer.set_jit(False)  # if you're using XLA
 tf.config.experimental.enable_op_determinism()
+
+# Additional workaround for libdevice issues on Picotte V100s
+import os
+os.environ['TF_XLA_FLAGS'] = '--tf_xla_enable_xla_devices=false'
+os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Reduce TF warnings
+# Disable XLA clustering to avoid libdevice dependency
+tf.config.optimizer.set_experimental_options({'disable_meta_optimizer': True})
 from tensorflow.keras import mixed_precision
 
 # Disable mixed precision on Picotte V100s to avoid NaN issues with custom loss functions
@@ -380,10 +387,18 @@ def make_dataset(delta, tij_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot
     # Memory-efficient tensor conversion
     try:
         print(f'Creating dataset with batch size {batch_size} and shuffle={shuffle}...')
-        if lambda_value is not None:
-            # Create lambda conditioning tensor
+        
+        if lambda_value is not None and LAMBDA_CONDITIONING:
+            # Create lambda conditioning tensor with the same batch size as features
             lambda_tensor = np.full((delta.shape[0], 1), lambda_value, dtype=np.float32)
-            dataset = tf.data.Dataset.from_tensor_slices((delta, tij_labels, lambda_tensor))
+            
+            # For lambda conditioning, we need to structure inputs as a dictionary
+            # to match the model's expected input names
+            dataset = tf.data.Dataset.from_tensor_slices(({
+                'density_input': delta,
+                'lambda_input': lambda_tensor
+            }, tij_labels))
+            
         else:
             dataset = tf.data.Dataset.from_tensor_slices((delta, tij_labels))
         
@@ -408,15 +423,20 @@ def make_dataset(delta, tij_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot
         
         # Fallback: explicit CPU tensor creation
         with tf.device('/CPU:0'):
-            delta = tf.convert_to_tensor(delta, dtype=tf.float32)
-            tij_labels = tf.convert_to_tensor(tij_labels, dtype=tf.float32)
+            delta_tensor = tf.convert_to_tensor(delta, dtype=tf.float32)
+            labels_tensor = tf.convert_to_tensor(tij_labels, dtype=tf.float32)
         
-        if lambda_value is not None:
+        if lambda_value is not None and LAMBDA_CONDITIONING:
             with tf.device('/CPU:0'):
-                lambda_tensor = tf.fill([tf.shape(delta)[0], 1], tf.cast(lambda_value, tf.float32))
-            dataset = tf.data.Dataset.from_tensor_slices((delta, tij_labels, lambda_tensor))
+                lambda_tensor = tf.fill([tf.shape(delta_tensor)[0], 1], tf.cast(lambda_value, tf.float32))
+            
+            # Create structured input dataset
+            dataset = tf.data.Dataset.from_tensor_slices(({
+                'density_input': delta_tensor,
+                'lambda_input': lambda_tensor
+            }, labels_tensor))
         else:
-            dataset = tf.data.Dataset.from_tensor_slices((delta, tij_labels))
+            dataset = tf.data.Dataset.from_tensor_slices((delta_tensor, labels_tensor))
         
         if shuffle:
             buffer_size = min(10000, len(delta))
@@ -946,7 +966,13 @@ for i, inter_sep in enumerate(inter_seps):
     
     # Clean up training data to free memory for next iteration
     if i < len(inter_seps) - 1:  # Don't delete on last iteration
-        del train_features, train_labels, train_dataset
+        # Only delete variables if they exist
+        if 'train_dataset' in locals():
+            del train_dataset
+        if 'train_features' in locals():
+            del train_features
+        if 'train_labels' in locals():
+            del train_labels
         import gc
         gc.collect()
         print('Training data cleaned up for memory management.')
