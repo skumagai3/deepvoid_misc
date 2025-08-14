@@ -20,21 +20,21 @@ def test_help_message():
         print("Testing argument parsing...")
         for arg in new_args:
             if arg in help_output:
-                print(f"✓ {arg} found in help message")
+                print(f"PASS: {arg} found in help message")
             else:
-                print(f"✗ {arg} NOT found in help message")
+                print(f"FAIL: {arg} NOT found in help message")
         
         # Check for preprocessing choices
         if 'robust' in help_output and 'log_transform' in help_output:
-            print("✓ Preprocessing choices found")
+            print("PASS: Preprocessing choices found")
         else:
-            print("✗ Preprocessing choices missing")
+            print("FAIL: Preprocessing choices missing")
             
         # Check for validation strategy choices
         if 'target' in help_output and 'stage' in help_output and 'hybrid' in help_output:
-            print("✓ Validation strategy choices found")
+            print("PASS: Validation strategy choices found")
         else:
-            print("✗ Validation strategy choices missing")
+            print("FAIL: Validation strategy choices missing")
             
         print("\nFirst 20 lines of help output:")
         print('\n'.join(help_output.split('\n')[:20]))

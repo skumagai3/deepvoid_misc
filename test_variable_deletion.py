@@ -16,32 +16,32 @@ def test_variable_deletion():
     # Test the fixed deletion logic
     if 'train_dataset' in locals():
         del train_dataset
-        print("✓ Deleted train_dataset")
+        print("PASS: Deleted train_dataset")
     if 'train_features' in locals():
         del train_features  
-        print("✓ Deleted train_features")
+        print("PASS: Deleted train_features")
     if 'train_labels' in locals():
         del train_labels
-        print("✓ Deleted train_labels")
+        print("PASS: Deleted train_labels")
     
     # Case 2: Some variables don't exist (should not crash)
     print("\nCase 2: Variables already deleted (should not crash)")
     try:
         if 'train_dataset' in locals():
             del train_dataset
-            print("✓ train_dataset already deleted")
+            print("PASS: train_dataset already deleted")
         else:
-            print("✓ train_dataset not in locals - skipped")
+            print("PASS: train_dataset not in locals - skipped")
         if 'train_features' in locals():
             del train_features
-            print("✓ train_features already deleted")
+            print("PASS: train_features already deleted")
         else:
-            print("✓ train_features not in locals - skipped")
+            print("PASS: train_features not in locals - skipped")
         if 'train_labels' in locals():
             del train_labels
-            print("✓ train_labels already deleted")
+            print("PASS: train_labels already deleted")
         else:
-            print("✓ train_labels not in locals - skipped")
+            print("PASS: train_labels not in locals - skipped")
             
         print("✅ Variable deletion logic works correctly!")
         return True

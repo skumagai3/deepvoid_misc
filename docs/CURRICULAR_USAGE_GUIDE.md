@@ -313,7 +313,7 @@ python curricular_pred.py ROOT_DIR MODEL_NAME L_PRED [OPTIONS]
 
 ### Important Note on Preprocessing
 
-⚠️ **The preprocessing method used for prediction MUST match the preprocessing method used during training**
+**WARNING: The preprocessing method used for prediction MUST match the preprocessing method used during training**
 
 Models trained with different preprocessing methods need to be evaluated with their respective preprocessing. Check your training logs or configuration to determine which preprocessing was used.
 

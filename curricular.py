@@ -925,37 +925,91 @@ if validation_strategy == 'hybrid':
 
 epoch_offset = 0
 for i, inter_sep in enumerate(inter_seps):
-    # Aggressive GPU memory cleanup before each new stage (except first)
+    print(f'Starting training for interparticle separation L={inter_sep} Mpc/h (stage {i+1}/{len(inter_seps)})...')
+    
+    # Aggressive memory cleanup before each new stage (including first stage for safety)
     if i > 0:
-        print(f'Clearing GPU memory before L={inter_sep} Mpc/h stage...')
+        print(f'Performing aggressive memory cleanup before L={inter_sep} Mpc/h stage...')
+        
+        # Delete training dataset from previous iteration
+        try:
+            del train_dataset
+            print('Previous training dataset deleted')
+        except:
+            pass
+        
+        # Force garbage collection multiple times
+        for _ in range(3):
+            gc.collect()
+        
+        # Clear TensorFlow session and backend state
         tf.keras.backend.clear_session()
-        gc.collect()
+        
         # Force GPU memory cleanup
         if tf.config.list_physical_devices('GPU'):
             try:
-                import os
-                import subprocess
-                # Clear GPU cache
-                subprocess.run(['nvidia-smi', '--gpu-reset'], check=False, 
-                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            except:
-                pass
-        print('GPU memory cleanup completed')
-    
-    print(f'Starting training for interparticle separation L={inter_sep} Mpc/h...')
+                # Reset GPU memory allocation
+                gpus = tf.config.list_physical_devices('GPU')
+                for gpu in gpus:
+                    tf.config.experimental.set_memory_growth(gpu, True)
+                print('GPU memory growth reset')
+            except Exception as e:
+                print(f'GPU memory reset failed (non-critical): {e}')
+        
+        print('Memory cleanup completed')
+        
+        # Monitor memory after cleanup
+        try:
+            import psutil
+            memory_usage = psutil.virtual_memory()
+            print(f'System RAM after cleanup: {memory_usage.used / 1024**3:.2f} GB used / {memory_usage.total / 1024**3:.2f} GB total ({memory_usage.percent:.1f}%)')
+        except:
+            pass
     # Only show detailed stats for the first data load
     verbose_load = (i == 0)
+    
+    # Monitor memory before data loading
+    try:
+        import psutil
+        memory_before = psutil.virtual_memory()
+        print(f'System RAM before loading L={inter_sep}: {memory_before.used / 1024**3:.2f} GB used / {memory_before.total / 1024**3:.2f} GB total ({memory_before.percent:.1f}%)')
+    except:
+        pass
+    
     if EXTRA_INPUTS is not None:
         train_features, train_labels = load_data(inter_sep, extra_inputs=EXTRA_INPUTS, verbose=verbose_load, preprocessing=PREPROCESSING)
     else:
         train_features, train_labels = load_data(inter_sep, verbose=verbose_load, preprocessing=PREPROCESSING)
+    
+    # Monitor memory after data loading
+    try:
+        import psutil
+        memory_after = psutil.virtual_memory()
+        memory_increase = (memory_after.used - memory_before.used) / 1024**3
+        print(f'System RAM after loading L={inter_sep}: {memory_after.used / 1024**3:.2f} GB used / {memory_after.total / 1024**3:.2f} GB total ({memory_after.percent:.1f}%)')
+        print(f'Memory increase from data loading: +{memory_increase:.2f} GB')
+    except:
+        pass
+        
     print(f'Training data loaded for L={inter_sep}. Features shape: {train_features.shape}, Labels shape: {train_labels.shape}')
     # Create the training dataset
     train_dataset = make_dataset(train_features, train_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot=ONE_HOT, lambda_value=float(inter_sep) if LAMBDA_CONDITIONING else None)
     
     # Clear training data from memory after dataset creation
     del train_features, train_labels
-    gc.collect()
+    
+    # Force garbage collection multiple times to ensure cleanup
+    for _ in range(3):
+        gc.collect()
+    
+    # Monitor memory after dataset creation and cleanup
+    try:
+        import psutil
+        memory_after_dataset = psutil.virtual_memory()
+        print(f'System RAM after dataset creation & cleanup: {memory_after_dataset.used / 1024**3:.2f} GB used / {memory_after_dataset.total / 1024**3:.2f} GB total ({memory_after_dataset.percent:.1f}%)')
+    except:
+        pass
+        
     print('Training data cleared from memory after dataset creation')
     
     # Monitor GPU memory after data loading
@@ -1119,6 +1173,17 @@ for i, inter_sep in enumerate(inter_seps):
     print(f'Combined history now has {len(combined_history["epoch"])} total epochs')
     print(f'Current epoch range: {epoch_numbers[0]} to {epoch_numbers[-1]}')
     
+    # Clean up training data and history after each stage
+    del history
+    print(f'Stage {i+1} cleanup: training history deleted')
+    
+    # Monitor memory after training stage
+    try:
+        import psutil
+        memory_usage = psutil.virtual_memory()
+        print(f'System RAM after stage {i+1}: {memory_usage.used / 1024**3:.2f} GB used / {memory_usage.total / 1024**3:.2f} GB total ({memory_usage.percent:.1f}%)')
+    except:
+        pass
 
     if early_stop.stopped_epoch > 0:
         print(f'Early stopping triggered after {early_stop.stopped_epoch} epochs.')
