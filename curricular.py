@@ -406,12 +406,11 @@ def make_dataset(delta, tij_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot
             # Create lambda conditioning tensor with the same batch size as features
             lambda_tensor = np.full((delta.shape[0], 1), lambda_value, dtype=np.float32)
             
-            # For lambda conditioning, we need to structure inputs as a dictionary
-            # to match the model's expected input names
-            dataset = tf.data.Dataset.from_tensor_slices(({
-                'density_input': delta,
-                'lambda_input': lambda_tensor
-            }, tij_labels))
+            # For lambda conditioning, model expects [inputs, lambda_input] and outputs [segmentation, lambda_pred]
+            # We need to provide labels for both: [segmentation_labels, lambda_labels]
+            lambda_labels = np.full((tij_labels.shape[0], 1), lambda_value, dtype=np.float32)
+            
+            dataset = tf.data.Dataset.from_tensor_slices(((delta, lambda_tensor), (tij_labels, lambda_labels)))
             
         else:
             dataset = tf.data.Dataset.from_tensor_slices((delta, tij_labels))
@@ -443,12 +442,10 @@ def make_dataset(delta, tij_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot
         if lambda_value is not None and LAMBDA_CONDITIONING:
             with tf.device('/CPU:0'):
                 lambda_tensor = tf.fill([tf.shape(delta_tensor)[0], 1], tf.cast(lambda_value, tf.float32))
+                lambda_labels = tf.fill([tf.shape(labels_tensor)[0], 1], tf.cast(lambda_value, tf.float32))
             
-            # Create structured input dataset
-            dataset = tf.data.Dataset.from_tensor_slices(({
-                'density_input': delta_tensor,
-                'lambda_input': lambda_tensor
-            }, labels_tensor))
+            # Create dataset with multiple inputs and outputs for lambda conditioning
+            dataset = tf.data.Dataset.from_tensor_slices(((delta_tensor, lambda_tensor), (labels_tensor, lambda_labels)))
         else:
             dataset = tf.data.Dataset.from_tensor_slices((delta_tensor, labels_tensor))
         
@@ -631,22 +628,22 @@ with strategy.scope():
             lambda_conditioning=LAMBDA_CONDITIONING
         )
     # Create optimizer with gradient clipping to prevent NaN losses
-    base_optimizer = tf.keras.optimizers.Adam(
+    optimizer = tf.keras.optimizers.Adam(
         learning_rate=LEARNING_RATE, 
         clipnorm=1.0  # Use gradient norm clipping only
     )
-    optimizer = mixed_precision.LossScaleOptimizer(base_optimizer)
     
     if LAMBDA_CONDITIONING:
+        # For lambda conditioning, the model outputs [segmentation, lambda_pred]
         model.compile(
-            optimizer=optimizer,  # Use loss-scaled optimizer
-            loss={'last_activation': loss_fn, 'lambda_output': 'mse'},
-            loss_weights={'last_activation': 1.0, 'lambda_output': 0.1},
-            metrics={'last_activation': metrics, 'lambda_output': 'mse'}
+            optimizer=optimizer,
+            loss=[loss_fn, 'mse'],  # Use list format for multiple outputs
+            loss_weights=[1.0, 0.1],  # Main loss gets full weight, lambda loss gets 0.1
+            metrics=[metrics, 'mse']  # Segmentation metrics and lambda MSE
         )
     else:
         model.compile(
-            optimizer=optimizer,  # Use loss-scaled optimizer
+            optimizer=optimizer,
             loss=loss_fn,
             metrics=metrics
         )
@@ -665,22 +662,17 @@ class WarmupLearningRateScheduler(tf.keras.callbacks.Callback):
         if epoch < self.warmup_epochs:
             # Gradual warmup from target_lr/10 to target_lr
             warmup_lr = self.target_lr * (0.1 + 0.9 * (epoch + 1) / self.warmup_epochs)
-            # Handle loss-scaled optimizer
+            # Direct access to optimizer (no more LossScaleOptimizer)
             optimizer = self.model.optimizer
-            if hasattr(optimizer, '_optimizer'):
-                # This is a LossScaleOptimizer, access the inner optimizer
-                base_optimizer = optimizer._optimizer
-            else:
-                base_optimizer = optimizer
                 
             # Use the most compatible method to set learning rate
             try:
                 # Try the newer method first
-                base_optimizer.learning_rate.assign(warmup_lr)
+                optimizer.learning_rate.assign(warmup_lr)
             except AttributeError:
                 try:
                     # Fallback to older method
-                    tf.keras.backend.set_value(base_optimizer.learning_rate, warmup_lr)
+                    tf.keras.backend.set_value(optimizer.learning_rate, warmup_lr)
                 except Exception as e:
                     print(f"Warning: Could not set learning rate during warmup: {e}")
                     
@@ -689,17 +681,12 @@ class WarmupLearningRateScheduler(tf.keras.callbacks.Callback):
         elif epoch == self.warmup_epochs:
             # Set to target learning rate after warmup
             optimizer = self.model.optimizer
-            if hasattr(optimizer, '_optimizer'):
-                # This is a LossScaleOptimizer, access the inner optimizer
-                base_optimizer = optimizer._optimizer
-            else:
-                base_optimizer = optimizer
                 
             try:
-                base_optimizer.learning_rate.assign(self.target_lr)
+                optimizer.learning_rate.assign(self.target_lr)
             except AttributeError:
                 try:
-                    tf.keras.backend.set_value(base_optimizer.learning_rate, self.target_lr)
+                    tf.keras.backend.set_value(optimizer.learning_rate, self.target_lr)
                 except Exception as e:
                     print(f"Warning: Could not set target learning rate: {e}")
             if self.verbose:
@@ -867,13 +854,13 @@ for i, inter_sep in enumerate(inter_seps):
         # recompile the model after freezing layers
         if LAMBDA_CONDITIONING:
             model.compile(
-                optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
-                loss={'last_activation': loss_fn, 'lambda_output': 'mse'},
-                loss_weights={'last_activation': 1.0, 'lambda_output': 0.1},
-                metrics={'last_activation': metrics, 'lambda_output': 'mse'})
+                optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE, clipnorm=1.0),
+                loss=[loss_fn, 'mse'],  # Use list format for multiple outputs
+                loss_weights=[1.0, 0.1],  # Main loss gets full weight, lambda loss gets 0.1
+                metrics=[metrics, 'mse'])  # Segmentation metrics and lambda MSE
         else:
             model.compile(
-                optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE),
+                optimizer=tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE, clipnorm=1.0),
                 loss=loss_fn,
                 metrics=metrics)
         print(f'Model recompiled after freezing layers for interparticle separation L={inter_sep}')
