@@ -140,6 +140,10 @@ optional.add_argument('--FOCAL_GAMMA', type=float, default=1.5,
                       help='Gamma value for focal loss. Default: 1.5')
 optional.add_argument('--NO_OVERLAPPING_SUBCUBES', action='store_true',
                       help='Disable overlapping subcubes with rotations to save memory. Default is to use overlapping subcubes with rotations for better data augmentation.')
+optional.add_argument('--RSD_PRESERVING_ROTATIONS', action='store_true',
+                      help='Use RSD-preserving rotations (only around z-axis and xy-flips) instead of full 3D rotations. Recommended when ADD_RSD is used to preserve line-of-sight anisotropy.')
+optional.add_argument('--EXTRA_AUGMENTATION', action='store_true',
+                      help='Enable extra data augmentation (doubles the number of rotated samples). Default is lighter augmentation for better memory usage.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 DEPTH = args.DEPTH
@@ -161,13 +165,32 @@ WARMUP_EPOCHS = args.WARMUP_EPOCHS
 FOCAL_ALPHA = args.FOCAL_ALPHA
 FOCAL_GAMMA = args.FOCAL_GAMMA
 USE_OVERLAPPING_SUBCUBES = not args.NO_OVERLAPPING_SUBCUBES  # Default is True unless --NO_OVERLAPPING_SUBCUBES is specified
+RSD_PRESERVING_ROTATIONS = args.RSD_PRESERVING_ROTATIONS  # Default is False unless --RSD_PRESERVING_ROTATIONS is specified
+EXTRA_AUGMENTATION = args.EXTRA_AUGMENTATION  # Default is False unless --EXTRA_AUGMENTATION is specified
+
+# Make RSD-preserving rotations the default when ADD_RSD is enabled (unless explicitly overridden)
+if ADD_RSD and not args.RSD_PRESERVING_ROTATIONS and 'RSD_PRESERVING_ROTATIONS' not in sys.argv:
+    RSD_PRESERVING_ROTATIONS = True
+    print("🔄 Auto-enabling RSD-preserving rotations since --ADD_RSD is used")
 
 # Set up validation strategy parameters
 validation_strategy = args.VALIDATION_STRATEGY
 target_lambda = args.TARGET_LAMBDA or args.L_VAL  # Default to L_VAL if not specified
 
-print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, L_VAL={L_VAL}, USE_ATTENTION={USE_ATTENTION}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}, N_EPOCHS_PER_INTER_SEP={N_EPOCHS_PER_INTER_SEP}, VALIDATION_STRATEGY={validation_strategy}, TARGET_LAMBDA={target_lambda}, PREPROCESSING={PREPROCESSING}, WARMUP_EPOCHS={WARMUP_EPOCHS}, FOCAL_ALPHA={FOCAL_ALPHA}, FOCAL_GAMMA={FOCAL_GAMMA}, USE_OVERLAPPING_SUBCUBES={USE_OVERLAPPING_SUBCUBES}')
+print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, L_VAL={L_VAL}, USE_ATTENTION={USE_ATTENTION}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}, N_EPOCHS_PER_INTER_SEP={N_EPOCHS_PER_INTER_SEP}, VALIDATION_STRATEGY={validation_strategy}, TARGET_LAMBDA={target_lambda}, PREPROCESSING={PREPROCESSING}, WARMUP_EPOCHS={WARMUP_EPOCHS}, FOCAL_ALPHA={FOCAL_ALPHA}, FOCAL_GAMMA={FOCAL_GAMMA}, USE_OVERLAPPING_SUBCUBES={USE_OVERLAPPING_SUBCUBES}, RSD_PRESERVING_ROTATIONS={RSD_PRESERVING_ROTATIONS}, EXTRA_AUGMENTATION={EXTRA_AUGMENTATION}')
 
+# Validate RSD-related arguments
+if RSD_PRESERVING_ROTATIONS and not ADD_RSD:
+    print("⚠️  WARNING: --RSD_PRESERVING_ROTATIONS is enabled but --ADD_RSD is not.")
+    print("   RSD-preserving rotations are mainly beneficial when training with Redshift Space Distortions.")
+    print("   Consider adding --ADD_RSD if your data contains line-of-sight distortions.")
+    
+if RSD_PRESERVING_ROTATIONS:
+    print("🔄 Using RSD-preserving rotations: only z-axis rotations (90°, 180°, 270°) + xy-flips")
+    print("   This preserves line-of-sight anisotropy but doubles the number of augmented samples (8x vs 4x)")
+else:
+    print("🔄 Using standard 3D rotations: rotations around all three axes (may disrupt RSD anisotropy)")
+    
 # Validate focal loss parameters
 if LOSS != 'FOCAL_CCE' and (args.FOCAL_ALPHA != [0.6, 0.3, 0.09, 0.02] or args.FOCAL_GAMMA != 1.5):
     print(f"WARNING: Focal loss parameters specified (alpha={FOCAL_ALPHA}, gamma={FOCAL_GAMMA}) but loss function is '{LOSS}', not 'FOCAL_CCE'. These parameters will be ignored.")
@@ -286,26 +309,100 @@ def load_data(inter_sep, extra_inputs=None, verbose=True, preprocessing='standar
     # Choose consistent subcube extraction method based on USE_OVERLAPPING_SUBCUBES flag
     if USE_OVERLAPPING_SUBCUBES:
         # Use overlapping subcubes with rotations for maximum data augmentation
-        features, labels = nets.load_dataset_all_overlap(
-            FILE_DEN=data_file,
-            FILE_MSK=FILE_MASK,
-            SUBGRID=SUBGRID,
-            OFF=OFF,
-            preprocessing=preprocessing
-        )
-        if verbose:
-            print(f'Using overlapping subcubes with rotations for main features')
+        if RSD_PRESERVING_ROTATIONS:
+            if EXTRA_AUGMENTATION:
+                # Heavy RSD-preserving: 8x samples per subcube (4 z-rotations + 4 with xy-flips)
+                features, labels = nets.load_dataset_all_overlap_rsd_preserving(
+                    FILE_DEN=data_file,
+                    FILE_MSK=FILE_MASK,
+                    SUBGRID=SUBGRID,
+                    OFF=OFF,
+                    preprocessing=preprocessing
+                )
+                if verbose:
+                    print(f'Using overlapping subcubes with heavy RSD-preserving rotations (8x per subcube)')
+            else:
+                # Light RSD-preserving: 4x samples per subcube (4 z-rotations only)
+                features, labels = nets.load_dataset_all_overlap_rsd_preserving_light(
+                    FILE_DEN=data_file,
+                    FILE_MSK=FILE_MASK,
+                    SUBGRID=SUBGRID,
+                    OFF=OFF,
+                    preprocessing=preprocessing
+                )
+                if verbose:
+                    print(f'Using overlapping subcubes with light RSD-preserving rotations (4x per subcube)')
+        else:
+            if EXTRA_AUGMENTATION:
+                # Heavy standard: 4x samples per subcube (full 3D rotations)
+                features, labels = nets.load_dataset_all_overlap(
+                    FILE_DEN=data_file,
+                    FILE_MSK=FILE_MASK,
+                    SUBGRID=SUBGRID,
+                    OFF=OFF,
+                    preprocessing=preprocessing
+                )
+                if verbose:
+                    print(f'Using overlapping subcubes with heavy 3D rotations (4x per subcube)')
+            else:
+                # Light standard: 2x samples per subcube (original + one rotation)
+                features, labels = nets.load_dataset_all_overlap_light(
+                    FILE_DEN=data_file,
+                    FILE_MSK=FILE_MASK,
+                    SUBGRID=SUBGRID,
+                    OFF=OFF,
+                    preprocessing=preprocessing
+                )
+                if verbose:
+                    print(f'Using overlapping subcubes with light augmentation (2x per subcube)')
     else:
         # Use non-overlapping subcubes with rotations for memory efficiency
-        features, labels = nets.load_dataset_all(
-            FILE_DEN=data_file,
-            FILE_MASK=FILE_MASK,
-            SUBGRID=SUBGRID,
-            verbose=verbose,
-            preprocessing=preprocessing
-        )
-        if verbose:
-            print(f'Using non-overlapping subcubes with rotations for main features')
+        if RSD_PRESERVING_ROTATIONS:
+            if EXTRA_AUGMENTATION:
+                # Heavy RSD-preserving: 8x samples per subcube (4 z-rotations + 4 with xy-flips)
+                features, labels = nets.load_dataset_all_rsd_preserving(
+                    FILE_DEN=data_file,
+                    FILE_MASK=FILE_MASK,
+                    SUBGRID=SUBGRID,
+                    verbose=verbose,
+                    preprocessing=preprocessing
+                )
+                if verbose:
+                    print(f'Using non-overlapping subcubes with heavy RSD-preserving rotations (8x per subcube)')
+            else:
+                # Light RSD-preserving: 4x samples per subcube (4 z-rotations only)
+                features, labels = nets.load_dataset_all_rsd_preserving_light(
+                    FILE_DEN=data_file,
+                    FILE_MASK=FILE_MASK,
+                    SUBGRID=SUBGRID,
+                    verbose=verbose,
+                    preprocessing=preprocessing
+                )
+                if verbose:
+                    print(f'Using non-overlapping subcubes with light RSD-preserving rotations (4x per subcube)')
+        else:
+            if EXTRA_AUGMENTATION:
+                # Heavy standard: 4x samples per subcube (full 3D rotations)
+                features, labels = nets.load_dataset_all(
+                    FILE_DEN=data_file,
+                    FILE_MASK=FILE_MASK,
+                    SUBGRID=SUBGRID,
+                    verbose=verbose,
+                    preprocessing=preprocessing
+                )
+                if verbose:
+                    print(f'Using non-overlapping subcubes with heavy 3D rotations (4x per subcube)')
+            else:
+                # Light standard: 2x samples per subcube (original + one rotation)
+                features, labels = nets.load_dataset_all_light(
+                    FILE_DEN=data_file,
+                    FILE_MASK=FILE_MASK,
+                    SUBGRID=SUBGRID,
+                    verbose=verbose,
+                    preprocessing=preprocessing
+                )
+                if verbose:
+                    print(f'Using non-overlapping subcubes with light augmentation (2x per subcube)')
     
     if extra_inputs is not None:
         extra_input_file = DATA_PATH + EXTRA_INPUTS_INFO[inter_sep]
@@ -317,23 +414,53 @@ def load_data(inter_sep, extra_inputs=None, verbose=True, preprocessing='standar
             # Use overlapping subcubes (like load_dataset) but ensure same number of samples as features
             extra_input = nets.load_dataset(extra_input_file, SUBGRID, OFF, preprocessing)
             
-            # We need to replicate the data to match the 4 rotations in load_dataset_all_overlap
-            # load_dataset_all_overlap produces nbins³ × 4 samples, but load_dataset produces nbins³ samples
-            # So we need to replicate each sample 4 times to match the rotation augmentation
-            n_samples = extra_input.shape[0]
-            extra_input_rotated = np.zeros((n_samples * 4, SUBGRID, SUBGRID, SUBGRID, 1), dtype=extra_input.dtype)
-            
-            for i in range(n_samples):
-                # Original
-                extra_input_rotated[i*4, :, :, :, 0] = extra_input[i, :, :, :, 0]
-                # 3 rotations (matching the rotation pattern in load_dataset_all_overlap)
-                extra_input_rotated[i*4+1, :, :, :, 0] = volumes.rotate_cube(extra_input[i, :, :, :, 0], 2)
-                extra_input_rotated[i*4+2, :, :, :, 0] = volumes.rotate_cube(extra_input[i, :, :, :, 0], 1) 
-                extra_input_rotated[i*4+3, :, :, :, 0] = volumes.rotate_cube(extra_input[i, :, :, :, 0], 0)
-            
-            extra_input = extra_input_rotated
-            if verbose:
-                print(f'Applied 4 rotations to extra inputs to match main features')
+            if RSD_PRESERVING_ROTATIONS:
+                # We need to replicate the data to match the 8 RSD-preserving rotations
+                # RSD-preserving produces nbins³ × 8 samples, but load_dataset produces nbins³ samples
+                # So we need to replicate each sample 8 times to match the rotation augmentation
+                n_samples = extra_input.shape[0]
+                extra_input_rotated = np.zeros((n_samples * 8, SUBGRID, SUBGRID, SUBGRID, 1), dtype=extra_input.dtype)
+                
+                for i in range(n_samples):
+                    # Original
+                    extra_input_rotated[i*8, :, :, :, 0] = extra_input[i, :, :, :, 0]
+                    # 3 z-axis rotations
+                    extra_input_rotated[i*8+1, :, :, :, 0] = volumes.rotate_cube(extra_input[i, :, :, :, 0], 2)
+                    temp_rot = volumes.rotate_cube(extra_input[i, :, :, :, 0], 2)
+                    extra_input_rotated[i*8+2, :, :, :, 0] = volumes.rotate_cube(temp_rot, 2)
+                    temp_rot = volumes.rotate_cube(temp_rot, 2)
+                    extra_input_rotated[i*8+3, :, :, :, 0] = volumes.rotate_cube(temp_rot, 2)
+                    
+                    # Same 4 rotations with xy-flip
+                    flipped = np.flip(extra_input[i, :, :, :, 0], axis=0)
+                    extra_input_rotated[i*8+4, :, :, :, 0] = flipped
+                    extra_input_rotated[i*8+5, :, :, :, 0] = volumes.rotate_cube(flipped, 2)
+                    temp_rot = volumes.rotate_cube(flipped, 2)
+                    extra_input_rotated[i*8+6, :, :, :, 0] = volumes.rotate_cube(temp_rot, 2)
+                    temp_rot = volumes.rotate_cube(temp_rot, 2)
+                    extra_input_rotated[i*8+7, :, :, :, 0] = volumes.rotate_cube(temp_rot, 2)
+                
+                extra_input = extra_input_rotated
+                if verbose:
+                    print(f'Applied 8 RSD-preserving rotations to extra inputs to match main features')
+            else:
+                # We need to replicate the data to match the 4 rotations in load_dataset_all_overlap
+                # load_dataset_all_overlap produces nbins³ × 4 samples, but load_dataset produces nbins³ samples
+                # So we need to replicate each sample 4 times to match the rotation augmentation
+                n_samples = extra_input.shape[0]
+                extra_input_rotated = np.zeros((n_samples * 4, SUBGRID, SUBGRID, SUBGRID, 1), dtype=extra_input.dtype)
+                
+                for i in range(n_samples):
+                    # Original
+                    extra_input_rotated[i*4, :, :, :, 0] = extra_input[i, :, :, :, 0]
+                    # 3 rotations (matching the rotation pattern in load_dataset_all_overlap)
+                    extra_input_rotated[i*4+1, :, :, :, 0] = volumes.rotate_cube(extra_input[i, :, :, :, 0], 2)
+                    extra_input_rotated[i*4+2, :, :, :, 0] = volumes.rotate_cube(extra_input[i, :, :, :, 0], 1) 
+                    extra_input_rotated[i*4+3, :, :, :, 0] = volumes.rotate_cube(extra_input[i, :, :, :, 0], 0)
+                
+                extra_input = extra_input_rotated
+                if verbose:
+                    print(f'Applied 4 rotations to extra inputs to match main features')
         else:
             # Use non-overlapping subcubes - need to create a custom loader for extra inputs
             # that matches the non-overlapping pattern of load_dataset_all but for single files
@@ -347,21 +474,57 @@ def load_data(inter_sep, extra_inputs=None, verbose=True, preprocessing='standar
                 den = nets.minmax(den)
             # Add other preprocessing methods as needed
             
-            # Extract non-overlapping subcubes with 4 rotations (matching load_dataset_all pattern)
+            # Extract non-overlapping subcubes with rotations (matching load_dataset_all pattern)
             n_bins = den.shape[0] // SUBGRID
-            extra_input = np.zeros(((n_bins**3)*4, SUBGRID, SUBGRID, SUBGRID, 1), dtype=np.float32)
-            
-            cont = 0
-            for i in range(n_bins):
-                for j in range(n_bins):
-                    for k in range(n_bins):
-                        sub_den = den[i*SUBGRID:(i+1)*SUBGRID, j*SUBGRID:(j+1)*SUBGRID, k*SUBGRID:(k+1)*SUBGRID]
-                        # Original + 3 rotations (matching load_dataset_all pattern exactly)
-                        extra_input[cont,:,:,:,0] = sub_den
-                        extra_input[cont+1,:,:,:,0] = volumes.rotate_cube(sub_den, 2)
-                        extra_input[cont+2,:,:,:,0] = volumes.rotate_cube(sub_den, 1)
-                        extra_input[cont+3,:,:,:,0] = volumes.rotate_cube(sub_den, 0)
-                        cont += 4
+            if RSD_PRESERVING_ROTATIONS:
+                # 8 RSD-preserving rotations (4 z-axis + 4 z-axis with xy-flip)
+                extra_input = np.zeros(((n_bins**3)*8, SUBGRID, SUBGRID, SUBGRID, 1), dtype=np.float32)
+                
+                cont = 0
+                for i in range(n_bins):
+                    for j in range(n_bins):
+                        for k in range(n_bins):
+                            sub_den = den[i*SUBGRID:(i+1)*SUBGRID, j*SUBGRID:(j+1)*SUBGRID, k*SUBGRID:(k+1)*SUBGRID]
+                            
+                            # Original + 3 z-axis rotations
+                            extra_input[cont,:,:,:,0] = sub_den
+                            extra_input[cont+1,:,:,:,0] = volumes.rotate_cube(sub_den.copy(), 2)
+                            temp_rot = volumes.rotate_cube(sub_den.copy(), 2)
+                            extra_input[cont+2,:,:,:,0] = volumes.rotate_cube(temp_rot, 2)
+                            temp_rot = volumes.rotate_cube(temp_rot, 2)
+                            extra_input[cont+3,:,:,:,0] = volumes.rotate_cube(temp_rot, 2)
+                            
+                            # Same 4 rotations with xy-flip
+                            sub_den_flip = np.flip(sub_den, axis=0)
+                            extra_input[cont+4,:,:,:,0] = sub_den_flip
+                            extra_input[cont+5,:,:,:,0] = volumes.rotate_cube(sub_den_flip.copy(), 2)
+                            temp_rot = volumes.rotate_cube(sub_den_flip.copy(), 2)
+                            extra_input[cont+6,:,:,:,0] = volumes.rotate_cube(temp_rot, 2)
+                            temp_rot = volumes.rotate_cube(temp_rot, 2)
+                            extra_input[cont+7,:,:,:,0] = volumes.rotate_cube(temp_rot, 2)
+                            
+                            cont += 8
+                            
+                if verbose:
+                    print(f'Applied 8 RSD-preserving rotations to extra inputs for non-overlapping subcubes')
+            else:
+                # 4 traditional rotations (around all axes)
+                extra_input = np.zeros(((n_bins**3)*4, SUBGRID, SUBGRID, SUBGRID, 1), dtype=np.float32)
+                
+                cont = 0
+                for i in range(n_bins):
+                    for j in range(n_bins):
+                        for k in range(n_bins):
+                            sub_den = den[i*SUBGRID:(i+1)*SUBGRID, j*SUBGRID:(j+1)*SUBGRID, k*SUBGRID:(k+1)*SUBGRID]
+                            # Original + 3 rotations (matching load_dataset_all pattern exactly)
+                            extra_input[cont,:,:,:,0] = sub_den
+                            extra_input[cont+1,:,:,:,0] = volumes.rotate_cube(sub_den, 2)
+                            extra_input[cont+2,:,:,:,0] = volumes.rotate_cube(sub_den, 1)
+                            extra_input[cont+3,:,:,:,0] = volumes.rotate_cube(sub_den, 0)
+                            cont += 4
+                            
+                if verbose:
+                    print(f'Applied 4 traditional rotations to extra inputs for non-overlapping subcubes')
             
             if verbose:
                 print(f'Extracted non-overlapping subcubes with 4 rotations for extra inputs')
@@ -464,6 +627,8 @@ if UNIFORM_FLAG:
     MODEL_NAME += '_uniform'
 if ADD_RSD:
     MODEL_NAME += '_RSD'
+if RSD_PRESERVING_ROTATIONS:
+    MODEL_NAME += '_RSDrot'
 if USE_ATTENTION:
     MODEL_NAME += '_attention'
 if LAMBDA_CONDITIONING:

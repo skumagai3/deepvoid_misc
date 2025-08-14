@@ -503,6 +503,845 @@ def load_dataset_all_overlap(FILE_DEN, FILE_MSK, SUBGRID, OFF, preproc='mm', sig
   return X_all_overlap.astype('float32'), Y_all_overlap.astype('int8')
 
 #---------------------------------------------------------
+# RSD-preserving versions of data loading functions
+# Only rotate around z-axis and optionally flip in xy-plane
+# to preserve line-of-sight anisotropy
+#---------------------------------------------------------
+def load_dataset_all_overlap_rsd_preserving(FILE_DEN, FILE_MSK, SUBGRID, OFF, preproc='mm', sigma=None, preprocessing=None):
+  '''
+  RSD-preserving version of load_dataset_all_overlap.
+  Only rotates around z-axis (90°, 180°, 270°) and optionally flips in xy-plane.
+  This preserves line-of-sight anisotropy for redshift space distortions.
+  '''
+  print(f'Reading volume: {FILE_DEN}... ')
+  den = volumes.read_fvolume(FILE_DEN)
+  if sigma is not None:
+    den = ndi.gaussian_filter(den,sigma,mode='wrap')
+    print(f'Smoothed density with a Gaussian kernel of size {sigma}')
+  print(f'Reading mask: {FILE_MSK}...')
+  msk = volumes.read_fvolume(FILE_MSK)
+  # print mask populations:
+  _, cnts = np.unique(msk,return_counts=True)
+  for val in cnts:
+    print(f'% of population: {val/den.shape[0]**3 * 100}')
+  summary(den); summary(msk)
+  
+  # Handle new preprocessing methods (same as regular version)
+  if preprocessing is not None:
+    if preprocessing == 'standard':
+      den = minmax(den)
+      print('Ran standard preprocessing to scale density to [0,1]!')
+      print('\nNew summary statistics: ')
+      summary(den)
+    elif preprocessing == 'robust':
+      den_clipped = np.clip(den, np.percentile(den, 1), np.percentile(den, 99))
+      std_val = np.std(den_clipped)
+      if std_val == 0:
+        print("Warning: Standard deviation is zero after clipping. Using zeros array.")
+        den = np.zeros_like(den_clipped)
+      else:
+        den = (den_clipped - np.median(den_clipped)) / std_val
+        den = np.clip(den, -3, 3)
+      print('Ran robust preprocessing with outlier clipping and capping!')
+      print('\nNew summary statistics: ')
+      summary(den)
+    elif preprocessing == 'log_transform':
+      den = np.log10(den + 1e-6)
+      std_val = np.std(den)
+      if std_val == 0:
+        print("Warning: Standard deviation is zero after log transform. Using zeros array.")
+        den = np.zeros_like(den)
+      else:
+        den = (den - np.mean(den)) / std_val
+      print('Ran log transform preprocessing!')
+      print('\nNew summary statistics: ')
+      summary(den)
+    elif preprocessing == 'clip_extreme':
+      den = np.clip(den, np.percentile(den, 0.1), np.percentile(den, 99.9))
+      den = standardize(den)
+      print('Ran extreme value clipping and standardization!')
+      print('\nNew summary statistics: ')
+      summary(den)
+  else:
+    # Use legacy preprocessing methods
+    if preproc == 'mm':
+      den = minmax(den)
+      print('Ran preprocessing to scale density to [0,1]!')
+      print('\nNew summary statistics for density field: ')
+      summary(den)
+    if preproc == 'std':
+      den = standardize(den)
+      print('Ran preprocessing by dividing density/mask by std dev and subtracting by the mean! ')
+      print('\nNew summary statistics for density field: ')
+      summary(den)
+      
+  nbins = den.shape[0]//SUBGRID + (den.shape[0]//SUBGRID - 1)
+  # Using 8 augmentations: 4 z-rotations + 4 z-rotations with xy-flip
+  print(f'Number of overlapping subcubes (RSD-preserving): {8*nbins**3}')
+  X_all_overlap = np.ndarray(((nbins**3)*8, SUBGRID, SUBGRID, SUBGRID, 1))
+  Y_all_overlap = np.ndarray(((nbins**3)*8, SUBGRID, SUBGRID, SUBGRID, 1))
+  
+  # loop over overlapping subcubes with RSD-preserving rotations
+  cont = 0
+  for i in range(nbins):
+    off_i = SUBGRID*i - OFF*i
+    for j in range(nbins):
+      off_j = SUBGRID*j - OFF*j
+      for k in range(nbins):
+        off_k = SUBGRID*k - OFF*k
+        # define subcube:
+        sub_den = den[off_i:off_i+SUBGRID,off_j:off_j+SUBGRID,off_k:off_k+SUBGRID]
+        sub_msk = msk[off_i:off_i+SUBGRID,off_j:off_j+SUBGRID,off_k:off_k+SUBGRID]
+        
+        # Original (0°)
+        X_all_overlap[cont,:,:,:,0] = sub_den
+        Y_all_overlap[cont,:,:,:,0] = sub_msk
+        cont += 1
+        
+        # Z-axis rotation 90°
+        sub_den_rot = np.rot90(sub_den, k=1, axes=(0,1))  # Rotate in xy-plane
+        sub_msk_rot = np.rot90(sub_msk, k=1, axes=(0,1))
+        X_all_overlap[cont,:,:,:,0] = sub_den_rot
+        Y_all_overlap[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+        
+        # Z-axis rotation 180°
+        sub_den_rot = np.rot90(sub_den, k=2, axes=(0,1))
+        sub_msk_rot = np.rot90(sub_msk, k=2, axes=(0,1))
+        X_all_overlap[cont,:,:,:,0] = sub_den_rot
+        Y_all_overlap[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+        
+        # Z-axis rotation 270°
+        sub_den_rot = np.rot90(sub_den, k=3, axes=(0,1))
+        sub_msk_rot = np.rot90(sub_msk, k=3, axes=(0,1))
+        X_all_overlap[cont,:,:,:,0] = sub_den_rot
+        Y_all_overlap[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+        
+        # Same 4 rotations with xy-flip
+        sub_den_flip = np.flip(sub_den, axis=0)  # Flip along x-axis
+        sub_msk_flip = np.flip(sub_msk, axis=0)
+        
+        # Flipped original (0°)
+        X_all_overlap[cont,:,:,:,0] = sub_den_flip
+        Y_all_overlap[cont,:,:,:,0] = sub_msk_flip
+        cont += 1
+        
+        # Flipped 90°
+        sub_den_rot = np.rot90(sub_den_flip, k=1, axes=(0,1))
+        sub_msk_rot = np.rot90(sub_msk_flip, k=1, axes=(0,1))
+        X_all_overlap[cont,:,:,:,0] = sub_den_rot
+        Y_all_overlap[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+        
+        # Flipped 180°
+        sub_den_rot = np.rot90(sub_den_flip, k=2, axes=(0,1))
+        sub_msk_rot = np.rot90(sub_msk_flip, k=2, axes=(0,1))
+        X_all_overlap[cont,:,:,:,0] = sub_den_rot
+        Y_all_overlap[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+        
+        # Flipped 270°
+        sub_den_rot = np.rot90(sub_den_flip, k=3, axes=(0,1))
+        sub_msk_rot = np.rot90(sub_msk_flip, k=3, axes=(0,1))
+        X_all_overlap[cont,:,:,:,0] = sub_den_rot
+        Y_all_overlap[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+        
+  print(f'RSD-preserving augmentation: Generated {cont} samples (8x per subcube)')
+  gc.collect()
+  return X_all_overlap.astype('float32'), Y_all_overlap.astype('int8')
+
+
+def load_dataset_all_overlap_rsd_preserving_light(FILE_DEN, FILE_MSK, SUBGRID, OFF, preproc='mm', sigma=None, preprocessing=None):
+  '''
+  Lighter RSD-preserving version with 4x augmentation instead of 8x.
+  Only rotates around z-axis (90°, 180°, 270°) without xy-flips.
+  Good balance between RSD preservation and memory usage.
+  '''
+  print(f'Reading volume: {FILE_DEN}... ')
+  den = volumes.read_fvolume(FILE_DEN)
+  if sigma is not None:
+    den = ndi.gaussian_filter(den,sigma,mode='wrap')
+    print(f'Smoothed density with a Gaussian kernel of size {sigma}')
+  print(f'Reading mask: {FILE_MSK}...')
+  msk = volumes.read_fvolume(FILE_MSK)
+  # print mask populations:
+  _, cnts = np.unique(msk,return_counts=True)
+  for val in cnts:
+    print(f'% of population: {val/den.shape[0]**3 * 100}')
+  summary(den); summary(msk)
+  
+  # Handle new preprocessing methods (same as regular version)
+  if preprocessing is not None:
+    if preprocessing == 'standard':
+      den = minmax(den)
+      print('Ran standard preprocessing to scale density to [0,1]!')
+      print('\nNew summary statistics: ')
+      summary(den)
+    elif preprocessing == 'robust':
+      den_clipped = np.clip(den, np.percentile(den, 1), np.percentile(den, 99))
+      std_val = np.std(den_clipped)
+      if std_val == 0:
+        print("Warning: Standard deviation is zero after clipping. Using zeros array.")
+        den = np.zeros_like(den_clipped)
+      else:
+        den = (den_clipped - np.median(den_clipped)) / std_val
+        den = np.clip(den, -3, 3)
+      print('Ran robust preprocessing with outlier clipping and capping!')
+      print('\nNew summary statistics: ')
+      summary(den)
+    elif preprocessing == 'log_transform':
+      den = np.log10(den + 1e-6)
+      std_val = np.std(den)
+      if std_val == 0:
+        print("Warning: Standard deviation is zero after log transform. Using zeros array.")
+        den = np.zeros_like(den)
+      else:
+        den = (den - np.mean(den)) / std_val
+      print('Ran log transform preprocessing!')
+      print('\nNew summary statistics: ')
+      summary(den)
+    elif preprocessing == 'clip_extreme':
+      den = np.clip(den, np.percentile(den, 0.1), np.percentile(den, 99.9))
+      den = standardize(den)
+      print('Ran extreme value clipping and standardization!')
+      print('\nNew summary statistics: ')
+      summary(den)
+  else:
+    # Use legacy preprocessing methods
+    if preproc == 'mm':
+      den = minmax(den)
+      print('Ran preprocessing to scale density to [0,1]!')
+      print('\nNew summary statistics for density field: ')
+      summary(den)
+    if preproc == 'std':
+      den = standardize(den)
+      print('Ran preprocessing by dividing density/mask by std dev and subtracting by the mean! ')
+      print('\nNew summary statistics for density field: ')
+      summary(den)
+      
+  nbins = den.shape[0]//SUBGRID + (den.shape[0]//SUBGRID - 1)
+  # Using 4 augmentations: 4 z-rotations only (no flips)
+  print(f'Number of overlapping subcubes (light RSD-preserving): {4*nbins**3}')
+  X_all_overlap = np.ndarray(((nbins**3)*4, SUBGRID, SUBGRID, SUBGRID, 1))
+  Y_all_overlap = np.ndarray(((nbins**3)*4, SUBGRID, SUBGRID, SUBGRID, 1))
+  
+  # loop over overlapping subcubes with light RSD-preserving rotations
+  cont = 0
+  for i in range(nbins):
+    off_i = SUBGRID*i - OFF*i
+    for j in range(nbins):
+      off_j = SUBGRID*j - OFF*j
+      for k in range(nbins):
+        off_k = SUBGRID*k - OFF*k
+        # define subcube:
+        sub_den = den[off_i:off_i+SUBGRID,off_j:off_j+SUBGRID,off_k:off_k+SUBGRID]
+        sub_msk = msk[off_i:off_i+SUBGRID,off_j:off_j+SUBGRID,off_k:off_k+SUBGRID]
+        
+        # Original (0°)
+        X_all_overlap[cont,:,:,:,0] = sub_den
+        Y_all_overlap[cont,:,:,:,0] = sub_msk
+        cont += 1
+        
+        # Z-axis rotation 90°
+        sub_den_rot = np.rot90(sub_den, k=1, axes=(0,1))  # Rotate in xy-plane
+        sub_msk_rot = np.rot90(sub_msk, k=1, axes=(0,1))
+        X_all_overlap[cont,:,:,:,0] = sub_den_rot
+        Y_all_overlap[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+        
+        # Z-axis rotation 180°
+        sub_den_rot = np.rot90(sub_den, k=2, axes=(0,1))
+        sub_msk_rot = np.rot90(sub_msk, k=2, axes=(0,1))
+        X_all_overlap[cont,:,:,:,0] = sub_den_rot
+        Y_all_overlap[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+        
+        # Z-axis rotation 270°
+        sub_den_rot = np.rot90(sub_den, k=3, axes=(0,1))
+        sub_msk_rot = np.rot90(sub_msk, k=3, axes=(0,1))
+        X_all_overlap[cont,:,:,:,0] = sub_den_rot
+        Y_all_overlap[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+        
+  print(f'Light RSD-preserving augmentation: Generated {cont} samples (4x per subcube)')
+  gc.collect()
+  return X_all_overlap.astype('float32'), Y_all_overlap.astype('int8')
+
+
+def load_dataset_all_rsd_preserving_light(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=True, sigma=None, binary_mask=False, verbose=True, preprocessing=None):
+  '''
+  Lighter RSD-preserving version with 4x augmentation instead of 8x.
+  Only rotates around z-axis without xy-flips.
+  '''
+  print(f'Reading volume: {FILE_DEN}... ')
+  den = volumes.read_fvolume(FILE_DEN)
+  den_shp = den.shape
+  print(f'Reading mask: {FILE_MASK}...')
+  msk = volumes.read_fvolume(FILE_MASK)
+  if sigma is not None:
+    den = ndi.gaussian_filter(den,sigma,mode='wrap')
+    print(f'Smoothed density with a Gaussian kernel of size {sigma}')
+  # print mask populations:
+  _, cnts = np.unique(msk,return_counts=True)
+  for val in cnts:
+    print(f'% of population: {val/den.shape[0]**3 * 100}')
+  
+  if verbose:
+    summary(den); summary(msk)
+  
+  if binary_mask == True:
+    print('Converting mask to binary...')
+    msk = convert_to_binary_mask(msk)
+    if verbose:
+      summary(msk)
+
+  # Handle new preprocessing methods (same as regular version)
+  if preprocessing is not None:
+    if preprocessing == 'standard':
+      den = minmax(den)
+      if verbose:
+        print('Ran standard preprocessing to scale density to [0,1]!')
+        print('\nNew summary statistics: ')
+        summary(den)
+    elif preprocessing == 'robust':
+      den_clipped = np.clip(den, np.percentile(den, 1), np.percentile(den, 99))
+      std_val = np.std(den_clipped)
+      if std_val == 0:
+        print("Warning: Standard deviation is zero after clipping. Using zeros array.")
+        den = np.zeros_like(den_clipped)
+      else:
+        den = (den_clipped - np.median(den_clipped)) / std_val
+        den = np.clip(den, -3, 3)
+      if verbose:
+        print('Ran robust preprocessing with outlier clipping and capping!')
+        print('\nNew summary statistics: ')
+        summary(den)
+    elif preprocessing == 'log_transform':
+      den = np.log10(den + 1e-6)
+      std_val = np.std(den)
+      if std_val == 0:
+        print("Warning: Standard deviation is zero after log transform. Using zeros array.")
+        den = np.zeros_like(den)
+      else:
+        den = (den - np.mean(den)) / std_val
+      if verbose:
+        print('Ran log transform preprocessing!')
+        print('\nNew summary statistics: ')
+        summary(den)
+    elif preprocessing == 'clip_extreme':
+      den = np.clip(den, np.percentile(den, 0.1), np.percentile(den, 99.9))
+      den = standardize(den)
+      if verbose:
+        print('Ran extreme value clipping and standardization!')
+        print('\nNew summary statistics: ')
+        summary(den)
+  else:
+    # Use legacy preprocessing methods
+    if preproc == 'mm':
+      den = minmax(den)
+      if verbose:
+        print('Ran preprocessing to scale density to [0,1]!')
+        print('\nNew summary statistics: ')
+        summary(den)
+    if preproc == 'std':
+      den = standardize(den)
+      if verbose:
+        print('Ran preprocessing by dividing density/mask by std dev and subtracting by the mean! ')
+        print('\nNew summary statistics: ')
+        summary(den)
+        
+  n_bins = den_shp[0] // SUBGRID
+
+  cont = 0 
+  # Using 4 augmentations: 4 z-rotations only (no flips)  
+  X_all = np.zeros(shape=((n_bins**3)*4, SUBGRID,SUBGRID,SUBGRID,1))
+  if classification == False:
+    Y_all = np.ndarray(((n_bins**3)*4, SUBGRID,SUBGRID,SUBGRID,1),dtype=np.float16)
+  else:
+    Y_all = np.ndarray(((n_bins**3)*4, SUBGRID,SUBGRID,SUBGRID,1),dtype=np.int8)
+
+  for i in range(n_bins):
+    for j in range(n_bins):
+      for k in range(n_bins):
+        sub_den = den[i*SUBGRID:(i+1)*SUBGRID, j*SUBGRID:(j+1)*SUBGRID, k*SUBGRID:(k+1)*SUBGRID]
+        sub_msk = msk[i*SUBGRID:(i+1)*SUBGRID, j*SUBGRID:(j+1)*SUBGRID, k*SUBGRID:(k+1)*SUBGRID]
+        
+        # Original (0°)
+        X_all[cont,:,:,:,0] = sub_den
+        Y_all[cont,:,:,:,0] = sub_msk
+        cont += 1
+
+        # Z-axis rotation 90° (only around z-axis, preserves RSD)
+        sub_den_rot = volumes.rotate_cube(sub_den.copy(), 2)  # axis=2 is z-axis rotation
+        sub_msk_rot = volumes.rotate_cube(sub_msk.copy(), 2)
+        X_all[cont,:,:,:,0] = sub_den_rot
+        Y_all[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+
+        # Z-axis rotation 180°
+        sub_den_rot = volumes.rotate_cube(sub_den.copy(), 2)
+        sub_den_rot = volumes.rotate_cube(sub_den_rot, 2)
+        sub_msk_rot = volumes.rotate_cube(sub_msk.copy(), 2)
+        sub_msk_rot = volumes.rotate_cube(sub_msk_rot, 2)
+        X_all[cont,:,:,:,0] = sub_den_rot
+        Y_all[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+
+        # Z-axis rotation 270°
+        sub_den_rot = volumes.rotate_cube(sub_den.copy(), 2)
+        sub_den_rot = volumes.rotate_cube(sub_den_rot, 2)
+        sub_den_rot = volumes.rotate_cube(sub_den_rot, 2)
+        sub_msk_rot = volumes.rotate_cube(sub_msk.copy(), 2)
+        sub_msk_rot = volumes.rotate_cube(sub_msk_rot, 2)
+        sub_msk_rot = volumes.rotate_cube(sub_msk_rot, 2)
+        X_all[cont,:,:,:,0] = sub_den_rot
+        Y_all[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+
+  X_all = X_all.astype('float32')
+  Y_all = Y_all.astype('int8')
+  
+  # Check for NaN values before returning
+  if np.any(np.isnan(X_all)):
+    print("ERROR: NaN values detected in feature array!")
+    print(f"Number of NaN values: {np.sum(np.isnan(X_all))}")
+    print(f"Preprocessing method used: {preprocessing or preproc}")
+    X_all = np.nan_to_num(X_all, nan=0.0, posinf=0.0, neginf=0.0)
+    print("NaN values replaced with zeros.")
+  
+  if np.any(np.isnan(Y_all)):
+    print("ERROR: NaN values detected in label array!")
+    Y_all = np.nan_to_num(Y_all, nan=0.0, posinf=0.0, neginf=0.0)
+    print("NaN values in labels replaced with zeros.")
+  
+  print(f'Light RSD-preserving augmentation: Generated {cont} samples (4x per subcube)')
+  gc.collect()
+  return X_all, Y_all
+
+
+def load_dataset_all_light(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=True, sigma=None, binary_mask=False, verbose=True, preprocessing=None):
+  '''
+  Lighter version of load_dataset_all with 2x augmentation instead of 4x.
+  Only does original + one 90° rotation around z-axis.
+  '''
+  print(f'Reading volume: {FILE_DEN}... ')
+  den = volumes.read_fvolume(FILE_DEN)
+  den_shp = den.shape
+  print(f'Reading mask: {FILE_MASK}...')
+  msk = volumes.read_fvolume(FILE_MASK)
+  if sigma is not None:
+    den = ndi.gaussian_filter(den,sigma,mode='wrap')
+    print(f'Smoothed density with a Gaussian kernel of size {sigma}')
+  # print mask populations:
+  _, cnts = np.unique(msk,return_counts=True)
+  for val in cnts:
+    print(f'% of population: {val/den.shape[0]**3 * 100}')
+  
+  if verbose:
+    summary(den); summary(msk)
+  
+  if binary_mask == True:
+    print('Converting mask to binary...')
+    msk = convert_to_binary_mask(msk)
+    if verbose:
+      summary(msk)
+
+  # Handle new preprocessing methods (same as regular version)
+  if preprocessing is not None:
+    if preprocessing == 'standard':
+      den = minmax(den)
+      if verbose:
+        print('Ran standard preprocessing to scale density to [0,1]!')
+        print('\nNew summary statistics: ')
+        summary(den)
+    elif preprocessing == 'robust':
+      den_clipped = np.clip(den, np.percentile(den, 1), np.percentile(den, 99))
+      std_val = np.std(den_clipped)
+      if std_val == 0:
+        print("Warning: Standard deviation is zero after clipping. Using zeros array.")
+        den = np.zeros_like(den_clipped)
+      else:
+        den = (den_clipped - np.median(den_clipped)) / std_val
+        den = np.clip(den, -3, 3)
+      if verbose:
+        print('Ran robust preprocessing with outlier clipping and capping!')
+        print('\nNew summary statistics: ')
+        summary(den)
+    elif preprocessing == 'log_transform':
+      den = np.log10(den + 1e-6)
+      std_val = np.std(den)
+      if std_val == 0:
+        print("Warning: Standard deviation is zero after log transform. Using zeros array.")
+        den = np.zeros_like(den)
+      else:
+        den = (den - np.mean(den)) / std_val
+      if verbose:
+        print('Ran log transform preprocessing!')
+        print('\nNew summary statistics: ')
+        summary(den)
+    elif preprocessing == 'clip_extreme':
+      den = np.clip(den, np.percentile(den, 0.1), np.percentile(den, 99.9))
+      den = standardize(den)
+      if verbose:
+        print('Ran extreme value clipping and standardization!')
+        print('\nNew summary statistics: ')
+        summary(den)
+  else:
+    # Use legacy preprocessing methods
+    if preproc == 'mm':
+      den = minmax(den)
+      if verbose:
+        print('Ran preprocessing to scale density to [0,1]!')
+        print('\nNew summary statistics: ')
+        summary(den)
+    if preproc == 'std':
+      den = standardize(den)
+      if verbose:
+        print('Ran preprocessing by dividing density/mask by std dev and subtracting by the mean! ')
+        print('\nNew summary statistics: ')
+        summary(den)
+        
+  n_bins = den_shp[0] // SUBGRID
+
+  cont = 0 
+  # Using 2 augmentations: original + one rotation  
+  X_all = np.zeros(shape=((n_bins**3)*2, SUBGRID,SUBGRID,SUBGRID,1))
+  if classification == False:
+    Y_all = np.ndarray(((n_bins**3)*2, SUBGRID,SUBGRID,SUBGRID,1),dtype=np.float16)
+  else:
+    Y_all = np.ndarray(((n_bins**3)*2, SUBGRID,SUBGRID,SUBGRID,1),dtype=np.int8)
+
+  for i in range(n_bins):
+    for j in range(n_bins):
+      for k in range(n_bins):
+        sub_den = den[i*SUBGRID:(i+1)*SUBGRID, j*SUBGRID:(j+1)*SUBGRID, k*SUBGRID:(k+1)*SUBGRID]
+        sub_msk = msk[i*SUBGRID:(i+1)*SUBGRID, j*SUBGRID:(j+1)*SUBGRID, k*SUBGRID:(k+1)*SUBGRID]
+        
+        # Original (0°)
+        X_all[cont,:,:,:,0] = sub_den
+        Y_all[cont,:,:,:,0] = sub_msk
+        cont += 1
+
+        # One rotation (90° around z-axis to preserve RSD if present)
+        sub_den_rot = volumes.rotate_cube(sub_den.copy(), 2)  # axis=2 is z-axis rotation
+        sub_msk_rot = volumes.rotate_cube(sub_msk.copy(), 2)
+        X_all[cont,:,:,:,0] = sub_den_rot
+        Y_all[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+
+  X_all = X_all.astype('float32')
+  Y_all = Y_all.astype('int8')
+  
+  # Check for NaN values before returning
+  if np.any(np.isnan(X_all)):
+    print("ERROR: NaN values detected in feature array!")
+    print(f"Number of NaN values: {np.sum(np.isnan(X_all))}")
+    print(f"Preprocessing method used: {preprocessing or preproc}")
+    X_all = np.nan_to_num(X_all, nan=0.0, posinf=0.0, neginf=0.0)
+    print("NaN values replaced with zeros.")
+  
+  if np.any(np.isnan(Y_all)):
+    print("ERROR: NaN values detected in label array!")
+    Y_all = np.nan_to_num(Y_all, nan=0.0, posinf=0.0, neginf=0.0)
+    print("NaN values in labels replaced with zeros.")
+  
+  print(f'Light augmentation: Generated {cont} samples (2x per subcube)')
+  gc.collect()
+  return X_all, Y_all
+
+
+def load_dataset_all_overlap_light(FILE_DEN, FILE_MSK, SUBGRID, OFF, preproc='mm', sigma=None, preprocessing=None):
+  '''
+  Lighter version of load_dataset_all_overlap with 2x augmentation instead of 4x.
+  Only does original + 90° z-axis rotation.
+  '''
+  print(f'Reading volume: {FILE_DEN}... ')
+  den = volumes.read_fvolume(FILE_DEN)
+  if sigma is not None:
+    den = ndi.gaussian_filter(den,sigma,mode='wrap')
+    print(f'Smoothed density with a Gaussian kernel of size {sigma}')
+  print(f'Reading mask: {FILE_MSK}...')
+  msk = volumes.read_fvolume(FILE_MSK)
+  # print mask populations:
+  _, cnts = np.unique(msk,return_counts=True)
+  for val in cnts:
+    print(f'% of population: {val/den.shape[0]**3 * 100}')
+  summary(den); summary(msk)
+  
+  # Handle new preprocessing methods (same as regular version)
+  if preprocessing is not None:
+    if preprocessing == 'standard':
+      den = minmax(den)
+      print('Ran standard preprocessing to scale density to [0,1]!')
+      print('\nNew summary statistics: ')
+      summary(den)
+    elif preprocessing == 'robust':
+      den_clipped = np.clip(den, np.percentile(den, 1), np.percentile(den, 99))
+      std_val = np.std(den_clipped)
+      if std_val == 0:
+        print("Warning: Standard deviation is zero after clipping. Using zeros array.")
+        den = np.zeros_like(den_clipped)
+      else:
+        den = (den_clipped - np.median(den_clipped)) / std_val
+        den = np.clip(den, -3, 3)
+      print('Ran robust preprocessing with outlier clipping and capping!')
+      print('\nNew summary statistics: ')
+      summary(den)
+    elif preprocessing == 'log_transform':
+      den = np.log10(den + 1e-6)
+      std_val = np.std(den)
+      if std_val == 0:
+        print("Warning: Standard deviation is zero after log transform. Using zeros array.")
+        den = np.zeros_like(den)
+      else:
+        den = (den - np.mean(den)) / std_val
+      print('Ran log transform preprocessing!')
+      print('\nNew summary statistics: ')
+      summary(den)
+    elif preprocessing == 'clip_extreme':
+      den = np.clip(den, np.percentile(den, 0.1), np.percentile(den, 99.9))
+      den = standardize(den)
+      print('Ran extreme value clipping and standardization!')
+      print('\nNew summary statistics: ')
+      summary(den)
+  else:
+    # Use legacy preprocessing methods
+    if preproc == 'mm':
+      den = minmax(den)
+      print('Ran preprocessing to scale density to [0,1]!')
+      print('\nNew summary statistics for density field: ')
+      summary(den)
+    if preproc == 'std':
+      den = standardize(den)
+      print('Ran preprocessing by dividing density/mask by std dev and subtracting by the mean! ')
+      print('\nNew summary statistics for density field: ')
+      summary(den)
+      
+  nbins = den.shape[0]//SUBGRID + (den.shape[0]//SUBGRID - 1)
+  # Using 2 augmentations: original + one rotation
+  print(f'Number of overlapping subcubes (light): {2*nbins**3}')
+  X_all_overlap = np.ndarray(((nbins**3)*2, SUBGRID, SUBGRID, SUBGRID, 1))
+  Y_all_overlap = np.ndarray(((nbins**3)*2, SUBGRID, SUBGRID, SUBGRID, 1))
+  
+  # loop over overlapping subcubes with light augmentation
+  cont = 0
+  for i in range(nbins):
+    off_i = SUBGRID*i - OFF*i
+    for j in range(nbins):
+      off_j = SUBGRID*j - OFF*j
+      for k in range(nbins):
+        off_k = SUBGRID*k - OFF*k
+        # define subcube:
+        sub_den = den[off_i:off_i+SUBGRID,off_j:off_j+SUBGRID,off_k:off_k+SUBGRID]
+        sub_msk = msk[off_i:off_i+SUBGRID,off_j:off_j+SUBGRID,off_k:off_k+SUBGRID]
+        
+        # Original
+        X_all_overlap[cont,:,:,:,0] = sub_den
+        Y_all_overlap[cont,:,:,:,0] = sub_msk
+        cont += 1
+        
+        # One rotation (90° z-axis)
+        sub_den_rot = np.rot90(sub_den, k=1, axes=(0,1))
+        sub_msk_rot = np.rot90(sub_msk, k=1, axes=(0,1))
+        X_all_overlap[cont,:,:,:,0] = sub_den_rot
+        Y_all_overlap[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+        
+  print(f'Light augmentation: Generated {cont} samples (2x per subcube)')
+  gc.collect()
+  return X_all_overlap.astype('float32'), Y_all_overlap.astype('int8')
+
+
+def load_dataset_all_rsd_preserving(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=True, sigma=None, binary_mask=False, verbose=True, preprocessing=None):
+  '''
+  RSD-preserving version of load_dataset_all.
+  Only rotates around z-axis instead of all three axes to preserve line-of-sight anisotropy.
+  '''
+  print(f'Reading volume: {FILE_DEN}... ')
+  den = volumes.read_fvolume(FILE_DEN)
+  den_shp = den.shape
+  print(f'Reading mask: {FILE_MASK}...')
+  msk = volumes.read_fvolume(FILE_MASK)
+  if sigma is not None:
+    den = ndi.gaussian_filter(den,sigma,mode='wrap')
+    print(f'Smoothed density with a Gaussian kernel of size {sigma}')
+  # print mask populations:
+  _, cnts = np.unique(msk,return_counts=True)
+  for val in cnts:
+    print(f'% of population: {val/den.shape[0]**3 * 100}')
+  
+  if verbose:
+    summary(den); summary(msk)
+  
+  if binary_mask == True:
+    print('Converting mask to binary...')
+    msk = convert_to_binary_mask(msk)
+    if verbose:
+      summary(msk)
+
+  # Handle new preprocessing methods (same as regular version)
+  if preprocessing is not None:
+    if preprocessing == 'standard':
+      den = minmax(den)
+      if verbose:
+        print('Ran standard preprocessing to scale density to [0,1]!')
+        print('\nNew summary statistics: ')
+        summary(den)
+    elif preprocessing == 'robust':
+      den_clipped = np.clip(den, np.percentile(den, 1), np.percentile(den, 99))
+      std_val = np.std(den_clipped)
+      if std_val == 0:
+        print("Warning: Standard deviation is zero after clipping. Using zeros array.")
+        den = np.zeros_like(den_clipped)
+      else:
+        den = (den_clipped - np.median(den_clipped)) / std_val
+        den = np.clip(den, -3, 3)
+      if verbose:
+        print('Ran robust preprocessing with outlier clipping and capping!')
+        print('\nNew summary statistics: ')
+        summary(den)
+    elif preprocessing == 'log_transform':
+      den = np.log10(den + 1e-6)
+      std_val = np.std(den)
+      if std_val == 0:
+        print("Warning: Standard deviation is zero after log transform. Using zeros array.")
+        den = np.zeros_like(den)
+      else:
+        den = (den - np.mean(den)) / std_val
+      if verbose:
+        print('Ran log transform preprocessing!')
+        print('\nNew summary statistics: ')
+        summary(den)
+    elif preprocessing == 'clip_extreme':
+      den = np.clip(den, np.percentile(den, 0.1), np.percentile(den, 99.9))
+      den = standardize(den)
+      if verbose:
+        print('Ran extreme value clipping and standardization!')
+        print('\nNew summary statistics: ')
+        summary(den)
+  else:
+    # Use legacy preprocessing methods
+    if preproc == 'mm':
+      den = minmax(den)
+      if verbose:
+        print('Ran preprocessing to scale density to [0,1]!')
+        print('\nNew summary statistics: ')
+        summary(den)
+    if preproc == 'std':
+      den = standardize(den)
+      if verbose:
+        print('Ran preprocessing by dividing density/mask by std dev and subtracting by the mean! ')
+        print('\nNew summary statistics: ')
+        summary(den)
+        
+  n_bins = den_shp[0] // SUBGRID
+
+  cont = 0 
+  # Using 8 augmentations: 4 z-rotations + 4 z-rotations with xy-flip  
+  X_all = np.zeros(shape=((n_bins**3)*8, SUBGRID,SUBGRID,SUBGRID,1))
+  if classification == False:
+    Y_all = np.ndarray(((n_bins**3)*8, SUBGRID,SUBGRID,SUBGRID,1),dtype=np.float16)
+  else:
+    Y_all = np.ndarray(((n_bins**3)*8, SUBGRID,SUBGRID,SUBGRID,1),dtype=np.int8)
+
+  for i in range(n_bins):
+    for j in range(n_bins):
+      for k in range(n_bins):
+        sub_den = den[i*SUBGRID:(i+1)*SUBGRID, j*SUBGRID:(j+1)*SUBGRID, k*SUBGRID:(k+1)*SUBGRID]
+        sub_msk = msk[i*SUBGRID:(i+1)*SUBGRID, j*SUBGRID:(j+1)*SUBGRID, k*SUBGRID:(k+1)*SUBGRID]
+        
+        # Original (0°)
+        X_all[cont,:,:,:,0] = sub_den
+        Y_all[cont,:,:,:,0] = sub_msk
+        cont += 1
+
+        # Z-axis rotation 90° (only around z-axis, preserves RSD)
+        sub_den_rot = volumes.rotate_cube(sub_den.copy(), 2)  # axis=2 is z-axis rotation
+        sub_msk_rot = volumes.rotate_cube(sub_msk.copy(), 2)
+        X_all[cont,:,:,:,0] = sub_den_rot
+        Y_all[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+
+        # Z-axis rotation 180°
+        sub_den_rot = volumes.rotate_cube(sub_den.copy(), 2)
+        sub_den_rot = volumes.rotate_cube(sub_den_rot, 2)
+        sub_msk_rot = volumes.rotate_cube(sub_msk.copy(), 2)
+        sub_msk_rot = volumes.rotate_cube(sub_msk_rot, 2)
+        X_all[cont,:,:,:,0] = sub_den_rot
+        Y_all[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+
+        # Z-axis rotation 270°
+        sub_den_rot = volumes.rotate_cube(sub_den.copy(), 2)
+        sub_den_rot = volumes.rotate_cube(sub_den_rot, 2)
+        sub_den_rot = volumes.rotate_cube(sub_den_rot, 2)
+        sub_msk_rot = volumes.rotate_cube(sub_msk.copy(), 2)
+        sub_msk_rot = volumes.rotate_cube(sub_msk_rot, 2)
+        sub_msk_rot = volumes.rotate_cube(sub_msk_rot, 2)
+        X_all[cont,:,:,:,0] = sub_den_rot
+        Y_all[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+        
+        # Same 4 rotations with xy-flip
+        sub_den_flip = np.flip(sub_den, axis=0)  # Flip along x-axis
+        sub_msk_flip = np.flip(sub_msk, axis=0)
+        
+        # Flipped original (0°)
+        X_all[cont,:,:,:,0] = sub_den_flip
+        Y_all[cont,:,:,:,0] = sub_msk_flip
+        cont += 1
+        
+        # Flipped 90°
+        sub_den_rot = volumes.rotate_cube(sub_den_flip.copy(), 2)
+        sub_msk_rot = volumes.rotate_cube(sub_msk_flip.copy(), 2)
+        X_all[cont,:,:,:,0] = sub_den_rot
+        Y_all[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+        
+        # Flipped 180°
+        sub_den_rot = volumes.rotate_cube(sub_den_flip.copy(), 2)
+        sub_den_rot = volumes.rotate_cube(sub_den_rot, 2)
+        sub_msk_rot = volumes.rotate_cube(sub_msk_flip.copy(), 2)
+        sub_msk_rot = volumes.rotate_cube(sub_msk_rot, 2)
+        X_all[cont,:,:,:,0] = sub_den_rot
+        Y_all[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+        
+        # Flipped 270°
+        sub_den_rot = volumes.rotate_cube(sub_den_flip.copy(), 2)
+        sub_den_rot = volumes.rotate_cube(sub_den_rot, 2)
+        sub_den_rot = volumes.rotate_cube(sub_den_rot, 2)
+        sub_msk_rot = volumes.rotate_cube(sub_msk_flip.copy(), 2)
+        sub_msk_rot = volumes.rotate_cube(sub_msk_rot, 2)
+        sub_msk_rot = volumes.rotate_cube(sub_msk_rot, 2)
+        X_all[cont,:,:,:,0] = sub_den_rot
+        Y_all[cont,:,:,:,0] = sub_msk_rot
+        cont += 1
+
+  X_all = X_all.astype('float32')
+  Y_all = Y_all.astype('int8')
+  
+  # Check for NaN values before returning
+  if np.any(np.isnan(X_all)):
+    print("ERROR: NaN values detected in feature array!")
+    print(f"Number of NaN values: {np.sum(np.isnan(X_all))}")
+    print(f"Preprocessing method used: {preprocessing or preproc}")
+    X_all = np.nan_to_num(X_all, nan=0.0, posinf=0.0, neginf=0.0)
+    print("NaN values replaced with zeros.")
+  
+  if np.any(np.isnan(Y_all)):
+    print("ERROR: NaN values detected in label array!")
+    Y_all = np.nan_to_num(Y_all, nan=0.0, posinf=0.0, neginf=0.0)
+    print("NaN values in labels replaced with zeros.")
+  
+  print(f'RSD-preserving augmentation: Generated {cont} samples (8x per subcube)')
+  gc.collect()
+  return X_all, Y_all
+
+#---------------------------------------------------------
 # For loading testing/validation data for prediction
 #---------------------------------------------------------
 def load_dataset(file_in, SUBGRID, OFF, preproc='mm',sigma=None,return_int=False):

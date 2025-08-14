@@ -10,13 +10,14 @@ This guide covers the usage of `curricular.py` for training and `curricular_pred
 2. [Curricular Training (`curricular.py`)](#curricular-training)
 3. [Validation Strategies](#validation-strategies)
 4. [Preprocessing Methods](#preprocessing-methods)
-5. [Memory Optimization](#memory-optimization)
-6. [Prediction (`curricular_pred.py`)](#prediction)
-7. [Loss Functions Guide](#loss-functions-guide)
-8. [Common Usage Examples](#common-usage-examples)
-9. [File Output Strategy](#file-output-strategy)
-10. [Troubleshooting](#troubleshooting)
-11. [Log Transform Preprocessing Explained](#log-transform-preprocessing-explained)
+5. [RSD-Preserving Rotations](#rsd-preserving-rotations)
+6. [Memory Optimization](#memory-optimization)
+7. [Prediction (`curricular_pred.py`)](#prediction)
+8. [Loss Functions Guide](#loss-functions-guide)
+9. [Common Usage Examples](#common-usage-examples)
+10. [File Output Strategy](#file-output-strategy)
+11. [Troubleshooting](#troubleshooting)
+12. [Log Transform Preprocessing Explained](#log-transform-preprocessing-explained)
 
 ---
 
@@ -48,6 +49,7 @@ The DeepVoid curricular training system includes these advanced features:
 
 ### Additional Features
 - **Redshift Space Distortions**: Realistic observational effects
+- **RSD-Preserving Rotations**: Optional data augmentation that preserves line-of-sight anisotropy
 - **Extra Inputs**: Galaxy colors (g-r) and flux density
 - **TEST_MODE**: Quick testing with reduced datasets
 - **Comprehensive Logging**: Detailed training metrics and validation tracking
@@ -89,6 +91,7 @@ python curricular.py ROOT_DIR DEPTH FILTERS LOSS [OPTIONS]
 | `--PREPROCESSING` | "standard" | Preprocessing method: 'standard', 'robust', 'log_transform', 'clip_extreme' |
 | `--WARMUP_EPOCHS` | 0 | Number of warmup epochs with gradual learning rate increase |
 | `--NO_OVERLAPPING_SUBCUBES` | False | Disable overlapping subcubes to save memory |
+| `--RSD_PRESERVING_ROTATIONS` | False | Use RSD-preserving rotations (z-axis only + xy-flips) instead of full 3D rotations |
 | `--FOCAL_ALPHA` | [0.6, 0.3, 0.09, 0.02] | Alpha values for focal loss [void, wall, filament, halo] |
 | `--FOCAL_GAMMA` | 1.5 | Gamma value for focal loss |
 
@@ -188,6 +191,74 @@ python curricular.py /ifs/groups/vogeleyGrp/ 4 16 SCCE --WARMUP_EPOCHS 10 --LEAR
 - Prevents early training instability
 - Helps with convergence when using large learning rates
 - Particularly useful with complex loss functions
+
+---
+
+### RSD-Preserving Rotations
+
+When working with data that contains Redshift-Space Distortions (RSD), standard 3D rotations can destroy the anisotropic line-of-sight information that RSD modeling requires. DeepVoid provides RSD-preserving rotations as an alternative data augmentation strategy.
+
+#### Automatic RSD-Preserving Mode
+
+When the `--ADD_RSD` flag is used, RSD-preserving rotations are **automatically enabled** as the default augmentation strategy. This ensures that the line-of-sight anisotropy crucial for RSD analysis is preserved during training.
+
+#### Manual Control
+
+You can also manually enable RSD-preserving rotations for any dataset using:
+```bash
+--RSD_PRESERVING_ROTATIONS
+```
+
+#### Memory Optimization
+
+To balance data augmentation benefits with GPU memory constraints, DeepVoid uses lighter augmentation levels by default:
+
+- **Default (Light) Augmentation:**
+  - RSD-preserving: 4x samples per subcube (4 z-axis rotations only)
+  - Standard: 2x samples per subcube (original + one rotation)
+
+- **Extra (Heavy) Augmentation:** Use `--EXTRA_AUGMENTATION` for maximum augmentation:
+  - RSD-preserving: 8x samples per subcube (4 z-rotations + 4 z-rotations with xy-flips)
+  - Standard: 4x samples per subcube (full 3D rotations)
+
+#### Technical Details
+
+**RSD-Preserving Augmentation Strategy:**
+- Rotations only around the z-axis (line-of-sight direction)
+- Preserves RSD anisotropy while still providing data augmentation
+- Light version: 0°, 90°, 180°, 270° z-axis rotations
+- Heavy version: Above rotations + xy-flipped versions of each
+
+**Comparison with Standard Rotations:**
+- Standard rotations: Full 3D rotations around x, y, z axes
+- RSD-preserving: Only z-axis rotations + optional xy-flips
+- Memory usage: Light versions use ~50% less memory than heavy versions
+
+#### Usage Examples
+
+**Automatic RSD-preserving with light augmentation (recommended for RSD data):**
+```bash
+python curricular.py /path/to/density.dat /path/to/mask.dat --ADD_RSD --subgrid_dim 32
+# Automatically enables RSD-preserving rotations with 4x augmentation
+```
+
+**Manual RSD-preserving with heavy augmentation:**
+```bash
+python curricular.py /path/to/density.dat /path/to/mask.dat --RSD_PRESERVING_ROTATIONS --EXTRA_AUGMENTATION --subgrid_dim 32
+# Uses RSD-preserving rotations with 8x augmentation
+```
+
+**Memory-optimized training for large datasets:**
+```bash
+python curricular.py /path/to/density.dat /path/to/mask.dat --subgrid_dim 32
+# Uses light standard augmentation (2x) for minimal memory usage
+```
+
+**Maximum augmentation for small datasets:**
+```bash
+python curricular.py /path/to/density.dat /path/to/mask.dat --EXTRA_AUGMENTATION --subgrid_dim 32
+# Uses heavy standard augmentation (4x) for maximum data diversity
+```
 
 ---
 
