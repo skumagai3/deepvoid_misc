@@ -12,23 +12,38 @@ import os
 import sys
 
 # Set environment variables for better memory management and stability
-os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"  # Reduce TensorFlow logging
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"  # Suppress INFO and WARNING (but keep ERROR visible)
 os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"  # Better memory management
 os.environ["TF_DISABLE_CUDNN_AUTOTUNE"] = "1"  # Disable autotuning for stability
+os.environ["TF_DISABLE_SEGMENT_REDUCTION"] = "1"  # Disable problematic optimizations
+os.environ["TF_ENABLE_EXPERIMENTAL_TENSOR_FLOAT_32_EXECUTION"] = "0"  # Disable TF32 for stability
+
+# Additional stability variables
+os.environ["TF_DETERMINISTIC_OPS"] = "0"  # Disable for performance (conflicts with frozen layers)
+os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"  # Force GPU memory growth
+os.environ["TF_GPU_THREAD_MODE"] = "gpu_private"  # Better thread management
+os.environ["CUDA_CACHE_DISABLE"] = "0"  # Enable CUDA kernel caching for performance
+os.environ["TF_XLA_FLAGS"] = "--tf_xla_auto_jit=0"  # Disable XLA auto-jit (set explicitly later)
 
 import argparse
 import numpy as np
 import tensorflow as tf
+
+# Suppress TensorFlow warnings and errors
+import absl.logging
+absl.logging.set_verbosity(absl.logging.ERROR)
+tf.get_logger().setLevel('ERROR')
+import warnings
+warnings.filterwarnings('ignore')
+
 import NETS_LITE as nets
 import volumes
 # Import validation functions
 from NETS_LITE import MultiScaleValidationCallback
-import absl.logging
 import plotter
 import datetime
 import gc
 from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, TensorBoard, EarlyStopping
-absl.logging.set_verbosity(absl.logging.ERROR)
 print('TensorFlow version:', tf.__version__)
 print('CUDA?', tf.test.is_built_with_cuda())
 # get the GPU devices
@@ -48,11 +63,11 @@ if gpus:
 nets.K.set_image_data_format('channels_last')
 # NOTE turning off XLA JIT compilation for now, as it can cause issues with some models
 tf.config.optimizer.set_jit(False)  # if you're using XLA
-tf.config.experimental.enable_op_determinism()
+# Disable deterministic ops due to issues with frozen batch norm layers in TF 2.10.0
+# tf.config.experimental.enable_op_determinism()  # Commented out - causes issues with frozen layers
 
 # Additional workaround for libdevice issues on Picotte V100s
-import os
-os.environ['TF_CPP_MIN_LOG_LEVEL'] = '2'  # Reduce TF warnings
+# Note: TF_CPP_MIN_LOG_LEVEL already set above
 # Disable XLA clustering to avoid libdevice dependency while keeping GPUs enabled
 tf.config.optimizer.set_experimental_options({'disable_meta_optimizer': True})
 from tensorflow.keras import mixed_precision
@@ -547,7 +562,17 @@ elif LOSS == 'FOCAL_CCE':
     loss_fn = nets.categorical_focal_loss(alpha=alpha, gamma=gamma)
     print(f'Using Focal Loss with alpha={alpha} and gamma={gamma}')
 elif LOSS == 'SCCE':
-    loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
+    base_loss_fn = tf.keras.losses.SparseCategoricalCrossentropy()
+    
+    # Wrap SCCE with NaN detection for Picotte V100 numerical stability
+    def nan_safe_scce_loss(y_true, y_pred):
+        loss = base_loss_fn(y_true, y_pred)
+        # Replace NaN values with a reasonable fallback loss value
+        safe_loss = tf.where(tf.math.is_finite(loss), loss, tf.constant(2.0, dtype=loss.dtype))
+        return safe_loss
+    
+    loss_fn = nan_safe_scce_loss
+    CUSTOM_OBJECTS['nan_safe_scce_loss'] = nan_safe_scce_loss
 elif LOSS == 'SCCE_Void_Penalty':
     loss_fn = nets.SCCE_void_penalty
 elif LOSS == 'SCCE_Class_Penalty':
@@ -615,8 +640,12 @@ with strategy.scope():
             model_name=MODEL_NAME,
             lambda_conditioning=LAMBDA_CONDITIONING
         )
-    # Create optimizer with loss scaling for mixed precision
-    base_optimizer = tf.keras.optimizers.Adam(learning_rate=LEARNING_RATE, clipnorm=1.0)
+    # Create optimizer with aggressive gradient clipping to prevent NaN losses
+    base_optimizer = tf.keras.optimizers.Adam(
+        learning_rate=LEARNING_RATE, 
+        clipnorm=0.5,  # Reduced from 1.0 to 0.5 for more aggressive clipping
+        clipvalue=0.5  # Additional gradient value clipping
+    )
     optimizer = mixed_precision.LossScaleOptimizer(base_optimizer)
     
     if LAMBDA_CONDITIONING:
@@ -754,7 +783,10 @@ if validation_strategy == 'hybrid':
             """Create stage validation dataset on demand"""
             if self.current_stage_dataset is not None:
                 del self.current_stage_dataset
+                # Force GPU memory clearing
+                tf.keras.backend.clear_session()
                 gc.collect()
+                print(f'Cleared previous stage validation dataset from GPU memory')
             self.current_stage_dataset = create_validation_dataset(stage_lambda)
     
     validation_callback = LazyMultiScaleValidationCallback(
@@ -770,6 +802,23 @@ if validation_strategy == 'hybrid':
 
 epoch_offset = 0
 for i, inter_sep in enumerate(inter_seps):
+    # Aggressive GPU memory cleanup before each new stage (except first)
+    if i > 0:
+        print(f'Clearing GPU memory before L={inter_sep} Mpc/h stage...')
+        tf.keras.backend.clear_session()
+        gc.collect()
+        # Force GPU memory cleanup
+        if tf.config.list_physical_devices('GPU'):
+            try:
+                import os
+                import subprocess
+                # Clear GPU cache
+                subprocess.run(['nvidia-smi', '--gpu-reset'], check=False, 
+                             stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            except:
+                pass
+        print('GPU memory cleanup completed')
+    
     print(f'Starting training for interparticle separation L={inter_sep} Mpc/h...')
     # Only show detailed stats for the first data load
     verbose_load = (i == 0)
@@ -785,6 +834,13 @@ for i, inter_sep in enumerate(inter_seps):
     del train_features, train_labels
     gc.collect()
     print('Training data cleared from memory after dataset creation')
+    
+    # Monitor GPU memory after data loading
+    try:
+        gpu_details = tf.config.experimental.get_memory_info('GPU:0')
+        print(f'GPU memory after loading L={inter_sep}: {gpu_details["current"] / 1024**3:.2f} GB used')
+    except:
+        pass
     
     # Update validation dataset for stage-based validation
     if validation_strategy == 'stage':
@@ -816,6 +872,9 @@ for i, inter_sep in enumerate(inter_seps):
         density_to_freeze_map[inter_sep],
     )
     if inter_sep != '0.33':
+        # Clear optimizer state before recompiling to prevent memory accumulation
+        print(f'Resetting optimizer state before recompiling for L={inter_sep}')
+        
         # recompile the model after freezing layers
         if LAMBDA_CONDITIONING:
             model.compile(

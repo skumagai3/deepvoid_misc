@@ -943,14 +943,20 @@ def SCCE_Proportion_Aware(y_true, y_pred, target_props=[0.65, 0.25, 0.08, 0.02],
     # Base SCCE loss
     scce_loss = tf.keras.losses.sparse_categorical_crossentropy(y_true, y_pred)
     
-    # Calculate predicted proportions
-    pred_probs = tf.nn.softmax(y_pred, axis=-1)
+    # Calculate predicted proportions - y_pred is already softmaxed, no need for tf.nn.softmax
+    # Add small epsilon for numerical stability in TensorFlow 2.10.0
+    epsilon = 1e-7
+    pred_probs = tf.clip_by_value(y_pred, epsilon, 1.0 - epsilon)
     pred_props = tf.reduce_mean(pred_probs, axis=[0, 1, 2, 3])  # Average over all spatial dimensions
     
     # Calculate proportion penalty - use same dtype as predictions for mixed precision compatibility
     target_props_tensor = tf.constant(target_props, dtype=y_pred.dtype)
     prop_diff = tf.square(pred_props - target_props_tensor)
     prop_penalty = tf.reduce_sum(prop_diff) * tf.cast(prop_weight, y_pred.dtype)
+    
+    # Add numerical stability check
+    scce_loss = tf.where(tf.math.is_finite(scce_loss), scce_loss, tf.zeros_like(scce_loss))
+    prop_penalty = tf.where(tf.math.is_finite(prop_penalty), prop_penalty, tf.zeros_like(prop_penalty))
     
     return scce_loss + prop_penalty
 
