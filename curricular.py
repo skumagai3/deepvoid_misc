@@ -1050,8 +1050,9 @@ for i, inter_sep in enumerate(inter_seps):
     if validation_strategy == 'stage':
         print(f'Updating validation dataset for stage-based validation: L={inter_sep} Mpc/h')
         # Clear old validation dataset to free memory
-        del val_dataset
-        gc.collect()
+        if 'val_dataset' in locals() and val_dataset is not None:
+            del val_dataset
+            gc.collect()
         val_dataset = create_validation_dataset(inter_sep)
     
     # Update validation dataset for gradual validation strategy
@@ -1060,8 +1061,9 @@ for i, inter_sep in enumerate(inter_seps):
         if i == 0 or current_val_lambda != gradual_validation_map[inter_seps[i-1]]:
             print(f'Updating validation dataset for gradual validation: training L={inter_sep} -> validation L={current_val_lambda} Mpc/h')
             # Clear old validation dataset to free memory
-            del val_dataset
-            gc.collect()
+            if 'val_dataset' in locals() and val_dataset is not None:
+                del val_dataset
+                gc.collect()
             val_dataset = create_validation_dataset(current_val_lambda)
         else:
             print(f'Keeping current validation dataset: training L={inter_sep} -> validation L={current_val_lambda} Mpc/h')
