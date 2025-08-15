@@ -8,10 +8,16 @@ progressively increase the interparticle separation.
 You can either score the models on the highest lambda or on the current lambda. 
 '''
 print('>>> Running curricular.py')
+print('DEBUG: Script started successfully')
+
+import os
+import sys
+print('DEBUG: Basic imports successful')
 import os
 import sys
 
 # Set environment variables for better memory management and stability
+print('DEBUG: Setting TensorFlow environment variables...')
 os.environ["TF_CPP_MIN_LOG_LEVEL"] = "2"  # Suppress INFO and WARNING (but keep ERROR visible)
 os.environ["TF_GPU_ALLOCATOR"] = "cuda_malloc_async"  # Better memory management
 os.environ["TF_DISABLE_CUDNN_AUTOTUNE"] = "1"  # Disable autotuning for stability
@@ -28,6 +34,7 @@ os.environ["TF_XLA_FLAGS"] = "--tf_xla_auto_jit=0"  # Disable XLA auto-jit (set 
 import argparse
 import numpy as np
 import tensorflow as tf
+print('DEBUG: TensorFlow imported successfully')
 
 # Suppress TensorFlow warnings and errors
 import absl.logging
@@ -43,6 +50,7 @@ from NETS_LITE import MultiScaleValidationCallback, HybridValidationCallback
 import plotter
 import datetime
 import gc
+print('DEBUG: All imports completed successfully')
 from tensorflow.keras.callbacks import ModelCheckpoint, ReduceLROnPlateau, TensorBoard, EarlyStopping
 print('TensorFlow version:', tf.__version__)
 print('CUDA?', tf.test.is_built_with_cuda())
@@ -655,8 +663,7 @@ print(f'ONE_HOT encoding: {ONE_HOT}')
 
 # Create validation datasets based on strategy
 print(f'Creating validation datasets with strategy: {validation_strategy}')
-# Create validation datasets based on strategy
-print(f'Creating validation datasets with strategy: {validation_strategy}')
+print('DEBUG: About to set up validation strategy (not loading data yet)')
 
 # For universal compatibility, use lazy loading for validation datasets
 def create_validation_dataset(lambda_val, cache_key=None):
@@ -679,35 +686,21 @@ gradual_validation_map = {
     '10': '10'       # Final stage validates on final complexity
 }
 
+print('DEBUG: Validation mapping defined, setting up strategy without loading data')
+
 if validation_strategy == 'gradual':
     print('Gradual validation mapping:')
     for stage_lambda, val_lambda in gradual_validation_map.items():
         print(f'  Training L={stage_lambda} -> Validation L={val_lambda}')
 
-if validation_strategy == 'target':
-    print(f'Using target-based validation: L={target_lambda} Mpc/h')
-    val_dataset = create_validation_dataset(target_lambda)
-    
-elif validation_strategy == 'stage':
-    print(f'Using stage-based validation: will update during training')
-    # For stage-based, create initial validation dataset
-    val_dataset = create_validation_dataset(inter_seps[0])
-    
-elif validation_strategy == 'gradual':
-    print(f'Using gradual validation: progressive complexity increase')
-    # Start with validation for the first stage
-    initial_val_lambda = gradual_validation_map[inter_seps[0]]
-    print(f'Initial gradual validation: training L={inter_seps[0]} -> validation L={initial_val_lambda}')
-    val_dataset = create_validation_dataset(initial_val_lambda)
-    
-else:  # hybrid
-    print(f'Using hybrid validation: weighted combination of target (L={target_lambda}) and stage-based')
-    # Create target validation dataset
-    val_dataset = create_validation_dataset(target_lambda)
-    target_val_dataset = val_dataset
+# Delay validation dataset creation until training loop starts
+val_dataset = None
+print('DEBUG: Validation dataset creation deferred until training starts')
+print('DEBUG: Skipping early validation dataset loading to avoid RAM spike')
 #================================================================
 # Set loss function and metrics
 #================================================================
+print('DEBUG: Setting up loss function and metrics')
 metrics = ['accuracy']
 metrics += [nets.MCC_keras(int_labels=not ONE_HOT),
             nets.F1_micro_keras(int_labels=not ONE_HOT),
@@ -768,10 +761,13 @@ print("DEBUG: Log directory created successfully")
 # Create the model
 #================================================================
 print(f'Creating model with depth={DEPTH}, filters={FILTERS}, loss={LOSS}, uniform={UNIFORM_FLAG}, RSD={ADD_RSD}, attention={USE_ATTENTION}...')
+print('DEBUG: About to create model - this might cause RAM spike')
 #strategy = tf.distribute.MirroredStrategy()
 strategy = tf.distribute.get_strategy()
 print('Number of devices:', strategy.num_replicas_in_sync)
+print('DEBUG: Strategy created, about to enter strategy scope')
 with strategy.scope():
+    print('DEBUG: Inside strategy scope, about to create model')
     if USE_ATTENTION:
         model = nets.attention_unet_3d(
             input_shape=input_shape,
@@ -794,11 +790,13 @@ with strategy.scope():
             model_name=MODEL_NAME,
             lambda_conditioning=LAMBDA_CONDITIONING
         )
+    print('DEBUG: Model architecture created successfully')
     # Create optimizer with gradient clipping to prevent NaN losses
     optimizer = tf.keras.optimizers.Adam(
         learning_rate=LEARNING_RATE, 
         clipnorm=1.0  # Use gradient norm clipping only
     )
+    print('DEBUG: Optimizer created, about to compile model')
     
     if LAMBDA_CONDITIONING:
         # For lambda conditioning, the model outputs [segmentation, lambda_pred]
@@ -808,12 +806,14 @@ with strategy.scope():
             loss_weights=[1.0, 0.1],  # Main loss gets full weight, lambda loss gets 0.1
             metrics=[metrics, 'mse']  # Segmentation metrics and lambda MSE
         )
+print('DEBUG: Model compiled successfully (LAMBDA_CONDITIONING branch)')
     else:
         model.compile(
             optimizer=optimizer,
             loss=loss_fn,
             metrics=metrics
         )
+print('DEBUG: Model compiled successfully (normal branch)')
 print("DEBUG: About to call model.summary() - this might be where it hangs...")
 # Temporarily disable model.summary() to test if this is causing the hang
 # print(model.summary())
@@ -930,6 +930,10 @@ validation_callback = None
 print(f"DEBUG: Current validation_strategy = '{validation_strategy}'")
 if validation_strategy == 'hybrid':
     print("DEBUG: Entering hybrid validation setup...")
+    # Pre-create target validation dataset for hybrid validation
+    print(f'Creating target validation dataset for L={target_lambda} Mpc/h...')
+    target_val_dataset = create_validation_dataset(target_lambda)
+    
     # Pre-create stage validation datasets for all interparticle separations
     stage_datasets = {}
     print('Creating stage validation datasets for hybrid validation...')
@@ -1265,6 +1269,7 @@ elif validation_strategy == 'gradual':
     eval_dataset = val_dataset  # Already updated to final gradual stage in the loop
 else:  # hybrid
     print(f'Using target validation dataset for final evaluation: L={target_lambda} Mpc/h')
+    # For hybrid validation, target_val_dataset was created earlier
     eval_dataset = target_val_dataset
 
 try:
