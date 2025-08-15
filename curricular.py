@@ -144,8 +144,8 @@ optional.add_argument('--FOCAL_ALPHA', nargs=4, type=float, default=[0.6, 0.3, 0
                       help='Alpha values for focal loss [void, wall, filament, halo]. Default: 0.6 0.3 0.09 0.02')
 optional.add_argument('--FOCAL_GAMMA', type=float, default=1.5,
                       help='Gamma value for focal loss. Default: 1.5')
-optional.add_argument('--NO_OVERLAPPING_SUBCUBES', action='store_true',
-                      help='Disable overlapping subcubes with rotations to save memory. Default is to use overlapping subcubes with rotations for better data augmentation.')
+optional.add_argument('--USE_OVERLAPPING_SUBCUBES', action='store_true',
+                      help='Enable overlapping subcubes with rotations for better data augmentation but higher memory usage. Default is to use non-overlapping subcubes for memory efficiency.')
 optional.add_argument('--RSD_PRESERVING_ROTATIONS', action='store_true',
                       help='Use RSD-preserving rotations (only around z-axis and xy-flips) instead of full 3D rotations. Recommended when ADD_RSD is used to preserve line-of-sight anisotropy.')
 optional.add_argument('--EXTRA_AUGMENTATION', action='store_true',
@@ -170,7 +170,7 @@ PREPROCESSING = args.PREPROCESSING
 WARMUP_EPOCHS = args.WARMUP_EPOCHS
 FOCAL_ALPHA = args.FOCAL_ALPHA
 FOCAL_GAMMA = args.FOCAL_GAMMA
-USE_OVERLAPPING_SUBCUBES = not args.NO_OVERLAPPING_SUBCUBES  # Default is True unless --NO_OVERLAPPING_SUBCUBES is specified
+USE_OVERLAPPING_SUBCUBES = args.USE_OVERLAPPING_SUBCUBES  # Default is False unless --USE_OVERLAPPING_SUBCUBES is specified
 RSD_PRESERVING_ROTATIONS = args.RSD_PRESERVING_ROTATIONS  # Default is False unless --RSD_PRESERVING_ROTATIONS is specified
 EXTRA_AUGMENTATION = args.EXTRA_AUGMENTATION  # Default is False unless --EXTRA_AUGMENTATION is specified
 
@@ -196,6 +196,12 @@ if RSD_PRESERVING_ROTATIONS:
     print("   This preserves line-of-sight anisotropy but doubles the number of augmented samples (8x vs 4x)")
 else:
     print("Using standard 3D rotations: rotations around all three axes (may disrupt RSD anisotropy)")
+
+# Print subcube method information
+if USE_OVERLAPPING_SUBCUBES:
+    print("Using overlapping subcubes: better data augmentation but higher memory usage")
+else:
+    print("Using non-overlapping subcubes: memory efficient but less data augmentation")
     
 # Validate focal loss parameters
 if LOSS != 'FOCAL_CCE' and (args.FOCAL_ALPHA != [0.6, 0.3, 0.09, 0.02] or args.FOCAL_GAMMA != 1.5):
