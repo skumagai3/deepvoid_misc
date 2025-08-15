@@ -22,6 +22,10 @@ os.environ["TF_DISABLE_CUDNN_AUTOTUNE"] = "1"  # Disable autotuning for stabilit
 os.environ["TF_DISABLE_SEGMENT_REDUCTION"] = "1"  # Disable problematic optimizations
 os.environ["TF_ENABLE_EXPERIMENTAL_TENSOR_FLOAT_32_EXECUTION"] = "0"  # Disable TF32 for stability
 
+# Additional CUDNN stability settings for A100
+os.environ["TF_CUDNN_USE_AUTOTUNE"] = "0"  # Disable CUDNN autotuning (consistent with TF_DISABLE_CUDNN_AUTOTUNE)
+os.environ["CUDNN_LOGDEST_DBG"] = "/dev/null"  # Suppress CUDNN debug logs
+
 # Additional stability variables
 os.environ["TF_DETERMINISTIC_OPS"] = "0"  # Disable for performance (conflicts with frozen layers)
 os.environ["TF_FORCE_GPU_ALLOW_GROWTH"] = "true"  # Force GPU memory growth
@@ -206,6 +210,13 @@ else:
 # Validate focal loss parameters
 if LOSS != 'FOCAL_CCE' and (args.FOCAL_ALPHA != [0.6, 0.3, 0.09, 0.02] or args.FOCAL_GAMMA != 1.5):
     print(f"WARNING: Focal loss parameters specified (alpha={FOCAL_ALPHA}, gamma={FOCAL_GAMMA}) but loss function is '{LOSS}', not 'FOCAL_CCE'. These parameters will be ignored.")
+
+# Override mixed precision for attention models to avoid CUDNN precision issues
+if USE_ATTENTION and not os.getcwd().startswith('/ifs/groups/vogeleyGrp'):
+    print('WARNING: Attention model detected - disabling mixed precision to avoid CUDNN algorithm mismatch errors on A100')
+    policy = mixed_precision.Policy('float32')
+    mixed_precision.set_global_policy(policy)
+    print(f'Mixed precision policy overridden to: {mixed_precision.global_policy().name}')
 
 # use mixed precision if on Picotte
 if ROOT_DIR.startswith('/ifs/groups/vogeleyGrp/'):
@@ -1060,6 +1071,13 @@ for i, inter_sep in enumerate(inter_seps):
             del val_dataset
             gc.collect()
         val_dataset = create_validation_dataset(inter_sep)
+    
+    # Update validation dataset for target validation strategy (create once at the beginning)
+    elif validation_strategy == 'target':
+        if i == 0:  # Only create on the first iteration
+            print(f'Creating target validation dataset: L={target_lambda} Mpc/h')
+            val_dataset = create_validation_dataset(target_lambda)
+        # Otherwise, keep using the same validation dataset
     
     # Update validation dataset for gradual validation strategy
     elif validation_strategy == 'gradual':
