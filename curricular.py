@@ -815,7 +815,8 @@ with strategy.scope():
             metrics=metrics
         )
 print(model.summary())
-print("DEBUG: Model summary completed successfully")
+print("DEBUG: Model summary completed successfully - about to define callbacks")
+print("DEBUG: Python interpreter still responsive, continuing...")
 #================================================================
 # Learning Rate Warmup Callback
 #================================================================
@@ -866,7 +867,9 @@ print("DEBUG: WarmupLearningRateScheduler class defined successfully")
 # Training loop
 #================================================================
 print('>>> Starting curricular training...')
+print("DEBUG: Entering main training loop")
 print("DEBUG: About to create ReduceLROnPlateau callback...")
+print("DEBUG: Importing ReduceLROnPlateau from tensorflow.keras.callbacks...")
 reduce_LR = ReduceLROnPlateau(
             patience=LEARNING_RATE_PATIENCE,
             factor=0.5,
