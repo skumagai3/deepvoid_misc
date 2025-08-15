@@ -814,7 +814,10 @@ with strategy.scope():
             loss=loss_fn,
             metrics=metrics
         )
-print(model.summary())
+print("DEBUG: About to call model.summary() - this might be where it hangs...")
+# Temporarily disable model.summary() to test if this is causing the hang
+# print(model.summary())
+print("DEBUG: Skipped model.summary() call - testing if this was causing the hang")
 print("DEBUG: Model summary completed successfully - about to define callbacks")
 print("DEBUG: Python interpreter still responsive, continuing...")
 #================================================================
