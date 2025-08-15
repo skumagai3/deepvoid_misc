@@ -13,8 +13,6 @@ print('DEBUG: Script started successfully')
 import os
 import sys
 print('DEBUG: Basic imports successful')
-import os
-import sys
 
 # Set environment variables for better memory management and stability
 print('DEBUG: Setting TensorFlow environment variables...')
@@ -806,14 +804,14 @@ with strategy.scope():
             loss_weights=[1.0, 0.1],  # Main loss gets full weight, lambda loss gets 0.1
             metrics=[metrics, 'mse']  # Segmentation metrics and lambda MSE
         )
-print('DEBUG: Model compiled successfully (LAMBDA_CONDITIONING branch)')
+        print('DEBUG: Model compiled successfully (LAMBDA_CONDITIONING branch)')
     else:
         model.compile(
             optimizer=optimizer,
             loss=loss_fn,
             metrics=metrics
         )
-print('DEBUG: Model compiled successfully (normal branch)')
+        print('DEBUG: Model compiled successfully (normal branch)')
 print("DEBUG: About to call model.summary() - this might be where it hangs...")
 # Temporarily disable model.summary() to test if this is causing the hang
 # print(model.summary())
