@@ -308,11 +308,6 @@ def load_data_for_prediction(inter_sep, extra_inputs=None, max_samples=None, pre
         print(f'Error during data loading: {e}')
         raise
     
-    if max_samples and features.shape[0] > max_samples:
-        print(f'Limiting to {max_samples} samples for memory management...')
-        features = features[:max_samples]
-        labels = labels[:max_samples]
-    
     if extra_inputs is not None:
         if inter_sep not in EXTRA_INPUTS_INFO:
             raise ValueError(f'Invalid interparticle separation for extra inputs: {inter_sep}.')
@@ -352,6 +347,12 @@ def load_data_for_prediction(inter_sep, extra_inputs=None, max_samples=None, pre
         
         del extra_features  # Free memory
         gc.collect()
+    
+    # Apply sample limitation AFTER all data is loaded and concatenated
+    if max_samples and features.shape[0] > max_samples:
+        print(f'Limiting to {max_samples} samples for memory management...')
+        features = features[:max_samples]
+        labels = labels[:max_samples]
     
     print(f'Features shape: {features.shape}, Labels shape: {labels.shape}')
     return features, labels
@@ -629,17 +630,17 @@ def main():
     
     # Load prediction data
     try:
-        # Aggressive memory management for Colab
+        # Memory management settings
         if TEST_MODE:
-            max_samples = 16  # Even smaller for testing
-            print('TEST_MODE: Using only 16 samples for quick testing')
+            max_samples = 64  # Limited for testing
+            print('TEST_MODE: Using only 64 samples for quick testing')
         elif MAX_PRED_BATCHES:
             max_samples = MAX_PRED_BATCHES * BATCH_SIZE
             print(f'Limited to {max_samples} samples based on MAX_PRED_BATCHES={MAX_PRED_BATCHES}')
         else:
-            # Default to a reasonable limit for Colab memory constraints
-            max_samples = 64  # Conservative default for Colab
-            print(f'Using default memory-safe limit of {max_samples} samples')
+            # No default limit - use all available data
+            max_samples = None
+            print('Using all available samples (no limit)')
             
         pred_features, pred_labels = load_data_for_prediction(
             L_PRED, 
