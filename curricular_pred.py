@@ -268,28 +268,39 @@ def load_data_for_prediction(inter_sep, extra_inputs=None, max_samples=None, pre
     print('Files exist, starting data loading...')
     
     try:
-        # For prediction, use load_dataset (no rotations) instead of load_dataset_all (with rotations)
+        # Map preprocessing options from new naming to load_dataset naming
+        preproc_mapping = {
+            'standard': 'mm',  # standard -> minmax
+            'robust': 'robust',
+            'log_transform': 'log_transform', 
+            'clip_extreme': 'clip_extreme'
+        }
+        preproc_param = preproc_mapping.get(preprocessing, 'mm')  # Default to minmax
+        
+        # For prediction, use load_dataset (no rotations) for features
         features = nets.load_dataset(
             file_in=data_file,
             SUBGRID=SUBGRID,
             OFF=OFF,
-            preproc=preprocessing if preprocessing != 'log_transform' else 'log_transform',
+            preproc=preproc_param,
             sigma=None
         )
         
-        # Load corresponding labels using load_dataset_all to get the labels (but we only need one copy)
-        _, labels = nets.load_dataset_all(
-            FILE_DEN=data_file,
-            FILE_MASK=FILE_MASK,
+        # For prediction, we also need to load labels without augmentation
+        # We'll load the mask data using load_dataset, but we need to handle it differently
+        # since it contains integer class labels, not continuous density values
+        labels = nets.load_dataset(
+            file_in=FILE_MASK,
             SUBGRID=SUBGRID,
-            preprocessing=preprocessing,
-            classification=True
+            OFF=OFF,
+            preproc=None,  # No preprocessing for integer class labels
+            sigma=None
         )
         
-        # For prediction, we need non-augmented features but we can get labels from the augmented version
-        # Since load_dataset gives us N subcubes and load_dataset_all gives us 4*N subcubes,
-        # we need to take every 4th label to match the non-augmented features
-        labels = labels[::4]  # Take every 4th label to match non-augmented subcubes
+        # Convert labels to integer type but keep spatial dimensions intact
+        # The labels should maintain the same spatial structure as features for proper evaluation
+        labels = labels.astype(np.int32)
+        print(f'Labels shape after loading: {labels.shape}')
         
         print(f'Data loading completed successfully with {preprocessing} preprocessing.')
         print(f'Features shape: {features.shape}, Labels shape: {labels.shape}')
@@ -319,15 +330,22 @@ def load_data_for_prediction(inter_sep, extra_inputs=None, max_samples=None, pre
             file_in=extra_input_file,
             SUBGRID=SUBGRID,
             OFF=OFF,
-            preproc=preprocessing if preprocessing != 'log_transform' else 'log_transform',
+            preproc=preproc_param,  # Use same mapped preprocessing parameter
             sigma=None
         )
         
         print(f'Extra inputs loaded. Shape: {extra_features.shape}')
+        print(f'Main features shape: {features.shape}')
+        print(f'Expected subcube count: {(512//SUBGRID + (512//SUBGRID - 1))**3}')
+        
+        # Debug information
+        print(f'SUBGRID: {SUBGRID}, OFF: {OFF}')
+        print(f'Main data file: {data_file}')
+        print(f'Extra input file: {extra_input_file}')
         
         # Concatenate extra inputs to main features
         if features.shape[0] != extra_features.shape[0]:
-            raise ValueError(f'Sample count mismatch: main features {features.shape[0]} vs extra inputs {extra_features.shape[0]}')
+            raise ValueError(f'Sample count mismatch: main features {features.shape[0]} vs extra inputs {extra_features.shape[0]}. Main features from {data_file}, extra inputs from {extra_input_file}')
         
         features = np.concatenate([features, extra_features], axis=-1)
         print(f'Features concatenated. Final shape: {features.shape}')
