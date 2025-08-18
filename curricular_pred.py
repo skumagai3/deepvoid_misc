@@ -268,13 +268,31 @@ def load_data_for_prediction(inter_sep, extra_inputs=None, max_samples=None, pre
     print('Files exist, starting data loading...')
     
     try:
-        features, labels = nets.load_dataset_all(
+        # For prediction, use load_dataset (no rotations) instead of load_dataset_all (with rotations)
+        features = nets.load_dataset(
+            file_in=data_file,
+            SUBGRID=SUBGRID,
+            OFF=OFF,
+            preproc=preprocessing if preprocessing != 'log_transform' else 'log_transform',
+            sigma=None
+        )
+        
+        # Load corresponding labels using load_dataset_all to get the labels (but we only need one copy)
+        _, labels = nets.load_dataset_all(
             FILE_DEN=data_file,
             FILE_MASK=FILE_MASK,
             SUBGRID=SUBGRID,
-            preprocessing=preprocessing
+            preprocessing=preprocessing,
+            classification=True
         )
+        
+        # For prediction, we need non-augmented features but we can get labels from the augmented version
+        # Since load_dataset gives us N subcubes and load_dataset_all gives us 4*N subcubes,
+        # we need to take every 4th label to match the non-augmented features
+        labels = labels[::4]  # Take every 4th label to match non-augmented subcubes
+        
         print(f'Data loading completed successfully with {preprocessing} preprocessing.')
+        print(f'Features shape: {features.shape}, Labels shape: {labels.shape}')
     except Exception as e:
         print(f'Error during data loading: {e}')
         raise
@@ -294,14 +312,15 @@ def load_data_for_prediction(inter_sep, extra_inputs=None, max_samples=None, pre
         if not os.path.exists(extra_input_file):
             raise FileNotFoundError(f'Extra input file not found: {extra_input_file}')
         
-        # Load extra inputs using the same preprocessing as main features
-        # For prediction, we use load_dataset_all which doesn't do rotations
-        # so we need to load the extra inputs with the same subcube pattern
-        extra_features, _ = nets.load_dataset_all(
-            FILE_DEN=extra_input_file,
-            FILE_MASK=FILE_MASK,
+        # Load extra inputs using the same non-augmented approach as main features
+        # For prediction, we use load_dataset which doesn't do rotations
+        # so we get the same subcube pattern as the main features
+        extra_features = nets.load_dataset(
+            file_in=extra_input_file,
             SUBGRID=SUBGRID,
-            preprocessing=preprocessing
+            OFF=OFF,
+            preproc=preprocessing if preprocessing != 'log_transform' else 'log_transform',
+            sigma=None
         )
         
         print(f'Extra inputs loaded. Shape: {extra_features.shape}')

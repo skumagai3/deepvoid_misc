@@ -277,16 +277,31 @@ def load_dataset_all(FILE_DEN, FILE_MASK, SUBGRID, preproc='mm', classification=
         print('\nNew summary statistics: ')
         summary(den)
     elif preprocessing == 'log_transform':
-      # Log transform for density fields
-      den = np.log10(den + 1e-6)  # Add small constant to avoid log(0)
-      std_val = np.std(den)
-      if std_val == 0:
-        print("Warning: Standard deviation is zero after log transform. Using zeros array.")
-        den = np.zeros_like(den)
+      # Log transform for density fields (not suitable for color data with negative values)
+      # Check if data contains negative values (like g-r colors)
+      if np.any(den < 0):
+        print("Warning: Data contains negative values. Using robust scaling instead of log transform for this data.")
+        # Use robust scaling for data with negative values (like color data)
+        den_clipped = np.clip(den, np.percentile(den, 5), np.percentile(den, 95))
+        std_val = np.std(den_clipped)
+        if std_val == 0:
+          print("Warning: Standard deviation is zero. Using zeros array.")
+          den = np.zeros_like(den_clipped)
+        else:
+          den = (den_clipped - np.median(den_clipped)) / std_val
+          den = np.clip(den, -3, 3)  # Cap extreme values
       else:
-        den = (den - np.mean(den)) / std_val
+        # Apply log transform for positive-only data (like density fields)
+        den_positive = np.maximum(den, 1e-10)  # Ensure all values are positive
+        den = np.log10(den_positive)
+        std_val = np.std(den)
+        if std_val == 0:
+          print("Warning: Standard deviation is zero after log transform. Using zeros array.")
+          den = np.zeros_like(den)
+        else:
+          den = (den - np.mean(den)) / std_val
       if verbose:
-        print('Ran log transform preprocessing!')
+        print('Ran log transform preprocessing (with negative value handling)!')
         print('\nNew summary statistics: ')
         summary(den)
     elif preprocessing == 'clip_extreme':
@@ -1356,22 +1371,30 @@ def load_dataset(file_in, SUBGRID, OFF, preproc='mm',sigma=None,return_int=False
   elif preproc == 'std':
     den = standardize(den); print('Ran preprocessing to scale density s.t. mean=0 and std dev = 1!')
   elif preproc == 'log_transform':
-    # Log transform for density fields - handle zeros and negative values properly
-    den = np.where(den <= 0, 1e-6, den)  # Replace zeros/negatives with small positive value
-    den = np.log10(den)  # Safe log transform
-    
-    # Check for any remaining inf/nan values
-    if np.any(np.isinf(den)) or np.any(np.isnan(den)):
-      print("Warning: inf/nan values found after log transform. Replacing with safe values.")
-      den = np.where(np.isinf(den) | np.isnan(den), np.log10(1e-6), den)
-    
-    std_val = np.std(den)
-    if std_val == 0:
-      print("Warning: Standard deviation is zero after log transform. Using zeros array.")
-      den = np.zeros_like(den)
+    # Log transform for density fields - use same robust logic as load_dataset_all
+    # Check if data contains negative values (like g-r colors)
+    if np.any(den < 0):
+      print("Warning: Data contains negative values. Using robust scaling instead of log transform for this data.")
+      # Use robust scaling for data with negative values (like color data)
+      den_clipped = np.clip(den, np.percentile(den, 5), np.percentile(den, 95))
+      std_val = np.std(den_clipped)
+      if std_val == 0:
+        print("Warning: Standard deviation is zero. Using zeros array.")
+        den = np.zeros_like(den_clipped)
+      else:
+        den = (den_clipped - np.median(den_clipped)) / std_val
+        den = np.clip(den, -3, 3)  # Cap extreme values
     else:
-      den = (den - np.mean(den)) / std_val
-    print('Ran log transform preprocessing!')
+      # Apply log transform for positive-only data (like density fields)
+      den_positive = np.maximum(den, 1e-10)  # Ensure all values are positive
+      den = np.log10(den_positive)
+      std_val = np.std(den)
+      if std_val == 0:
+        print("Warning: Standard deviation is zero after log transform. Using zeros array.")
+        den = np.zeros_like(den)
+      else:
+        den = (den - np.mean(den)) / std_val
+    print('Ran log transform preprocessing (with negative value handling)!')
   elif preproc == 'robust':
     # Robust preprocessing with outlier clipping
     den_clipped = np.clip(den, np.percentile(den, 1), np.percentile(den, 99))
