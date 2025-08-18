@@ -638,9 +638,10 @@ def main():
             max_samples = MAX_PRED_BATCHES * BATCH_SIZE
             print(f'Limited to {max_samples} samples based on MAX_PRED_BATCHES={MAX_PRED_BATCHES}')
         else:
-            # No default limit - use all available data
-            max_samples = None
-            print('Using all available samples (no limit)')
+            # Default to a reasonable limit for memory safety
+            # Full dataset is too large for most systems
+            max_samples = 200  # Conservative limit for memory safety
+            print(f'Using default memory-safe limit of {max_samples} samples (use --MAX_PRED_BATCHES to override)')
             
         pred_features, pred_labels = load_data_for_prediction(
             L_PRED, 
