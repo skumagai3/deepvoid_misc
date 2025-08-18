@@ -112,6 +112,36 @@ print(f'LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}, SAVE_PREDICTIONS={SAVE_PREDIC
 print(f'PREPROCESSING={PREPROCESSING}')
 
 #================================================================
+# Auto-detect model parameters from model name
+#================================================================
+print('Auto-detecting model parameters from model name...')
+
+# Parse model name for automatic parameter detection
+model_parts = MODEL_NAME.split('_')
+
+# Auto-detect RSD usage
+if not args.ADD_RSD and 'RSD' in model_parts:
+    ADD_RSD = True
+    print('Auto-detected: Model trained with RSD data (--ADD_RSD enabled)')
+
+# Auto-detect extra inputs
+if args.EXTRA_INPUTS is None:
+    if 'g-r' in model_parts:
+        EXTRA_INPUTS = 'g-r'
+        print('Auto-detected: Model trained with g-r color extra inputs')
+    elif 'r-flux-density' in model_parts:
+        EXTRA_INPUTS = 'r_flux_density'
+        print('Auto-detected: Model trained with r flux density extra inputs')
+
+# Auto-detect lambda conditioning
+if not args.LAMBDA_CONDITIONING and 'lambda' in model_parts:
+    LAMBDA_CONDITIONING = True
+    print('Auto-detected: Model uses lambda conditioning')
+
+# Print final detected parameters
+print(f'Final parameters: ADD_RSD={ADD_RSD}, EXTRA_INPUTS={EXTRA_INPUTS}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}')
+
+#================================================================
 # Set up custom objects for model loading
 #================================================================
 CUSTOM_OBJECTS = {
@@ -191,6 +221,11 @@ elif EXTRA_INPUTS == 'r_flux_density':
         '10': 'subs1_r_flux_density_Nm512_L10.fvol',
     }
 
+# Add RSD suffix to extra inputs if RSD is enabled
+if ADD_RSD and EXTRA_INPUTS is not None:
+    for key in EXTRA_INPUTS_INFO:
+        EXTRA_INPUTS_INFO[key] = EXTRA_INPUTS_INFO[key].replace('.fvol', '_RSD.fvol')
+
 inter_seps = list(data_info.keys())
 
 if L_PRED not in inter_seps:
@@ -254,9 +289,32 @@ def load_data_for_prediction(inter_sep, extra_inputs=None, max_samples=None, pre
             raise ValueError(f'Invalid interparticle separation for extra inputs: {inter_sep}.')
         extra_input_file = DATA_PATH + EXTRA_INPUTS_INFO[inter_sep]
         print(f'Loading extra inputs from {extra_input_file}...')
-        # Load extra inputs (implementation depends on your data structure)
-        # extra_data = load_extra_inputs(extra_input_file)
-        # features = np.concatenate([features, extra_data], axis=-1)
+        
+        # Check if extra input file exists
+        if not os.path.exists(extra_input_file):
+            raise FileNotFoundError(f'Extra input file not found: {extra_input_file}')
+        
+        # Load extra inputs using the same preprocessing as main features
+        # For prediction, we use load_dataset_all which doesn't do rotations
+        # so we need to load the extra inputs with the same subcube pattern
+        extra_features, _ = nets.load_dataset_all(
+            FILE_DEN=extra_input_file,
+            FILE_MASK=FILE_MASK,
+            SUBGRID=SUBGRID,
+            preprocessing=preprocessing
+        )
+        
+        print(f'Extra inputs loaded. Shape: {extra_features.shape}')
+        
+        # Concatenate extra inputs to main features
+        if features.shape[0] != extra_features.shape[0]:
+            raise ValueError(f'Sample count mismatch: main features {features.shape[0]} vs extra inputs {extra_features.shape[0]}')
+        
+        features = np.concatenate([features, extra_features], axis=-1)
+        print(f'Features concatenated. Final shape: {features.shape}')
+        
+        del extra_features  # Free memory
+        gc.collect()
     
     print(f'Features shape: {features.shape}, Labels shape: {labels.shape}')
     return features, labels
