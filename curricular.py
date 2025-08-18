@@ -500,54 +500,93 @@ def load_data(inter_sep, extra_inputs=None, verbose=True, preprocessing='standar
             # Extract non-overlapping subcubes with rotations (matching load_dataset_all pattern)
             n_bins = den.shape[0] // SUBGRID
             if RSD_PRESERVING_ROTATIONS:
-                # 8 RSD-preserving rotations (4 z-axis + 4 z-axis with xy-flip)
-                extra_input = np.zeros(((n_bins**3)*8, SUBGRID, SUBGRID, SUBGRID, 1), dtype=np.float32)
-                
-                cont = 0
-                for i in range(n_bins):
-                    for j in range(n_bins):
-                        for k in range(n_bins):
-                            sub_den = den[i*SUBGRID:(i+1)*SUBGRID, j*SUBGRID:(j+1)*SUBGRID, k*SUBGRID:(k+1)*SUBGRID]
-                            
-                            # Original + 3 z-axis rotations
-                            extra_input[cont,:,:,:,0] = sub_den
-                            extra_input[cont+1,:,:,:,0] = volumes.rotate_cube(sub_den.copy(), 2)
-                            temp_rot = volumes.rotate_cube(sub_den.copy(), 2)
-                            extra_input[cont+2,:,:,:,0] = volumes.rotate_cube(temp_rot, 2)
-                            temp_rot = volumes.rotate_cube(temp_rot, 2)
-                            extra_input[cont+3,:,:,:,0] = volumes.rotate_cube(temp_rot, 2)
-                            
-                            # Same 4 rotations with xy-flip
-                            sub_den_flip = np.flip(sub_den, axis=0)
-                            extra_input[cont+4,:,:,:,0] = sub_den_flip
-                            extra_input[cont+5,:,:,:,0] = volumes.rotate_cube(sub_den_flip.copy(), 2)
-                            temp_rot = volumes.rotate_cube(sub_den_flip.copy(), 2)
-                            extra_input[cont+6,:,:,:,0] = volumes.rotate_cube(temp_rot, 2)
-                            temp_rot = volumes.rotate_cube(temp_rot, 2)
-                            extra_input[cont+7,:,:,:,0] = volumes.rotate_cube(temp_rot, 2)
-                            
-                            cont += 8
-                            
-                if verbose:
-                    print(f'Applied 8 RSD-preserving rotations to extra inputs for non-overlapping subcubes')
+                if EXTRA_AUGMENTATION:
+                    # Heavy RSD-preserving: 8 rotations (4 z-axis + 4 z-axis with xy-flip)
+                    extra_input = np.zeros(((n_bins**3)*8, SUBGRID, SUBGRID, SUBGRID, 1), dtype=np.float32)
+                    
+                    cont = 0
+                    for i in range(n_bins):
+                        for j in range(n_bins):
+                            for k in range(n_bins):
+                                sub_den = den[i*SUBGRID:(i+1)*SUBGRID, j*SUBGRID:(j+1)*SUBGRID, k*SUBGRID:(k+1)*SUBGRID]
+                                
+                                # Original + 3 z-axis rotations
+                                extra_input[cont,:,:,:,0] = sub_den
+                                extra_input[cont+1,:,:,:,0] = volumes.rotate_cube(sub_den.copy(), 2)
+                                temp_rot = volumes.rotate_cube(sub_den.copy(), 2)
+                                extra_input[cont+2,:,:,:,0] = volumes.rotate_cube(temp_rot, 2)
+                                temp_rot = volumes.rotate_cube(temp_rot, 2)
+                                extra_input[cont+3,:,:,:,0] = volumes.rotate_cube(temp_rot, 2)
+                                
+                                # Same 4 rotations with xy-flip
+                                sub_den_flip = np.flip(sub_den, axis=0)
+                                extra_input[cont+4,:,:,:,0] = sub_den_flip
+                                extra_input[cont+5,:,:,:,0] = volumes.rotate_cube(sub_den_flip.copy(), 2)
+                                temp_rot = volumes.rotate_cube(sub_den_flip.copy(), 2)
+                                extra_input[cont+6,:,:,:,0] = volumes.rotate_cube(temp_rot, 2)
+                                temp_rot = volumes.rotate_cube(temp_rot, 2)
+                                extra_input[cont+7,:,:,:,0] = volumes.rotate_cube(temp_rot, 2)
+                                
+                                cont += 8
+                    
+                    if verbose:
+                        print(f'Applied 8 heavy RSD-preserving rotations to extra inputs for non-overlapping subcubes')
+                else:
+                    # Light RSD-preserving: 4 rotations (4 z-axis only) - MATCHES load_dataset_all_rsd_preserving_light
+                    extra_input = np.zeros(((n_bins**3)*4, SUBGRID, SUBGRID, SUBGRID, 1), dtype=np.float32)
+                    
+                    cont = 0
+                    for i in range(n_bins):
+                        for j in range(n_bins):
+                            for k in range(n_bins):
+                                sub_den = den[i*SUBGRID:(i+1)*SUBGRID, j*SUBGRID:(j+1)*SUBGRID, k*SUBGRID:(k+1)*SUBGRID]
+                                
+                                # Only 4 z-axis rotations (matching light RSD-preserving)
+                                extra_input[cont,:,:,:,0] = sub_den
+                                extra_input[cont+1,:,:,:,0] = volumes.rotate_cube(sub_den.copy(), 2)
+                                temp_rot = volumes.rotate_cube(sub_den.copy(), 2)
+                                extra_input[cont+2,:,:,:,0] = volumes.rotate_cube(temp_rot, 2)
+                                temp_rot = volumes.rotate_cube(temp_rot, 2)
+                                extra_input[cont+3,:,:,:,0] = volumes.rotate_cube(temp_rot, 2)
+                                cont += 4
+                    
+                    if verbose:
+                        print(f'Applied 4 light RSD-preserving rotations to extra inputs for non-overlapping subcubes')
             else:
-                # 4 traditional rotations (around all axes)
-                extra_input = np.zeros(((n_bins**3)*4, SUBGRID, SUBGRID, SUBGRID, 1), dtype=np.float32)
-                
-                cont = 0
-                for i in range(n_bins):
-                    for j in range(n_bins):
-                        for k in range(n_bins):
-                            sub_den = den[i*SUBGRID:(i+1)*SUBGRID, j*SUBGRID:(j+1)*SUBGRID, k*SUBGRID:(k+1)*SUBGRID]
-                            # Original + 3 rotations (matching load_dataset_all pattern exactly)
-                            extra_input[cont,:,:,:,0] = sub_den
-                            extra_input[cont+1,:,:,:,0] = volumes.rotate_cube(sub_den, 2)
-                            extra_input[cont+2,:,:,:,0] = volumes.rotate_cube(sub_den, 1)
-                            extra_input[cont+3,:,:,:,0] = volumes.rotate_cube(sub_den, 0)
-                            cont += 4
-                            
-                if verbose:
-                    print(f'Applied 4 traditional rotations to extra inputs for non-overlapping subcubes')
+                if EXTRA_AUGMENTATION:
+                    # Heavy standard: 4 rotations (around all axes)
+                    extra_input = np.zeros(((n_bins**3)*4, SUBGRID, SUBGRID, SUBGRID, 1), dtype=np.float32)
+                    
+                    cont = 0
+                    for i in range(n_bins):
+                        for j in range(n_bins):
+                            for k in range(n_bins):
+                                sub_den = den[i*SUBGRID:(i+1)*SUBGRID, j*SUBGRID:(j+1)*SUBGRID, k*SUBGRID:(k+1)*SUBGRID]
+                                # Original + 3 rotations (matching load_dataset_all pattern exactly)
+                                extra_input[cont,:,:,:,0] = sub_den
+                                extra_input[cont+1,:,:,:,0] = volumes.rotate_cube(sub_den, 2)
+                                extra_input[cont+2,:,:,:,0] = volumes.rotate_cube(sub_den, 1)
+                                extra_input[cont+3,:,:,:,0] = volumes.rotate_cube(sub_den, 0)
+                                cont += 4
+                    
+                    if verbose:
+                        print(f'Applied 4 heavy traditional rotations to extra inputs for non-overlapping subcubes')
+                else:
+                    # Light standard: 2 rotations - MATCHES load_dataset_all_light
+                    extra_input = np.zeros(((n_bins**3)*2, SUBGRID, SUBGRID, SUBGRID, 1), dtype=np.float32)
+                    
+                    cont = 0
+                    for i in range(n_bins):
+                        for j in range(n_bins):
+                            for k in range(n_bins):
+                                sub_den = den[i*SUBGRID:(i+1)*SUBGRID, j*SUBGRID:(j+1)*SUBGRID, k*SUBGRID:(k+1)*SUBGRID]
+                                # Only 2 rotations (matching light augmentation)
+                                extra_input[cont,:,:,:,0] = sub_den
+                                extra_input[cont+1,:,:,:,0] = volumes.rotate_cube(sub_den, 2)
+                                cont += 2
+                    
+                    if verbose:
+                        print(f'Applied 2 light rotations to extra inputs for non-overlapping subcubes')
             
             if verbose:
                 print(f'Extracted non-overlapping subcubes with 4 rotations for extra inputs')
