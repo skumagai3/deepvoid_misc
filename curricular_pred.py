@@ -313,6 +313,18 @@ def load_data_for_prediction(inter_sep, extra_inputs=None, max_samples=None, pre
             raise ValueError(f'Invalid interparticle separation for extra inputs: {inter_sep}.')
         extra_input_file = DATA_PATH + EXTRA_INPUTS_INFO[inter_sep]
         print(f'Loading extra inputs from {extra_input_file}...')
+        print(f'DEBUG: DATA_PATH = {DATA_PATH}')
+        print(f'DEBUG: EXTRA_INPUTS_INFO[{inter_sep}] = {EXTRA_INPUTS_INFO[inter_sep]}')
+        print(f'DEBUG: Full extra input path = {extra_input_file}')
+        print(f'DEBUG: File exists check = {os.path.exists(extra_input_file)}')
+        
+        # Try to list files in the directory to help debug
+        try:
+            data_dir_files = os.listdir(DATA_PATH)
+            matching_files = [f for f in data_dir_files if 'r_flux_density' in f and 'L10' in f]
+            print(f'DEBUG: Files in {DATA_PATH} matching "r_flux_density" and "L10": {matching_files}')
+        except Exception as e:
+            print(f'DEBUG: Could not list directory {DATA_PATH}: {e}')
         
         # Check if extra input file exists
         if not os.path.exists(extra_input_file):
