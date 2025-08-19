@@ -868,7 +868,7 @@ def main():
                     SUBGRID=SUBGRID, 
                     OFF=OFF,
                     TRAIN_SCORE=False,
-                    EXTRA_INPUTS=EXTRA_INPUTS_INFO.get(L_PRED) if EXTRA_INPUTS and EXTRA_INPUTS_INFO else None,
+                    EXTRA_INPUTS=DATA_PATH + EXTRA_INPUTS_INFO.get(L_PRED) if EXTRA_INPUTS and EXTRA_INPUTS_INFO else None,
                     lambda_value=float(L_PRED) if LAMBDA_CONDITIONING else None,
                     preprocessing=PREPROCESSING
                 )
