@@ -17,6 +17,13 @@ Key Options:
     Batch size for prediction (default: 2)
 --TEST_MODE
     Use only a small subset of data for quick testing
+--SKIP_SCORING
+    Skip scoring calculations and only generate slice plots
+--SKIP_SLICE_PLOTS
+    Skip slice plot generation to save memory
+
+Note: You can use --SKIP_SCORING to focus only on visualization when you don't need 
+      detailed metrics. This saves significant computation time for large datasets.
 '''
 
 import os
@@ -83,6 +90,8 @@ optional.add_argument('--SAVE_PREDICTIONS', action='store_true',
                       help='Save raw predictions to .fvol file.')
 optional.add_argument('--SKIP_SLICE_PLOTS', action='store_true',
                       help='Skip slice plot generation to save memory.')
+optional.add_argument('--SKIP_SCORING', action='store_true',
+                      help='Skip scoring calculations and only generate slice plots.')
 optional.add_argument('--MAX_PRED_BATCHES', type=int, default=None,
                       help='Limit number of prediction batches for memory management.')
 optional.add_argument('--TEST_MODE', action='store_true',
@@ -102,6 +111,7 @@ ADD_RSD = args.ADD_RSD
 LAMBDA_CONDITIONING = args.LAMBDA_CONDITIONING
 SAVE_PREDICTIONS = args.SAVE_PREDICTIONS
 SKIP_SLICE_PLOTS = args.SKIP_SLICE_PLOTS
+SKIP_SCORING = args.SKIP_SCORING
 MAX_PRED_BATCHES = args.MAX_PRED_BATCHES
 TEST_MODE = args.TEST_MODE
 PREPROCESSING = args.PREPROCESSING
@@ -109,6 +119,7 @@ PREPROCESSING = args.PREPROCESSING
 print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, MODEL_NAME={MODEL_NAME}, L_PRED={L_PRED}')
 print(f'BATCH_SIZE={BATCH_SIZE}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}')
 print(f'LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}, SAVE_PREDICTIONS={SAVE_PREDICTIONS}')
+print(f'SKIP_SLICE_PLOTS={SKIP_SLICE_PLOTS}, SKIP_SCORING={SKIP_SCORING}')
 print(f'PREPROCESSING={PREPROCESSING}')
 
 #================================================================
@@ -138,10 +149,14 @@ if not args.LAMBDA_CONDITIONING and 'lambda' in model_parts:
     LAMBDA_CONDITIONING = True
     print('Auto-detected: Model uses lambda conditioning')
 
-# Print final detected parameters
-print(f'Final parameters: ADD_RSD={ADD_RSD}, EXTRA_INPUTS={EXTRA_INPUTS}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}')
+    # Validate argument combinations
+    if SKIP_SLICE_PLOTS and SKIP_SCORING:
+        print('WARNING: Both --SKIP_SLICE_PLOTS and --SKIP_SCORING are enabled.')
+        print('         This will only load the model and data without generating any outputs.')
+        print('         Consider using only one of these options for meaningful results.')
 
-#================================================================
+    # Final detected parameters
+    print(f'Final parameters: ADD_RSD={ADD_RSD}, EXTRA_INPUTS={EXTRA_INPUTS}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}')#================================================================
 # Set up custom objects for model loading
 #================================================================
 CUSTOM_OBJECTS = {
@@ -680,21 +695,29 @@ def main():
     )
     
     # Make predictions
-    try:
-        predictions, true_labels = predict_with_memory_management(
-            model, pred_dataset, max_batches=MAX_PRED_BATCHES
-        )
-        
-        if predictions is None:
-            print('ERROR: Prediction failed.')
-            return
+    predictions = None
+    true_labels = None
+    
+    if not SKIP_SCORING or not SKIP_SLICE_PLOTS:
+        # Need predictions for either scoring or slice plots
+        print('Making predictions...')
+        try:
+            predictions, true_labels = predict_with_memory_management(
+                model, pred_dataset, max_batches=MAX_PRED_BATCHES
+            )
             
-    except Exception as e:
-        print(f'ERROR: Prediction failed: {e}')
-        return
+            if predictions is None:
+                print('ERROR: Prediction failed.')
+                return
+                
+        except Exception as e:
+            print(f'ERROR: Prediction failed: {e}')
+            return
+    else:
+        print('Skipping predictions since both scoring and slice plots are disabled.')
     
     # Save predictions if requested
-    if SAVE_PREDICTIONS:
+    if SAVE_PREDICTIONS and predictions is not None:
         pred_file = PRED_PATH + MODEL_NAME + f'_predictions_L{L_PRED}_{PREPROCESSING}.npy'
         try:
             np.save(pred_file, predictions)
@@ -703,120 +726,136 @@ def main():
             print(f'Warning: Failed to save predictions: {e}')
     
     # Calculate scores
-    print('Calculating scores...')
-    scores = {}
-    
-    # Create output directory for figures
-    MODEL_FIG_PATH = FIG_PATH + MODEL_NAME + '/'
-    os.makedirs(MODEL_FIG_PATH, exist_ok=True)
-    
-    # Save model temporarily for scoring functions that require a model file
-    temp_model_path = MODEL_PATH + MODEL_NAME + f'_temp_L{L_PRED}_{PREPROCESSING}'
-    print(f'Temporarily saving model for scoring functions...')
-    
-    try:
-        # Save the recreated model temporarily (function will add .keras extension)
-        model.save(temp_model_path + '.keras')
-        print(f'Model temporarily saved to {temp_model_path}.keras')
+    if not SKIP_SCORING and predictions is not None:
+        print('Calculating scores...')
+        scores = {}
         
-        # Use your existing save_scores_from_fvol function (includes MCC)
-        print('Using save_scores_from_fvol for comprehensive metrics (including MCC)...')
-        nets.save_scores_from_fvol(
-            true_labels, predictions, 
-            temp_model_path,
-            MODEL_FIG_PATH, scores, N_CLASSES, VAL_FLAG=True
-        )
-        print('save_scores_from_fvol completed successfully.')
+        # Create output directory for figures
+        MODEL_FIG_PATH = FIG_PATH + MODEL_NAME + '/'
+        os.makedirs(MODEL_FIG_PATH, exist_ok=True)
         
-        # Print key metrics from your scoring function
-        if scores:
-            print('\n=== Key Metrics (from save_scores_from_fvol) ===')
-            for key, value in scores.items():
-                if isinstance(value, (int, float)):
-                    print(f'{key}: {value:.4f}')
+        # Save model temporarily for scoring functions that require a model file
+        temp_model_path = MODEL_PATH + MODEL_NAME + f'_temp_L{L_PRED}_{PREPROCESSING}'
+        print(f'Temporarily saving model for scoring functions...')
         
-    except Exception as e:
-        print(f'save_scores_from_fvol failed: {e}')
-        print('Falling back to direct sklearn scoring...')
-        
-        # Fallback to direct sklearn scoring
         try:
-            from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
-            from sklearn.metrics import f1_score, precision_score, recall_score
+            # Save the recreated model temporarily (function will add .keras extension)
+            model.save(temp_model_path + '.keras')
+            print(f'Model temporarily saved to {temp_model_path}.keras')
             
-            # Convert predictions to class labels
-            if len(predictions.shape) > 1 and predictions.shape[-1] > 1:
-                pred_labels = np.argmax(predictions, axis=-1)
-            else:
-                pred_labels = predictions
-                
-            # Convert true labels to class labels if needed  
-            if len(true_labels.shape) > 1 and true_labels.shape[-1] > 1:
-                true_labels_flat = np.argmax(true_labels, axis=-1)
-            else:
-                true_labels_flat = true_labels
-                
-            # Flatten for sklearn metrics
-            y_true_flat = true_labels_flat.flatten()
-            y_pred_flat = pred_labels.flatten()
+            # Use your existing save_scores_from_fvol function (includes MCC)
+            print('Using save_scores_from_fvol for comprehensive metrics (including MCC)...')
+            nets.save_scores_from_fvol(
+                true_labels, predictions, 
+                temp_model_path,
+                MODEL_FIG_PATH, scores, N_CLASSES, VAL_FLAG=True
+            )
+            print('save_scores_from_fvol completed successfully.')
             
-            # Calculate comprehensive metrics
-            accuracy = accuracy_score(y_true_flat, y_pred_flat)
-            f1_macro = f1_score(y_true_flat, y_pred_flat, average='macro', zero_division=0)
-            f1_micro = f1_score(y_true_flat, y_pred_flat, average='micro', zero_division=0)
-            f1_weighted = f1_score(y_true_flat, y_pred_flat, average='weighted', zero_division=0)
+            # Print key metrics from your scoring function
+            if scores:
+                print('\n=== Key Metrics (from save_scores_from_fvol) ===')
+                for key, value in scores.items():
+                    if isinstance(value, (int, float)):
+                        print(f'{key}: {value:.4f}')
             
-            # Per-class F1 scores
-            f1_per_class = f1_score(y_true_flat, y_pred_flat, average=None, zero_division=0)
+        except Exception as e:
+            print(f'save_scores_from_fvol failed: {e}')
+            print('Falling back to direct sklearn scoring...')
             
-            # Store in scores dict
-            scores['accuracy'] = accuracy
-            scores['f1_macro'] = f1_macro
-            scores['f1_micro'] = f1_micro
-            scores['f1_weighted'] = f1_weighted
-            for i, class_name in enumerate(class_labels):
-                if i < len(f1_per_class):
-                    scores[f'f1_{class_name}'] = f1_per_class[i]
-            
-            print('Fallback scoring completed successfully.')
-            
-            # Print key metrics
-            print('\n=== Key Metrics (fallback) ===')
-            print(f'Accuracy: {accuracy:.4f}')
-            print(f'F1 Macro: {f1_macro:.4f}')
-            print(f'F1 Micro: {f1_micro:.4f}')
-            print(f'F1 Weighted: {f1_weighted:.4f}')
-            
-            # Per-class F1 scores
-            print('\n=== Per-Class F1 Scores ===')
-            for i, class_name in enumerate(class_labels):
-                if i < len(f1_per_class):
-                    print(f'F1 {class_name}: {f1_per_class[i]:.4f}')
-            
-            # Classification report
-            print('\n=== Classification Report ===')
-            print(classification_report(y_true_flat, y_pred_flat, 
-                                       target_names=class_labels, zero_division=0))
-            
-            # Save confusion matrix
+            # Fallback to direct sklearn scoring
             try:
-                cm = confusion_matrix(y_true_flat, y_pred_flat)
-                cm_file = MODEL_FIG_PATH + f'{MODEL_NAME}_confusion_matrix_L{L_PRED}_{PREPROCESSING}.npy'
-                np.save(cm_file, cm)
-                print(f'Confusion matrix saved to {cm_file}')
-            except Exception as e:
-                print(f'Warning: Could not save confusion matrix: {e}')
-                                           
-        except Exception as e2:
-            print(f'Fallback scoring also failed: {e2}')
-            print('Continuing without detailed metrics...')
+                from sklearn.metrics import accuracy_score, classification_report, confusion_matrix
+                from sklearn.metrics import f1_score, precision_score, recall_score
+                
+                # Convert predictions to class labels
+                if len(predictions.shape) > 1 and predictions.shape[-1] > 1:
+                    pred_labels = np.argmax(predictions, axis=-1)
+                else:
+                    pred_labels = predictions
+                    
+                # Convert true labels to class labels if needed  
+                if len(true_labels.shape) > 1 and true_labels.shape[-1] > 1:
+                    true_labels_flat = np.argmax(true_labels, axis=-1)
+                else:
+                    true_labels_flat = true_labels
+                    
+                # Flatten for sklearn metrics
+                y_true_flat = true_labels_flat.flatten()
+                y_pred_flat = pred_labels.flatten()
+                
+                # Calculate comprehensive metrics
+                accuracy = accuracy_score(y_true_flat, y_pred_flat)
+                f1_macro = f1_score(y_true_flat, y_pred_flat, average='macro', zero_division=0)
+                f1_micro = f1_score(y_true_flat, y_pred_flat, average='micro', zero_division=0)
+                f1_weighted = f1_score(y_true_flat, y_pred_flat, average='weighted', zero_division=0)
+                
+                # Per-class F1 scores
+                f1_per_class = f1_score(y_true_flat, y_pred_flat, average=None, zero_division=0)
+                
+                # Store in scores dict
+                scores['accuracy'] = accuracy
+                scores['f1_macro'] = f1_macro
+                scores['f1_micro'] = f1_micro
+                scores['f1_weighted'] = f1_weighted
+                for i, class_name in enumerate(class_labels):
+                    if i < len(f1_per_class):
+                        scores[f'f1_{class_name}'] = f1_per_class[i]
+                
+                print('Fallback scoring completed successfully.')
+                
+                # Print key metrics
+                print('\n=== Key Metrics (fallback) ===')
+                print(f'Accuracy: {accuracy:.4f}')
+                print(f'F1 Macro: {f1_macro:.4f}')
+                print(f'F1 Micro: {f1_micro:.4f}')
+                print(f'F1 Weighted: {f1_weighted:.4f}')
+                
+                # Per-class F1 scores
+                print('\n=== Per-Class F1 Scores ===')
+                for i, class_name in enumerate(class_labels):
+                    if i < len(f1_per_class):
+                        print(f'F1 {class_name}: {f1_per_class[i]:.4f}')
+                
+                # Classification report
+                print('\n=== Classification Report ===')
+                print(classification_report(y_true_flat, y_pred_flat, 
+                                           target_names=class_labels, zero_division=0))
+                
+                # Save confusion matrix
+                try:
+                    cm = confusion_matrix(y_true_flat, y_pred_flat)
+                    cm_file = MODEL_FIG_PATH + f'{MODEL_NAME}_confusion_matrix_L{L_PRED}_{PREPROCESSING}.npy'
+                    np.save(cm_file, cm)
+                    print(f'Confusion matrix saved to {cm_file}')
+                except Exception as e:
+                    print(f'Warning: Could not save confusion matrix: {e}')
+                                               
+            except Exception as e2:
+                print(f'Fallback scoring also failed: {e2}')
+                print('Continuing without detailed metrics...')
+    else:
+        print('Scoring step skipped as requested.')
+        scores = {}
+        temp_model_path = MODEL_PATH + MODEL_NAME + f'_temp_L{L_PRED}_{PREPROCESSING}'
     
     # Generate slice plots (if not skipped and plotter is available)
     if not SKIP_SLICE_PLOTS:
         if plotter is not None:
             print('Generating slice plots using save_scores_from_model...')
             try:
-                # Use your existing save_scores_from_model function with the temporary model
+                # Create output directory for figures if not created during scoring
+                MODEL_FIG_PATH = FIG_PATH + MODEL_NAME + '/'
+                os.makedirs(MODEL_FIG_PATH, exist_ok=True)
+                
+                # If scoring was skipped, we need to save the model temporarily for slice plots
+                if SKIP_SCORING:
+                    temp_model_path = MODEL_PATH + MODEL_NAME + f'_temp_L{L_PRED}_{PREPROCESSING}'
+                    print(f'Temporarily saving model for slice plot generation...')
+                    model.save(temp_model_path + '.keras')
+                    print(f'Model temporarily saved to {temp_model_path}.keras')
+                
+                # Use your existing save_scores_from_model function
                 FILE_PRED = PRED_PATH + MODEL_NAME + f'_predictions_L{L_PRED}_{PREPROCESSING}.fvol'
                 
                 nets.save_scores_from_model(
@@ -854,9 +893,22 @@ def main():
         print(f'Warning: Could not remove temporary model file: {e}')
     
     print('\n=== Prediction and Analysis Complete ===')
-    print(f'Results saved in: {MODEL_FIG_PATH}')
+    if not SKIP_SCORING:
+        print(f'Scoring results saved in: {MODEL_FIG_PATH}')
+    if not SKIP_SLICE_PLOTS:
+        print(f'Slice plots saved in: {MODEL_FIG_PATH}')
     if SAVE_PREDICTIONS:
         print(f'Raw predictions saved in: {PRED_PATH}')
+    
+    # Summary of what was done
+    if SKIP_SCORING and not SKIP_SLICE_PLOTS:
+        print('Note: Scoring was skipped, only slice plots were generated.')
+    elif not SKIP_SCORING and SKIP_SLICE_PLOTS:
+        print('Note: Slice plots were skipped, only scoring was performed.')
+    elif SKIP_SCORING and SKIP_SLICE_PLOTS:
+        print('Note: Both scoring and slice plots were skipped.')
+    else:
+        print('Note: Both scoring and slice plots were generated.')
 
 if __name__ == '__main__':
     main()
