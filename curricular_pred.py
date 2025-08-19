@@ -856,13 +856,14 @@ def main():
                     print(f'Model temporarily saved to {temp_model_path}.keras')
                 
                 # Use your existing save_scores_from_model function
-                # Create a clean prediction filename - avoid path concatenation issues
-                pred_filename = f'{MODEL_NAME}_predictions_L{L_PRED}_{PREPROCESSING}.fvol'
-                FILE_PRED = os.path.join(PRED_PATH, pred_filename)
+                # NOTE: save_scores_from_model expects a base filename (no path, no extension) for FILE_PRED
+                # It will construct the full path internally by appending to PRED_PATH
+                pred_base_filename = f'{MODEL_NAME}_predictions_L{L_PRED}_{PREPROCESSING}'
                 
                 # Ensure the prediction path exists and is clean
                 os.makedirs(PRED_PATH, exist_ok=True)
-                print(f'Using prediction file path: {FILE_PRED}')
+                print(f'Using prediction base filename: {pred_base_filename}')
+                print(f'Predictions will be saved to: {PRED_PATH}')
                 
                 # Get extra inputs path if needed
                 extra_inputs_path = None
@@ -875,7 +876,7 @@ def main():
                     FILE_MASK,                      # FILE_MSK  
                     temp_model_path,                # FILE_MODEL
                     MODEL_FIG_PATH,                 # FILE_FIG
-                    FILE_PRED,                      # FILE_PRED
+                    pred_base_filename,             # FILE_PRED (base filename only)
                     GRID=GRID, 
                     SUBGRID=SUBGRID, 
                     OFF=OFF,
