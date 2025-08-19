@@ -856,7 +856,19 @@ def main():
                     print(f'Model temporarily saved to {temp_model_path}.keras')
                 
                 # Use your existing save_scores_from_model function
-                FILE_PRED = PRED_PATH + MODEL_NAME + f'_predictions_L{L_PRED}_{PREPROCESSING}.fvol'
+                # Create a clean prediction filename - avoid path concatenation issues
+                pred_filename = f'{MODEL_NAME}_predictions_L{L_PRED}_{PREPROCESSING}.fvol'
+                FILE_PRED = os.path.join(PRED_PATH, pred_filename)
+                
+                # Ensure the prediction path exists and is clean
+                os.makedirs(PRED_PATH, exist_ok=True)
+                print(f'Using prediction file path: {FILE_PRED}')
+                
+                # Get extra inputs path if needed
+                extra_inputs_path = None
+                if EXTRA_INPUTS and EXTRA_INPUTS_INFO and L_PRED in EXTRA_INPUTS_INFO:
+                    extra_inputs_path = os.path.join(DATA_PATH, EXTRA_INPUTS_INFO[L_PRED])
+                    print(f'Using extra inputs path: {extra_inputs_path}')
                 
                 nets.save_scores_from_model(
                     DATA_PATH + data_info[L_PRED],  # FILE_DEN
@@ -868,7 +880,7 @@ def main():
                     SUBGRID=SUBGRID, 
                     OFF=OFF,
                     TRAIN_SCORE=False,
-                    EXTRA_INPUTS=DATA_PATH + EXTRA_INPUTS_INFO.get(L_PRED) if EXTRA_INPUTS and EXTRA_INPUTS_INFO else None,
+                    EXTRA_INPUTS=extra_inputs_path,
                     lambda_value=float(L_PRED) if LAMBDA_CONDITIONING else None,
                     preprocessing=PREPROCESSING
                 )
