@@ -1301,7 +1301,51 @@ else:  # hybrid
 
 try:
     results = model.evaluate(eval_dataset, verbose=2)
-    print('Final evaluation results:', results)
+    print('=' * 80)
+    print('>>> FINAL EVALUATION RESULTS <<<')
+    print('=' * 80)
+    
+    if LAMBDA_CONDITIONING:
+        # Lambda conditioning has dual outputs: [segmentation, lambda_pred]
+        # Results format: [total_loss, seg_loss, lambda_loss, seg_accuracy, seg_mcc, seg_f1_micro, seg_void_f1, lambda_mse]
+        if len(results) >= 8:
+            print(f'Total Loss:                    {results[0]:.6f}')
+            print(f'Segmentation Loss ({LOSS}):     {results[1]:.6f}')
+            print(f'Lambda Regression Loss (MSE):  {results[2]:.6f}')
+            print(f'Segmentation Accuracy:         {results[3]:.4f} ({results[3]*100:.2f}%)')
+            print(f'Segmentation MCC:              {results[4]:.4f}')
+            print(f'Segmentation F1-Micro:         {results[5]:.4f}')
+            print(f'Void F1 Score:                 {results[6]:.4f}')
+            print(f'Lambda Prediction MSE:         {results[7]:.6f}')
+            if len(results) > 8:
+                print(f'Lambda Prediction Accuracy:    {results[8]:.4f}')
+        else:
+            print(f'Results (lambda conditioning): {results}')
+            print('Note: Results format may vary - fewer metrics than expected')
+    else:
+        # Standard single-output model
+        # Results format: [loss, accuracy, mcc, f1_micro, void_f1]
+        if len(results) >= 5:
+            print(f'Total Loss ({LOSS}):           {results[0]:.6f}')
+            print(f'Accuracy:                      {results[1]:.4f} ({results[1]*100:.2f}%)')
+            print(f'Matthews Correlation Coeff:    {results[2]:.4f}')
+            print(f'F1-Micro Score:                {results[3]:.4f}')
+            print(f'Void F1 Score:                 {results[4]:.4f}')
+        else:
+            print(f'Results (standard model): {results}')
+            print('Note: Results format may vary - fewer metrics than expected')
+    
+    print('=' * 80)
+    print('Metric Definitions:')
+    print('  • Accuracy: Overall pixel-wise classification accuracy')
+    print('  • MCC: Matthews Correlation Coefficient (-1 to +1, measures quality of binary/multiclass classification)')
+    print('  • F1-Micro: Micro-averaged F1 score across all classes')
+    print('  • Void F1: F1 score specifically for void class detection')
+    if LAMBDA_CONDITIONING:
+        print('  • Lambda MSE: Mean squared error for lambda value regression')
+        print('  • Total Loss: Combined segmentation and lambda regression losses')
+    print('=' * 80)
+    
 except Exception as e:
     print(f'Error during final evaluation: {e}')
     print('This may be due to memory constraints. Training completed successfully.')
