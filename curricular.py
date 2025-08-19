@@ -149,6 +149,13 @@ optional.add_argument('--RSD_PRESERVING_ROTATIONS', action='store_true',
                       help='Use RSD-preserving rotations (only around z-axis and xy-flips) instead of full 3D rotations. Recommended when ADD_RSD is used to preserve line-of-sight anisotropy.')
 optional.add_argument('--EXTRA_AUGMENTATION', action='store_true',
                       help='Enable extra data augmentation (doubles the number of rotated samples). Default is lighter augmentation for better memory usage.')
+optional.add_argument('--VALIDATION_SPLIT', type=float, default=0.2,
+                      help='Fraction of data to reserve for validation (never used for training). Default is 0.2 (20%%).')
+optional.add_argument('--SPLIT_SEED', type=int, default=42,
+                      help='Random seed for train/validation split to ensure reproducibility. Default is 42.')
+optional.add_argument('--SPLIT_METHOD', type=str, default='random', 
+                      choices=['random', 'spatial'],
+                      help='Method for splitting data: random (random subcubes) or spatial (spatially separated regions). Default is random.')
 args = parser.parse_args()
 ROOT_DIR = args.ROOT_DIR
 DEPTH = args.DEPTH
@@ -172,6 +179,9 @@ FOCAL_GAMMA = args.FOCAL_GAMMA
 USE_OVERLAPPING_SUBCUBES = args.USE_OVERLAPPING_SUBCUBES  # Default is False unless --USE_OVERLAPPING_SUBCUBES is specified
 RSD_PRESERVING_ROTATIONS = args.RSD_PRESERVING_ROTATIONS  # Default is False unless --RSD_PRESERVING_ROTATIONS is specified
 EXTRA_AUGMENTATION = args.EXTRA_AUGMENTATION  # Default is False unless --EXTRA_AUGMENTATION is specified
+VALIDATION_SPLIT = args.VALIDATION_SPLIT
+SPLIT_SEED = args.SPLIT_SEED
+SPLIT_METHOD = args.SPLIT_METHOD
 
 # Make RSD-preserving rotations the default when ADD_RSD is enabled (unless explicitly overridden)
 if ADD_RSD and not args.RSD_PRESERVING_ROTATIONS and 'RSD_PRESERVING_ROTATIONS' not in sys.argv:
@@ -182,7 +192,17 @@ if ADD_RSD and not args.RSD_PRESERVING_ROTATIONS and 'RSD_PRESERVING_ROTATIONS' 
 validation_strategy = args.VALIDATION_STRATEGY
 target_lambda = args.TARGET_LAMBDA or args.L_VAL  # Default to L_VAL if not specified
 
-print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, L_VAL={L_VAL}, USE_ATTENTION={USE_ATTENTION}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}, N_EPOCHS_PER_INTER_SEP={N_EPOCHS_PER_INTER_SEP}, VALIDATION_STRATEGY={validation_strategy}, TARGET_LAMBDA={target_lambda}, PREPROCESSING={PREPROCESSING}, WARMUP_EPOCHS={WARMUP_EPOCHS}, FOCAL_ALPHA={FOCAL_ALPHA}, FOCAL_GAMMA={FOCAL_GAMMA}, USE_OVERLAPPING_SUBCUBES={USE_OVERLAPPING_SUBCUBES}, RSD_PRESERVING_ROTATIONS={RSD_PRESERVING_ROTATIONS}, EXTRA_AUGMENTATION={EXTRA_AUGMENTATION}')
+print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, L_VAL={L_VAL}, USE_ATTENTION={USE_ATTENTION}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}, N_EPOCHS_PER_INTER_SEP={N_EPOCHS_PER_INTER_SEP}, VALIDATION_STRATEGY={validation_strategy}, TARGET_LAMBDA={target_lambda}, PREPROCESSING={PREPROCESSING}, WARMUP_EPOCHS={WARMUP_EPOCHS}, FOCAL_ALPHA={FOCAL_ALPHA}, FOCAL_GAMMA={FOCAL_GAMMA}, USE_OVERLAPPING_SUBCUBES={USE_OVERLAPPING_SUBCUBES}, RSD_PRESERVING_ROTATIONS={RSD_PRESERVING_ROTATIONS}, EXTRA_AUGMENTATION={EXTRA_AUGMENTATION}, VALIDATION_SPLIT={VALIDATION_SPLIT}, SPLIT_SEED={SPLIT_SEED}, SPLIT_METHOD={SPLIT_METHOD}')
+
+# Validate split parameters
+if not 0.0 < VALIDATION_SPLIT < 1.0:
+    raise ValueError(f'VALIDATION_SPLIT must be between 0 and 1, got {VALIDATION_SPLIT}')
+
+print(f'Data splitting configuration:')
+print(f'  • Validation split: {VALIDATION_SPLIT:.1%} of data reserved for validation')
+print(f'  • Split method: {SPLIT_METHOD}')
+print(f'  • Split seed: {SPLIT_SEED} (for reproducibility)')
+print(f'  • Training data: {1-VALIDATION_SPLIT:.1%} of data used for training')
 
 # Validate RSD-related arguments
 if RSD_PRESERVING_ROTATIONS and not ADD_RSD:
@@ -294,9 +314,105 @@ if ADD_RSD and EXTRA_INPUTS is not None:
     for key in EXTRA_INPUTS_INFO:
         EXTRA_INPUTS_INFO[key] = EXTRA_INPUTS_INFO[key].replace('.fvol', '_RSD.fvol')
 #================================================================
+# Data splitting functions
+#================================================================
+def split_subcube_indices(total_subcubes, validation_split, split_seed, split_method='random'):
+    """
+    Split subcube indices into training and validation sets.
+    
+    Args:
+        total_subcubes (int): Total number of subcubes available
+        validation_split (float): Fraction to reserve for validation (0 < validation_split < 1)
+        split_seed (int): Random seed for reproducibility
+        split_method (str): 'random' for random split, 'spatial' for spatial separation
+    
+    Returns:
+        train_indices (np.ndarray): Indices for training subcubes
+        val_indices (np.ndarray): Indices for validation subcubes
+    """
+    np.random.seed(split_seed)  # Set seed for reproducible splits
+    
+    if split_method == 'random':
+        # Random split - shuffle all indices and split
+        all_indices = np.arange(total_subcubes)
+        np.random.shuffle(all_indices)
+        
+        n_val = int(total_subcubes * validation_split)
+        val_indices = all_indices[:n_val]
+        train_indices = all_indices[n_val:]
+        
+    elif split_method == 'spatial':
+        # Spatial split - try to separate validation data spatially
+        # This assumes subcubes are ordered spatially (which they typically are)
+        # We'll take validation subcubes from specific spatial regions
+        
+        # Calculate subcubes per dimension (assuming cubic arrangement)
+        subcubes_per_dim = int(np.round(total_subcubes ** (1/3)))
+        if subcubes_per_dim ** 3 != total_subcubes:
+            print(f'Warning: Total subcubes ({total_subcubes}) is not a perfect cube.')
+            print(f'Falling back to random split for spatial method.')
+            return split_subcube_indices(total_subcubes, validation_split, split_seed, 'random')
+        
+        # Create validation regions - use corners and edges to spatially separate
+        val_indices = []
+        
+        # Define validation regions (e.g., corner regions)
+        n_val_target = int(total_subcubes * validation_split)
+        
+        # Simple spatial strategy: take validation data from one corner region
+        val_size_per_dim = int(np.ceil((n_val_target ** (1/3))))
+        
+        for i in range(min(val_size_per_dim, subcubes_per_dim)):
+            for j in range(min(val_size_per_dim, subcubes_per_dim)):
+                for k in range(min(val_size_per_dim, subcubes_per_dim)):
+                    idx = i * subcubes_per_dim * subcubes_per_dim + j * subcubes_per_dim + k
+                    if idx < total_subcubes and len(val_indices) < n_val_target:
+                        val_indices.append(idx)
+        
+        val_indices = np.array(val_indices)
+        train_indices = np.array([i for i in range(total_subcubes) if i not in val_indices])
+        
+    else:
+        raise ValueError(f"Unknown split_method: {split_method}")
+    
+    print(f'Data split completed ({split_method}):')
+    print(f'  • Training samples: {len(train_indices)} ({len(train_indices)/total_subcubes:.1%})')
+    print(f'  • Validation samples: {len(val_indices)} ({len(val_indices)/total_subcubes:.1%})')
+    
+    return train_indices, val_indices
+
+def apply_split_to_data(features, labels, train_indices, val_indices, dataset_name=""):
+    """
+    Apply the train/validation split to loaded data.
+    
+    Args:
+        features (np.ndarray): Full feature array
+        labels (np.ndarray): Full label array  
+        train_indices (np.ndarray): Indices for training data
+        val_indices (np.ndarray): Indices for validation data
+        dataset_name (str): Name for logging purposes
+        
+    Returns:
+        train_features, train_labels, val_features, val_labels
+    """
+    print(f'Applying split to {dataset_name} data...')
+    print(f'  • Input shapes: features {features.shape}, labels {labels.shape}')
+    
+    # Apply split
+    train_features = features[train_indices]
+    train_labels = labels[train_indices] 
+    val_features = features[val_indices]
+    val_labels = labels[val_indices]
+    
+    print(f'  • Training: features {train_features.shape}, labels {train_labels.shape}')
+    print(f'  • Validation: features {val_features.shape}, labels {val_labels.shape}')
+    
+    return train_features, train_labels, val_features, val_labels
+
+#================================================================
 # Define loading function
 #================================================================
-def load_data(inter_sep, extra_inputs=None, verbose=True, preprocessing='standard'):
+def load_data(inter_sep, extra_inputs=None, verbose=True, preprocessing='standard', split_data=False, train_indices=None, val_indices=None):
     '''
     Load the data for a given interparticle separation.
     Args:
@@ -304,10 +420,12 @@ def load_data(inter_sep, extra_inputs=None, verbose=True, preprocessing='standar
         extra_inputs (str, optional): Additional inputs file name. Defaults to None.
         verbose (bool): Whether to print detailed loading statistics. Defaults to True.
         preprocessing (str): Preprocessing method for density data. Defaults to 'standard'.
+        split_data (bool): Whether to split data into train/validation. Defaults to False.
+        train_indices (np.ndarray, optional): Pre-computed training indices for consistent splitting.
+        val_indices (np.ndarray, optional): Pre-computed validation indices for consistent splitting.
     Returns:
-        features (np.ndarray): Features array.
-        labels (np.ndarray): Labels array.
-        extra_input (np.ndarray, optional): Additional inputs array if provided.
+        If split_data=False: features (np.ndarray), labels (np.ndarray)
+        If split_data=True: train_features, train_labels, val_features, val_labels
     '''
     if inter_sep not in inter_seps:
         raise ValueError(f'Invalid interparticle separation: {inter_sep}. Must be one of {inter_seps}')
@@ -598,7 +716,27 @@ def load_data(inter_sep, extra_inputs=None, verbose=True, preprocessing='standar
         print(f'Data loaded successfully using {subcube_method} subcubes.')
         print(f'Final features: {features.shape}, Labels: {labels.shape}')
     
-    return features, labels
+    # Apply train/validation split if requested
+    if split_data:
+        if train_indices is None or val_indices is None:
+            # Generate split indices if not provided
+            total_subcubes = features.shape[0]
+            train_indices, val_indices = split_subcube_indices(
+                total_subcubes, VALIDATION_SPLIT, SPLIT_SEED, SPLIT_METHOD
+            )
+        
+        # Apply split
+        train_features, train_labels, val_features, val_labels = apply_split_to_data(
+            features, labels, train_indices, val_indices, f"L={inter_sep}"
+        )
+        
+        # Memory cleanup
+        del features, labels
+        gc.collect()
+        
+        return train_features, train_labels, val_features, val_labels, train_indices, val_indices
+    else:
+        return features, labels
 
 def make_dataset(delta, tij_labels, batch_size=BATCH_SIZE, shuffle=True, one_hot=False, lambda_value=None):
     '''
@@ -718,14 +856,28 @@ print(f'ONE_HOT encoding: {ONE_HOT}')
 print(f'Creating validation datasets with strategy: {validation_strategy}')
 
 # For universal compatibility, use lazy loading for validation datasets
-def create_validation_dataset(lambda_val, cache_key=None):
-    """Create validation dataset with memory management"""
+def create_validation_dataset(lambda_val, cache_key=None, val_indices=None):
+    """Create validation dataset with memory management and proper train/val split"""
     print(f'Loading validation data for L={lambda_val} Mpc/h...')
-    x_val, y_val = load_data(lambda_val, extra_inputs=EXTRA_INPUTS, verbose=False, preprocessing=PREPROCESSING)
-    val_dataset = make_dataset(x_val, y_val, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, 
+    
+    if val_indices is not None:
+        # Load full data and apply pre-computed split
+        _, _, val_features, val_labels, _, _ = load_data(
+            lambda_val, extra_inputs=EXTRA_INPUTS, verbose=False, 
+            preprocessing=PREPROCESSING, split_data=True, val_indices=val_indices
+        )
+    else:
+        # Legacy mode - load without splitting (for backwards compatibility)
+        print("Warning: No validation indices provided - using full dataset for validation")
+        print("This may lead to data leakage! Consider using proper train/val split.")
+        val_features, val_labels = load_data(
+            lambda_val, extra_inputs=EXTRA_INPUTS, verbose=False, preprocessing=PREPROCESSING
+        )
+    
+    val_dataset = make_dataset(val_features, val_labels, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, 
                               lambda_value=float(lambda_val) if LAMBDA_CONDITIONING else None)
     # Clear memory immediately after dataset creation
-    del x_val, y_val
+    del val_features, val_labels
     gc.collect()
     return val_dataset
 
@@ -745,6 +897,10 @@ if validation_strategy == 'gradual':
 
 # Delay validation dataset creation until training loop starts
 val_dataset = None
+
+# Global variables to store split indices for consistency across all lambda values
+GLOBAL_TRAIN_INDICES = None
+GLOBAL_VAL_INDICES = None
 #================================================================
 # Set loss function and metrics
 #================================================================
@@ -946,19 +1102,43 @@ tensor_board_callback = TensorBoard(
 #================================================================
 print('>>> Starting training loop over interparticle separations...')
 
-# Initialize validation callback for hybrid strategy
+epoch_offset = 0
+
+# Initialize global split indices on first iteration
+first_lambda_for_split = inter_seps[0]  # Use first lambda to determine split
+print(f'Initializing train/validation split using data from L={first_lambda_for_split} Mpc/h...')
+
+# Load initial data to determine split indices
+print('Loading initial data to compute train/validation split indices...')
+initial_features, initial_labels = load_data(first_lambda_for_split, extra_inputs=EXTRA_INPUTS, 
+                                            verbose=True, preprocessing=PREPROCESSING, split_data=False)
+
+# Compute split indices based on the total number of subcubes
+total_subcubes = initial_features.shape[0]
+GLOBAL_TRAIN_INDICES, GLOBAL_VAL_INDICES = split_subcube_indices(
+    total_subcubes, VALIDATION_SPLIT, SPLIT_SEED, SPLIT_METHOD
+)
+
+print(f'Split indices computed: {len(GLOBAL_TRAIN_INDICES)} training, {len(GLOBAL_VAL_INDICES)} validation')
+print('These indices will be used consistently across all lambda values.')
+
+# Clean up initial data
+del initial_features, initial_labels
+gc.collect()
+
+# Initialize validation callback for hybrid strategy (after split indices are computed)
 validation_callback = None
 if validation_strategy == 'hybrid':
     # Pre-create target validation dataset for hybrid validation
     print(f'Creating target validation dataset for L={target_lambda} Mpc/h...')
-    target_val_dataset = create_validation_dataset(target_lambda)
+    target_val_dataset = create_validation_dataset(target_lambda, val_indices=GLOBAL_VAL_INDICES)
     
     # Pre-create stage validation datasets for all interparticle separations
     stage_datasets = {}
     print('Creating stage validation datasets for hybrid validation...')
     for sep in inter_seps:
         print(f'  Creating validation dataset for L={sep} Mpc/h...')
-        stage_datasets[sep] = create_validation_dataset(float(sep))
+        stage_datasets[sep] = create_validation_dataset(float(sep), val_indices=GLOBAL_VAL_INDICES)
         
     validation_callback = HybridValidationCallback(
         target_dataset=target_val_dataset,
@@ -970,7 +1150,6 @@ if validation_strategy == 'hybrid':
 else:
     print(f"Using {validation_strategy} validation strategy")
 
-epoch_offset = 0
 for i, inter_sep in enumerate(inter_seps):
     print(f'>>> Starting training for interparticle separation L={inter_sep} Mpc/h (stage {i+1}/{len(inter_seps)})...')
     
@@ -1024,9 +1203,16 @@ for i, inter_sep in enumerate(inter_seps):
         pass
     
     if EXTRA_INPUTS is not None:
-        train_features, train_labels = load_data(inter_sep, extra_inputs=EXTRA_INPUTS, verbose=verbose_load, preprocessing=PREPROCESSING)
+        train_features, train_labels, _, _, _, _ = load_data(
+            inter_sep, extra_inputs=EXTRA_INPUTS, verbose=verbose_load, 
+            preprocessing=PREPROCESSING, split_data=True, 
+            train_indices=GLOBAL_TRAIN_INDICES, val_indices=GLOBAL_VAL_INDICES
+        )
     else:
-        train_features, train_labels = load_data(inter_sep, verbose=verbose_load, preprocessing=PREPROCESSING)
+        train_features, train_labels, _, _, _, _ = load_data(
+            inter_sep, verbose=verbose_load, preprocessing=PREPROCESSING, 
+            split_data=True, train_indices=GLOBAL_TRAIN_INDICES, val_indices=GLOBAL_VAL_INDICES
+        )
     
     # Monitor memory after data loading
     try:
@@ -1073,13 +1259,13 @@ for i, inter_sep in enumerate(inter_seps):
         if 'val_dataset' in locals() and val_dataset is not None:
             del val_dataset
             gc.collect()
-        val_dataset = create_validation_dataset(inter_sep)
+        val_dataset = create_validation_dataset(inter_sep, val_indices=GLOBAL_VAL_INDICES)
     
     # Update validation dataset for target validation strategy (create once at the beginning)
     elif validation_strategy == 'target':
         if i == 0:  # Only create on the first iteration
             print(f'Creating target validation dataset: L={target_lambda} Mpc/h')
-            val_dataset = create_validation_dataset(target_lambda)
+            val_dataset = create_validation_dataset(target_lambda, val_indices=GLOBAL_VAL_INDICES)
         # Otherwise, keep using the same validation dataset
     
     # Update validation dataset for gradual validation strategy
@@ -1091,7 +1277,7 @@ for i, inter_sep in enumerate(inter_seps):
             if 'val_dataset' in locals() and val_dataset is not None:
                 del val_dataset
                 gc.collect()
-            val_dataset = create_validation_dataset(current_val_lambda)
+            val_dataset = create_validation_dataset(current_val_lambda, val_indices=GLOBAL_VAL_INDICES)
         else:
             print(f'Keeping current validation dataset: training L={inter_sep} -> validation L={current_val_lambda} Mpc/h')
     
