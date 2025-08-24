@@ -285,22 +285,24 @@ CUSTOM_OBJECTS = {
 def extract_feature_maps(model, input_data, layer_names=None, max_samples=MAX_SAMPLES):
     """
     Extract feature activation maps from intermediate layers.
+    Note: max_samples limits how many samples to process for feature extraction.
     """
-    print(f'Extracting feature maps from {len(input_data)} samples...')
+    print(f'Extracting feature maps from {min(len(input_data), max_samples)} samples...')
     
     if layer_names is None:
-        # Auto-select key layers
+        # Auto-select key layers (fewer layers to save memory)
         layer_names = []
         for layer in model.layers:
             layer_name = layer.name.lower()
+            # Only select key encoder/decoder blocks, skip intermediate layers
             if any(keyword in layer_name for keyword in ['encoder_block', 'bottleneck', 'decoder_block']):
-                if 'activation' not in layer_name and 'batch_norm' not in layer_name:
+                if any(suffix in layer_name for suffix in ['_0', '_1']) and 'activation' not in layer_name and 'batch_norm' not in layer_name:
                     layer_names.append(layer.name)
         
-        # Also include some conv layers
-        for layer in model.layers:
-            if 'conv3d' in layer.name.lower() and len(layer_names) < 20:
-                layer_names.append(layer.name)
+        # Limit to reduce memory usage
+        if len(layer_names) > 15:
+            # Sample every other layer
+            layer_names = layer_names[::2]
     
     print(f'Selected {len(layer_names)} layers for feature extraction:')
     for name in layer_names[:10]:  # Print first 10
@@ -328,13 +330,43 @@ def extract_feature_maps(model, input_data, layer_names=None, max_samples=MAX_SA
         print(f'Error creating feature model: {e}')
         return {}
     
-    # Extract features
+    # Extract features with memory management
     input_batch = input_data[:max_samples] if len(input_data) > max_samples else input_data
-    print(f'Processing {len(input_batch)} samples...')
+    print(f'Processing {len(input_batch)} samples with memory-efficient batching...')
     
     try:
-        features = feature_model.predict(input_batch, verbose=0)
+        # Process in smaller batches to avoid memory issues
+        batch_size = 1 if max_samples > 5 else 2  # Very small batches for memory efficiency
+        all_features = []
+        
+        for i in range(0, len(input_batch), batch_size):
+            batch = input_batch[i:i+batch_size]
+            print(f'  Processing batch {i//batch_size + 1}/{(len(input_batch) + batch_size - 1)//batch_size}...')
+            batch_features = feature_model.predict(batch, verbose=0)
+            
+            # Convert to list if single output
+            if not isinstance(batch_features, list):
+                batch_features = [batch_features]
+            
+            all_features.append(batch_features)
+            
+            # Clear GPU memory
+            tf.keras.backend.clear_session()
+            import gc
+            gc.collect()
+        
+        # Concatenate all batches
+        if all_features:
+            features = []
+            for layer_idx in range(len(all_features[0])):
+                layer_features = [batch[layer_idx] for batch in all_features]
+                concatenated = np.concatenate(layer_features, axis=0)
+                features.append(concatenated)
+        else:
+            features = []
+            
         print('Feature extraction completed successfully')
+        
     except Exception as e:
         print(f'Error during feature extraction: {e}')
         return {}
@@ -357,8 +389,9 @@ def extract_feature_maps(model, input_data, layer_names=None, max_samples=MAX_SA
 def extract_attention_maps(model, input_data, max_samples=MAX_SAMPLES):
     """
     Extract attention gate outputs from Attention U-Net.
+    Note: max_samples controls how many samples to extract attention maps from.
     """
-    print('Extracting attention maps...')
+    print(f'Extracting attention maps from {min(len(input_data), max_samples)} samples...')
     
     # Find attention-related layers
     attention_layers = []
@@ -380,6 +413,9 @@ def extract_attention_maps(model, input_data, max_samples=MAX_SAMPLES):
         attention_model = tf.keras.Model(inputs=model.input, outputs=attention_outputs)
         
         input_batch = input_data[:max_samples] if len(input_data) > max_samples else input_data
+        print(f'Processing {len(input_batch)} samples for attention extraction...')
+        
+        # Memory-efficient processing for attention maps
         attention_maps = attention_model.predict(input_batch, verbose=0)
         
         # Organize by depth level
@@ -1246,6 +1282,95 @@ def load_model_for_analysis():
     
     raise FileNotFoundError(f'Could not find or load model: {MODEL_NAME}')
 
+def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MAX_SAMPLES):
+    """
+    Visualize input data with enhanced density display.
+    Enhanced version with better density visualization using power scaling for better contrast.
+    Note: max_samples controls how many samples to visualize (for display purposes).
+    """
+    print(f'Visualizing input data for {min(len(input_data), max_samples)} samples...')
+    
+    # Limit to max_samples for visualization
+    vis_data = input_data[:max_samples] if len(input_data) > max_samples else input_data
+    vis_labels = labels[:max_samples] if labels is not None and len(labels) > max_samples else labels
+    
+    n_samples = len(vis_data)
+    fig, axes = plt.subplots(3, n_samples, figsize=(5*n_samples, 15))
+    if n_samples == 1:
+        axes = axes.reshape(-1, 1)
+    
+    for i, data in enumerate(vis_data):
+        # Squeeze the data to remove batch dimension
+        data_squeezed = data.squeeze()
+        
+        # Power scaling for enhanced density visualization (makes low density regions more visible)
+        enhanced_data = np.power(data_squeezed, 0.22)  # Power scaling instead of log to avoid issues with zeros
+        
+        # Central slices through the cube
+        center = enhanced_data.shape[0] // 2
+        slice_xy = enhanced_data[:, :, center]  # XY plane
+        slice_xz = enhanced_data[:, center, :]  # XZ plane  
+        slice_yz = enhanced_data[center, :, :]  # YZ plane
+        
+        # Plot with enhanced contrast
+        vmin, vmax = np.percentile(enhanced_data, [5, 99])  # Better contrast range
+        
+        # XY slice
+        im1 = axes[0, i].imshow(slice_xy, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
+        axes[0, i].set_title(f'Sample {i+1} - XY plane (z={center})')
+        axes[0, i].set_xlabel('X')
+        axes[0, i].set_ylabel('Y')
+        plt.colorbar(im1, ax=axes[0, i], shrink=0.8)
+        
+        # XZ slice
+        im2 = axes[1, i].imshow(slice_xz, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
+        axes[1, i].set_title(f'Sample {i+1} - XZ plane (y={center})')
+        axes[1, i].set_xlabel('X')
+        axes[1, i].set_ylabel('Z')
+        plt.colorbar(im2, ax=axes[1, i], shrink=0.8)
+        
+        # YZ slice
+        im3 = axes[2, i].imshow(slice_yz, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
+        axes[2, i].set_title(f'Sample {i+1} - YZ plane (x={center})')
+        axes[2, i].set_xlabel('Y')
+        axes[2, i].set_ylabel('Z')
+        plt.colorbar(im3, ax=axes[2, i], shrink=0.8)
+        
+        # Add label information if available
+        if vis_labels is not None and i < len(vis_labels):
+            # Handle different label formats
+            if hasattr(vis_labels[i], 'shape'):
+                if vis_labels[i].size == 1:
+                    label_text = f'Label: {float(vis_labels[i]):.3f}'
+                else:
+                    void_frac = np.mean(vis_labels[i] == 0)
+                    label_text = f'Void fraction: {void_frac:.3f}'
+            else:
+                label_text = f'Label: {vis_labels[i]:.3f}'
+            
+            # Add label text to first subplot
+            axes[0, i].text(0.02, 0.98, label_text, transform=axes[0, i].transAxes, 
+                           bbox=dict(boxstyle='round', facecolor='white', alpha=0.8), 
+                           verticalalignment='top', fontsize=10)
+    
+    # Add density statistics as subtitle
+    orig_stats = f"Original density - Min: {np.min(input_data):.2e}, Max: {np.max(input_data):.2e}, Mean: {np.mean(input_data):.2e}"
+    enhanced_stats = f"Enhanced density (power=0.22) - Min: {np.min(enhanced_data):.3f}, Max: {np.max(enhanced_data):.3f}, Mean: {np.mean(enhanced_data):.3f}"
+    
+    fig.suptitle(f'Input Data Visualization - Enhanced Density Display\n{orig_stats}\n{enhanced_stats}', 
+                 fontsize=12, y=0.98)
+    
+    plt.tight_layout()
+    plt.subplots_adjust(top=0.90)  # Make room for title
+    
+    # Save visualization
+    output_path = os.path.join(output_dir, 'input_data_enhanced.png')
+    plt.savefig(output_path, dpi=300, bbox_inches='tight')
+    print(f'Enhanced input data visualization saved to: {output_path}')
+    plt.show()
+    
+    return output_path
+
 #================================================================
 # Main analysis function
 #================================================================
@@ -1261,6 +1386,10 @@ def run_interpretability_analysis():
     print(f'Model: {MODEL_NAME}')
     print(f'Analysis Lambda: {L_ANALYSIS} Mpc/h')
     print(f'Max Samples: {MAX_SAMPLES}')
+    print(f'  Note: MAX_SAMPLES controls data loading/analysis scope')
+    print(f'  - Feature extraction: processes MAX_SAMPLES samples')
+    print(f'  - Input visualization: shows min(3, MAX_SAMPLES) samples')
+    print(f'  - Analysis functions: operate on loaded MAX_SAMPLES samples')
     print(f'Results Directory: {ANALYSIS_PATH}')
     print('=' * 80)
     
@@ -1348,6 +1477,15 @@ def run_interpretability_analysis():
     # Get slice index
     slice_idx_use = SLICE_IDX if SLICE_IDX is not None else void_mask.shape[2] // 2
     print(f'Using slice index: {slice_idx_use}')
+    
+    # 0. Visualize input data with enhanced display
+    print('\n--- Visualizing Input Data ---')
+    input_viz_path = visualize_input_data(
+        features, 
+        labels, 
+        output_dir=ANALYSIS_PATH, 
+        max_samples=min(3, MAX_SAMPLES)  # Limit to 3 samples for visualization
+    )
     
     # 1. Extract feature activation maps
     print('\n--- Extracting Feature Activation Maps ---')
@@ -1478,6 +1616,7 @@ def run_interpretability_analysis():
                 f.write(f"- {layer_name}: mean={mean_corr:.3f}, max_abs={max_corr:.3f}\n")
         
         f.write(f"\nFiles Generated:\n")
+        f.write(f"- input_data_enhanced.png (enhanced density visualization)\n")
         if SAVE_ALL:
             f.write(f"- feature_activation_maps.png\n")
             if USE_ATTENTION:
