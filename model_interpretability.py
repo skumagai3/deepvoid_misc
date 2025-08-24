@@ -440,9 +440,9 @@ def extract_attention_maps(model, input_data, max_samples=MAX_SAMPLES):
 # Visualization functions
 #================================================================
 def plot_feature_maps_3d(feature_dict, sample_idx=0, slice_idx=None, max_filters=MAX_FILTERS, 
-                         save_path=None, void_regions=None):
+                         save_path=None, void_regions=None, input_data=None):
     """
-    Plot 3D feature activation maps as 2D slices.
+    Plot 3D feature activation maps as 2D slices with input data context.
     """
     print(f'Creating feature maps plot for sample {sample_idx}...')
     
@@ -462,7 +462,10 @@ def plot_feature_maps_3d(feature_dict, sample_idx=0, slice_idx=None, max_filters
     
     n_layers = len(selected_layers)
     
-    fig, axes = plt.subplots(n_layers, max_filters, figsize=(max_filters*2, n_layers*2))
+    # Add one extra column for input data if provided
+    n_cols = max_filters + (1 if input_data is not None else 0)
+    
+    fig, axes = plt.subplots(n_layers, n_cols, figsize=(n_cols*2, n_layers*2))
     if n_layers == 1:
         axes = axes[np.newaxis, :]
     
@@ -481,7 +484,26 @@ def plot_feature_maps_3d(feature_dict, sample_idx=0, slice_idx=None, max_filters
         else:
             slice_idx_use = min(slice_idx, feature_map.shape[2] - 1)
         
-        # Select slice
+        # First column: Input data for context (if provided)
+        col_offset = 0
+        if input_data is not None:
+            ax_input = axes[layer_idx, 0] if n_layers > 1 else axes[0]
+            
+            # Show input data slice
+            input_slice = input_data[sample_idx, :, :, slice_idx_use, 0]  # First channel
+            im_input = ax_input.imshow(input_slice, cmap='viridis', aspect='equal')
+            
+            if layer_idx == 0:
+                ax_input.set_title('Input Data\n(Context)', fontsize=10, weight='bold')
+            ax_input.set_ylabel(f'{layer_name}', fontsize=8, weight='bold')
+            ax_input.set_xticks([])
+            ax_input.set_yticks([])
+            
+            # Add small colorbar
+            plt.colorbar(im_input, ax=ax_input, shrink=0.6)
+            col_offset = 1
+        
+        # Remaining columns: Feature maps
         feature_slice = feature_map[:, :, slice_idx_use, :]  # Shape: (H, W, C)
         n_filters = min(feature_slice.shape[-1], max_filters)
         
@@ -489,19 +511,17 @@ def plot_feature_maps_3d(feature_dict, sample_idx=0, slice_idx=None, max_filters
             if filter_idx >= feature_slice.shape[-1]:
                 break
                 
-            ax = axes[layer_idx, filter_idx] if n_layers > 1 else axes[filter_idx]
+            ax = axes[layer_idx, filter_idx + col_offset] if n_layers > 1 else axes[filter_idx + col_offset]
             
             # Plot activation map
             activation = feature_slice[:, :, filter_idx]
-            im = ax.imshow(activation, cmap='viridis', aspect='equal')
+            im = ax.imshow(activation, cmap='plasma', aspect='equal')
             
             # Overlay void regions if provided
             if void_regions is not None and void_regions.shape[:2] == activation.shape:
                 ax.contour(void_regions, levels=[0.5], colors='red', linewidths=1, alpha=0.7)
             
-            if filter_idx == 0:
-                ax.set_ylabel(f'{layer_name}\n(Filter {filter_idx})', fontsize=8)
-            else:
+            if layer_idx == 0:
                 ax.set_title(f'Filter {filter_idx}', fontsize=8)
             
             ax.set_xticks([])
@@ -513,10 +533,13 @@ def plot_feature_maps_3d(feature_dict, sample_idx=0, slice_idx=None, max_filters
         
         # Hide unused subplots
         for filter_idx in range(n_filters, max_filters):
-            ax = axes[layer_idx, filter_idx] if n_layers > 1 else axes[filter_idx]
-            ax.set_visible(False)
+            col_idx = filter_idx + col_offset
+            if col_idx < n_cols:
+                ax = axes[layer_idx, col_idx] if n_layers > 1 else axes[col_idx]
+                ax.set_visible(False)
     
-    plt.suptitle(f'Feature Activation Maps - Sample {sample_idx}, Slice {slice_idx_use}', fontsize=14)
+    title = f'Feature Activation Maps with Input Context - Sample {sample_idx}, Slice {slice_idx_use}' if input_data is not None else f'Feature Activation Maps - Sample {sample_idx}, Slice {slice_idx_use}'
+    plt.suptitle(title, fontsize=14)
     plt.tight_layout()
     
     if save_path:
@@ -1290,188 +1313,130 @@ def load_model_for_analysis():
 
 def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MAX_SAMPLES):
     """
-    Visualize input data with enhanced density display.
-    Enhanced version with better density visualization using power scaling for better contrast.
-    Note: max_samples controls how many samples to visualize (for display purposes).
+    Visualize input data with RAW values (no power transformation).
     """
-    print(f'Visualizing input data for {min(len(input_data), max_samples)} samples...')
+    print(f'Visualizing RAW input data for {min(len(input_data), max_samples)} samples...')
     
     # Limit to max_samples for visualization
     vis_data = input_data[:max_samples] if len(input_data) > max_samples else input_data
     vis_labels = labels[:max_samples] if labels is not None and len(labels) > max_samples else labels
     
-    n_samples = len(vis_data)
-    fig, axes = plt.subplots(3, n_samples, figsize=(5*n_samples, 15))
-    if n_samples == 1:
-        axes = axes.reshape(-1, 1)
+    n_samples = min(len(vis_data), 3)  # Show max 3 samples for space
     
-    for i, data in enumerate(vis_data):
-        # Squeeze the data to remove batch dimension
-        data_squeezed = data.squeeze()
+    for i in range(n_samples):
+        data = vis_data[i].squeeze()
         
-        # Handle multi-channel data - process each channel separately
-        if len(data_squeezed.shape) == 4:  # Multi-channel: (H, W, D, C)
-            n_channels = data_squeezed.shape[-1]
+        # Handle multi-channel data
+        if len(data.shape) == 4:  # Multi-channel: (H, W, D, C)
+            n_channels = data.shape[-1]
             print(f'  Sample {i+1}: Multi-channel data with {n_channels} channels')
             
-            # For visualization, show each channel separately or combine them
+            # Create figure for this sample
+            fig, axes = plt.subplots(n_channels, 3, figsize=(15, 5*n_channels))
+            if n_channels == 1:
+                axes = axes[np.newaxis, :]
+            
+            channel_names = ['Density', EXTRA_INPUTS or 'Extra Input'] if n_channels == 2 else [f'Channel {j}' for j in range(n_channels)]
+            
+            for ch in range(n_channels):
+                channel_data = data[:, :, :, ch]
+                
+                # Central slices through the cube - NO POWER TRANSFORMATION
+                center = channel_data.shape[0] // 2
+                slice_xy = channel_data[:, :, center]  # XY plane
+                slice_xz = channel_data[:, center, :]  # XZ plane  
+                slice_yz = channel_data[center, :, :]  # YZ plane
+                
+                # Use raw data range
+                vmin, vmax = np.min(channel_data), np.max(channel_data)
+                
+                # XY slice
+                im1 = axes[ch, 0].imshow(slice_xy, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
+                axes[ch, 0].set_title(f'{channel_names[ch]} - XY plane (z={center})')
+                axes[ch, 0].set_xlabel('X')
+                axes[ch, 0].set_ylabel('Y')
+                plt.colorbar(im1, ax=axes[ch, 0], shrink=0.8)
+                
+                # XZ slice
+                im2 = axes[ch, 1].imshow(slice_xz, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
+                axes[ch, 1].set_title(f'{channel_names[ch]} - XZ plane (y={center})')
+                axes[ch, 1].set_xlabel('X')
+                axes[ch, 1].set_ylabel('Z')
+                plt.colorbar(im2, ax=axes[ch, 1], shrink=0.8)
+                
+                # YZ slice
+                im3 = axes[ch, 2].imshow(slice_yz, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
+                axes[ch, 2].set_title(f'{channel_names[ch]} - YZ plane (x={center})')
+                axes[ch, 2].set_xlabel('Y')
+                axes[ch, 2].set_ylabel('Z')
+                plt.colorbar(im3, ax=axes[ch, 2], shrink=0.8)
+            
+            # Add title with statistics
             if n_channels == 2:
-                # Assume channels are [density, extra_input]
-                channel_names = ['Density', EXTRA_INPUTS or 'Extra Input']
-                
-                # Create subplots for each channel
-                fig_multi, axes_multi = plt.subplots(2, 3, figsize=(15, 10))
-                
-                for ch in range(n_channels):
-                    channel_data = data_squeezed[:, :, :, ch]
-                    
-                    # Use different scaling strategies for different channels
-                    if ch == 0:  # Density channel
-                        # More moderate power scaling for density
-                        enhanced_channel = np.power(np.abs(channel_data), 0.5) * np.sign(channel_data)
-                    else:  # Extra input channel
-                        # Even more moderate scaling for extra inputs
-                        enhanced_channel = np.power(np.abs(channel_data), 0.7) * np.sign(channel_data)
-                    
-                    # Central slices through the cube
-                    center = enhanced_channel.shape[0] // 2
-                    slice_xy = enhanced_channel[:, :, center]  # XY plane
-                    slice_xz = enhanced_channel[:, center, :]  # XZ plane  
-                    slice_yz = enhanced_channel[center, :, :]  # YZ plane
-                    
-                    # Better contrast range - use different percentiles for different channels
-                    if ch == 0:  # Density
-                        vmin, vmax = np.percentile(enhanced_channel, [2, 98])
-                    else:  # Extra input
-                        vmin, vmax = np.percentile(enhanced_channel, [5, 95])
-                    
-                    # XY slice
-                    im1 = axes_multi[ch, 0].imshow(slice_xy, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
-                    axes_multi[ch, 0].set_title(f'{channel_names[ch]} - XY plane (z={center})')
-                    axes_multi[ch, 0].set_xlabel('X')
-                    axes_multi[ch, 0].set_ylabel('Y')
-                    plt.colorbar(im1, ax=axes_multi[ch, 0], shrink=0.8)
-                    
-                    # XZ slice
-                    im2 = axes_multi[ch, 1].imshow(slice_xz, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
-                    axes_multi[ch, 1].set_title(f'{channel_names[ch]} - XZ plane (y={center})')
-                    axes_multi[ch, 1].set_xlabel('X')
-                    axes_multi[ch, 1].set_ylabel('Z')
-                    plt.colorbar(im2, ax=axes_multi[ch, 1], shrink=0.8)
-                    
-                    # YZ slice
-                    im3 = axes_multi[ch, 2].imshow(slice_yz, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
-                    axes_multi[ch, 2].set_title(f'{channel_names[ch]} - YZ plane (x={center})')
-                    axes_multi[ch, 2].set_xlabel('Y')
-                    axes_multi[ch, 2].set_ylabel('Z')
-                    plt.colorbar(im3, ax=axes_multi[ch, 2], shrink=0.8)
-                
-                # Add overall title and statistics
-                density_stats = f"Density: Min={np.min(data_squeezed[:,:,:,0]):.2e}, Max={np.max(data_squeezed[:,:,:,0]):.2e}"
-                extra_stats = f"{channel_names[1]}: Min={np.min(data_squeezed[:,:,:,1]):.2e}, Max={np.max(data_squeezed[:,:,:,1]):.2e}"
-                fig_multi.suptitle(f'Sample {i+1}: Multi-Channel Input Data\n{density_stats}\n{extra_stats}', 
-                                 fontsize=12, y=0.95)
-                
-                plt.tight_layout()
-                plt.subplots_adjust(top=0.85)
-                
-                # Save this sample
-                sample_path = os.path.join(output_dir, f'input_data_enhanced_sample_{i+1}.png')
-                fig_multi.savefig(sample_path, dpi=300, bbox_inches='tight')
-                print(f'  Multi-channel visualization saved to: {sample_path}')
-                plt.show()
-                plt.close(fig_multi)
-                
-                # For the main grid, use just the first channel (density) with moderate scaling
-                data_for_main = data_squeezed[:, :, :, 0]
+                density_stats = f"Density: Min={np.min(data[:,:,:,0]):.2e}, Max={np.max(data[:,:,:,0]):.2e}"
+                extra_stats = f"{channel_names[1]}: Min={np.min(data[:,:,:,1]):.2e}, Max={np.max(data[:,:,:,1]):.2e}"
+                fig.suptitle(f'Sample {i+1}: RAW Multi-Channel Input Data\n{density_stats}\n{extra_stats}', fontsize=12)
             else:
-                # For other multi-channel cases, use first channel
-                data_for_main = data_squeezed[:, :, :, 0]
+                fig.suptitle(f'Sample {i+1}: RAW Input Data', fontsize=12)
+            
+            plt.tight_layout()
+            plt.subplots_adjust(top=0.85 if n_channels == 2 else 0.9)
+            
+            # Save this sample
+            sample_path = os.path.join(output_dir, f'input_data_RAW_sample_{i+1}.png')
+            fig.savefig(sample_path, dpi=300, bbox_inches='tight')
+            print(f'  RAW visualization saved to: {sample_path}')
+            plt.show()
+            plt.close(fig)
+        
         else:
             # Single channel data
-            data_for_main = data_squeezed
-        
-        # More moderate power scaling for the main grid (less "funky" appearance)
-        enhanced_data = np.power(np.abs(data_for_main), 0.5) * np.sign(data_for_main)
-        
-        # Central slices through the cube
-        center = enhanced_data.shape[0] // 2
-        slice_xy = enhanced_data[:, :, center]  # XY plane
-        slice_xz = enhanced_data[:, center, :]  # XZ plane  
-        slice_yz = enhanced_data[center, :, :]  # YZ plane
-        
-        # Better contrast range - use wider percentiles for more visible structure
-        vmin, vmax = np.percentile(enhanced_data, [2, 98])  # Less aggressive clipping
-        
-        # XY slice
-        im1 = axes[0, i].imshow(slice_xy, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
-        axes[0, i].set_title(f'Sample {i+1} - XY plane (z={center})')
-        axes[0, i].set_xlabel('X')
-        axes[0, i].set_ylabel('Y')
-        plt.colorbar(im1, ax=axes[0, i], shrink=0.8)
-        
-        # XZ slice
-        im2 = axes[1, i].imshow(slice_xz, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
-        axes[1, i].set_title(f'Sample {i+1} - XZ plane (y={center})')
-        axes[1, i].set_xlabel('X')
-        axes[1, i].set_ylabel('Z')
-        plt.colorbar(im2, ax=axes[1, i], shrink=0.8)
-        
-        # YZ slice
-        im3 = axes[2, i].imshow(slice_yz, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
-        axes[2, i].set_title(f'Sample {i+1} - YZ plane (x={center})')
-        axes[2, i].set_xlabel('Y')
-        axes[2, i].set_ylabel('Z')
-        plt.colorbar(im3, ax=axes[2, i], shrink=0.8)
-        
-        # Add label information if available
-        if vis_labels is not None and i < len(vis_labels):
-            # Handle different label formats
-            if hasattr(vis_labels[i], 'shape'):
-                if vis_labels[i].size == 1:
-                    label_text = f'Label: {float(vis_labels[i]):.3f}'
-                else:
-                    void_frac = np.mean(vis_labels[i] == 0)
-                    label_text = f'Void fraction: {void_frac:.3f}'
-            else:
-                label_text = f'Label: {vis_labels[i]:.3f}'
+            fig, axes = plt.subplots(1, 3, figsize=(15, 5))
             
-            # Add label text to first subplot
-            axes[0, i].text(0.02, 0.98, label_text, transform=axes[0, i].transAxes, 
-                           bbox=dict(boxstyle='round', facecolor='white', alpha=0.8), 
-                           verticalalignment='top', fontsize=10)
+            # Central slices through the cube - NO POWER TRANSFORMATION
+            center = data.shape[0] // 2
+            slice_xy = data[:, :, center]  # XY plane
+            slice_xz = data[:, center, :]  # XZ plane  
+            slice_yz = data[center, :, :]  # YZ plane
+            
+            # Use raw data range
+            vmin, vmax = np.min(data), np.max(data)
+            
+            # XY slice
+            im1 = axes[0].imshow(slice_xy, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
+            axes[0].set_title(f'Sample {i+1} - XY plane (z={center})')
+            axes[0].set_xlabel('X')
+            axes[0].set_ylabel('Y')
+            plt.colorbar(im1, ax=axes[0], shrink=0.8)
+            
+            # XZ slice
+            im2 = axes[1].imshow(slice_xz, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
+            axes[1].set_title(f'Sample {i+1} - XZ plane (y={center})')
+            axes[1].set_xlabel('X')
+            axes[1].set_ylabel('Z')
+            plt.colorbar(im2, ax=axes[1], shrink=0.8)
+            
+            # YZ slice
+            im3 = axes[2].imshow(slice_yz, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
+            axes[2].set_title(f'Sample {i+1} - YZ plane (x={center})')
+            axes[2].set_xlabel('Y')
+            axes[2].set_ylabel('Z')
+            plt.colorbar(im3, ax=axes[2], shrink=0.8)
+            
+            # Add title with statistics
+            fig.suptitle(f'Sample {i+1}: RAW Input Data\nMin={vmin:.2e}, Max={vmax:.2e}', fontsize=12)
+            
+            plt.tight_layout()
+            plt.subplots_adjust(top=0.85)
+            
+            # Save this sample
+            sample_path = os.path.join(output_dir, f'input_data_RAW_sample_{i+1}.png')
+            fig.savefig(sample_path, dpi=300, bbox_inches='tight')
+            print(f'  RAW visualization saved to: {sample_path}')
+            plt.show()
+            plt.close(fig)
     
-    # Add density statistics as subtitle
-    if vis_data[0].squeeze().ndim == 4:  # Multi-channel
-        # Show stats for first channel (density) being displayed in main grid
-        first_channel_data = vis_data[0].squeeze()[:, :, :, 0]
-        orig_stats = f"Density Channel - Min: {np.min(first_channel_data):.2e}, Max: {np.max(first_channel_data):.2e}, Mean: {np.mean(first_channel_data):.2e}"
-        enhanced_stats = f"Enhanced (power=0.5) - Min: {np.min(enhanced_data):.3f}, Max: {np.max(enhanced_data):.3f}"
-        title_text = f'Input Data Comparison Grid - Density Channel Only\n{orig_stats}\n{enhanced_stats}\n(See individual sample files for detailed multi-channel analysis)'
-    else:
-        # Single channel
-        orig_stats = f"Original density - Min: {np.min(input_data):.2e}, Max: {np.max(input_data):.2e}, Mean: {np.mean(input_data):.2e}"
-        enhanced_stats = f"Enhanced (power=0.5) - Min: {np.min(enhanced_data):.3f}, Max: {np.max(enhanced_data):.3f}"
-        title_text = f'Input Data Visualization - Enhanced Density Display\n{orig_stats}\n{enhanced_stats}'
-    
-    fig.suptitle(title_text, fontsize=11, y=0.98)
-    
-    plt.tight_layout()
-    plt.subplots_adjust(top=0.90)  # Make room for title
-    
-    # Save visualization
-    if vis_data[0].squeeze().ndim == 4:
-        output_path = os.path.join(output_dir, f'input_data_enhanced_multichannel.png')
-        info_text = f'Multi-channel enhanced input data visualization (showing first channel) saved to: {output_path}'
-    else:
-        output_path = os.path.join(output_dir, 'input_data_enhanced.png')
-        info_text = f'Enhanced input data visualization saved to: {output_path}'
-    
-    plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(info_text)
-    plt.show()
-    
-    return output_path
+    return f'{output_dir}/input_data_RAW_sample_*.png'
 
 #================================================================
 # Main analysis function
@@ -1504,74 +1469,54 @@ def run_interpretability_analysis():
         print(f'Error loading model: {e}')
         return
     
-    # Load data
+    # Load data ONCE with proper auto-detection
+    expected_input_shape = model.input_shape
+    print(f'Model expects input shape: {expected_input_shape}')
+    
+    # Auto-detect missing extra inputs BEFORE loading data
+    if expected_input_shape[-1] == 2 and EXTRA_INPUTS is None:
+        print('Auto-detecting missing extra input from model requirements...')
+        if 'r_flux_density' in MODEL_NAME:
+            EXTRA_INPUTS = 'r_flux_density'
+            print('Auto-detected missing extra input: r_flux_density')
+        elif 'g-r' in MODEL_NAME:
+            EXTRA_INPUTS = 'g-r' 
+            print('Auto-detected missing extra input: g-r')
+        
+        # Update EXTRA_INPUTS_INFO if auto-detected
+        if EXTRA_INPUTS == 'r_flux_density' and not EXTRA_INPUTS_INFO:
+            EXTRA_INPUTS_INFO = {
+                '0.33': 'subs1_r_flux_density_Nm512_L3.fvol',
+                '3': 'subs1_r_flux_density_Nm512_L3.fvol',
+                '5': 'subs1_r_flux_density_Nm512_L5.fvol',
+                '7': 'subs1_r_flux_density_Nm512_L7.fvol',
+                '10': 'subs1_r_flux_density_Nm512_L10.fvol',
+            }
+            if ADD_RSD:
+                for key in EXTRA_INPUTS_INFO:
+                    EXTRA_INPUTS_INFO[key] = EXTRA_INPUTS_INFO[key].replace('.fvol', '_RSD.fvol')
+        elif EXTRA_INPUTS == 'g-r' and not EXTRA_INPUTS_INFO:
+            EXTRA_INPUTS_INFO = {
+                '0.33': 'subs1_g-r_Nm512_L3.fvol',
+                '3': 'subs1_g-r_Nm512_L3.fvol',
+                '5': 'subs1_g-r_Nm512_L5.fvol',
+                '7': 'subs1_g-r_Nm512_L7.fvol',
+                '10': 'subs1_g-r_Nm512_L10.fvol',
+            }
+            if ADD_RSD:
+                for key in EXTRA_INPUTS_INFO:
+                    EXTRA_INPUTS_INFO[key] = EXTRA_INPUTS_INFO[key].replace('.fvol', '_RSD.fvol')
+    
     try:
-        # First, try to load with current settings
+        # Load data ONCE with correct configuration
         features, labels = load_analysis_data(L_ANALYSIS, MAX_SAMPLES)
-        print(f'Initial data loaded: {features.shape} features, {labels.shape} labels')
+        print(f'Data loaded: {features.shape} features, {labels.shape} labels')
         
-        # Check if model expects more input channels than we loaded
-        expected_input_shape = model.input_shape
-        print(f'Model expects input shape: {expected_input_shape}')
-        print(f'Loaded data shape: {features.shape}')
-        
+        # Final validation
         if expected_input_shape[-1] != features.shape[-1]:
-            print(f'WARNING: Model expects {expected_input_shape[-1]} input channels but data has {features.shape[-1]} channels')
-            
-            # Try to auto-detect missing extra inputs ONLY if not already specified
-            if expected_input_shape[-1] == 2 and features.shape[-1] == 1 and EXTRA_INPUTS is None:
-                print('Attempting to auto-detect missing extra input...')
-                # Check model name for hints
-                if 'r_flux_density' in MODEL_NAME:
-                    EXTRA_INPUTS = 'r_flux_density'
-                    print('Auto-detected missing extra input: r_flux_density')
-                elif 'g-r' in MODEL_NAME:
-                    EXTRA_INPUTS = 'g-r' 
-                    print('Auto-detected missing extra input: g-r')
-                
-                if EXTRA_INPUTS is not None:
-                    print(f'Reloading data ONCE with extra input: {EXTRA_INPUTS}')
-                    
-                    # Update EXTRA_INPUTS_INFO if needed
-                    if EXTRA_INPUTS == 'r_flux_density' and not EXTRA_INPUTS_INFO:
-                        EXTRA_INPUTS_INFO = {
-                            '0.33': 'subs1_r_flux_density_Nm512_L3.fvol',
-                            '3': 'subs1_r_flux_density_Nm512_L3.fvol',
-                            '5': 'subs1_r_flux_density_Nm512_L5.fvol',
-                            '7': 'subs1_r_flux_density_Nm512_L7.fvol',
-                            '10': 'subs1_r_flux_density_Nm512_L10.fvol',
-                        }
-                        if ADD_RSD:
-                            for key in EXTRA_INPUTS_INFO:
-                                EXTRA_INPUTS_INFO[key] = EXTRA_INPUTS_INFO[key].replace('.fvol', '_RSD.fvol')
-                    elif EXTRA_INPUTS == 'g-r' and not EXTRA_INPUTS_INFO:
-                        EXTRA_INPUTS_INFO = {
-                            '0.33': 'subs1_g-r_Nm512_L3.fvol',
-                            '3': 'subs1_g-r_Nm512_L3.fvol',
-                            '5': 'subs1_g-r_Nm512_L5.fvol',
-                            '7': 'subs1_g-r_Nm512_L7.fvol',
-                            '10': 'subs1_g-r_Nm512_L10.fvol',
-                        }
-                        if ADD_RSD:
-                            for key in EXTRA_INPUTS_INFO:
-                                EXTRA_INPUTS_INFO[key] = EXTRA_INPUTS_INFO[key].replace('.fvol', '_RSD.fvol')
-                    
-                    # Reload data ONLY ONCE with the detected extra input
-                    try:
-                        features, labels = load_analysis_data(L_ANALYSIS, MAX_SAMPLES)
-                        print(f'Final data loaded: {features.shape} features, {labels.shape} labels')
-                    except Exception as e:
-                        print(f'Failed to reload with extra inputs: {e}')
-                        print('Continuing with original data - model inference may fail')
-                        # Reset to original single-channel data
-                        EXTRA_INPUTS = None
-                        features, labels = load_analysis_data(L_ANALYSIS, MAX_SAMPLES)
-                        
-            # Final check
-            if expected_input_shape[-1] != features.shape[-1]:
-                print(f'ERROR: Cannot proceed - model expects {expected_input_shape[-1]} channels but data has {features.shape[-1]}')
-                print('Please specify the correct --EXTRA_INPUTS parameter or check your model')
-                return
+            print(f'ERROR: Model expects {expected_input_shape[-1]} channels but data has {features.shape[-1]}')
+            print('Please specify the correct --EXTRA_INPUTS parameter or check your model')
+            return
                 
     except Exception as e:
         print(f'Error loading data: {e}')
@@ -1607,6 +1552,7 @@ def run_interpretability_analysis():
             slice_idx=slice_idx_use,
             max_filters=MAX_FILTERS,
             void_regions=void_mask[:, :, slice_idx_use],
+            input_data=features,  # Pass input data for context
             save_path=os.path.join(ANALYSIS_PATH, 'feature_activation_maps.png')
         )
         plt.close(fig1)
