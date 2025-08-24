@@ -6,10 +6,17 @@ This script provides comprehensive interpretability analysis for trained DeepVoi
 including feature activation maps, attention visualizations, and void-specific analysis.
 
 Usage:
-python model_interpretability.py ROOT_DIR MODEL_NAME L_ANALYSIS [options]
+python model_interpretability.py ROOT_DIR MODEL_NAME L_ANALYSIS --PREPROCESSING method [options]
 
 Example:
-python model_interpretability.py /content/drive/MyDrive/ TNG_curricular_SCCE_Proportion_Aware_D4_F16_RSD_attention_g-r_2025-08-18_17-16-07 10 --SAVE_ALL --EXTRA_INPUTS g-r --ADD_RSD
+python model_interpretability.py /content/drive/MyDrive/ TNG_curricular_SCCE_Proportion_Aware_D4_F16_RSD_attention_g-r_2025-08-18_17-16-07 10 --PREPROCESSING standard --SAVE_ALL --EXTRA_INPUTS g-r --ADD_RSD
+
+IMPORTANT: You MUST specify --PREPROCESSING to match the method used during training!
+Common preprocessing methods:
+- standard: Standard normalization (mean=0, std=1) 
+- robust: Robust scaling using median and IQR
+- log_transform: Log transformation + scaling
+- clip_extreme: Clip extreme values + scaling
 
 This will generate comprehensive interpretability analysis including:
 - Feature activation maps across all network layers
@@ -71,9 +78,9 @@ optional.add_argument('--ADD_RSD', action='store_true',
                       help='Use RSD data files (same as training).')
 optional.add_argument('--LAMBDA_CONDITIONING', action='store_true',
                       help='Model uses lambda conditioning.')
-optional.add_argument('--PREPROCESSING', type=str, default='standard',
+optional.add_argument('--PREPROCESSING', type=str, default=None,
                       choices=['standard', 'robust', 'log_transform', 'clip_extreme'],
-                      help='Preprocessing method used in training. Default is standard.')
+                      help='Preprocessing method used in training. REQUIRED to match training preprocessing exactly.')
 optional.add_argument('--MAX_SAMPLES', type=int, default=3,
                       help='Maximum number of samples to analyze. Default is 3.')
 optional.add_argument('--MAX_FILTERS', type=int, default=16,
@@ -93,13 +100,25 @@ optional.add_argument('--DPI', type=int, default=300,
 
 args = parser.parse_args()
 
+# Validate required arguments
+if args.PREPROCESSING is None:
+    print("ERROR: --PREPROCESSING is required!")
+    print("You must specify the preprocessing method that was used during training.")
+    print("Common options:")
+    print("  --PREPROCESSING standard    # Standard normalization (mean=0, std=1)")
+    print("  --PREPROCESSING robust      # Robust scaling using median and IQR")
+    print("  --PREPROCESSING log_transform  # Log transformation + scaling")
+    print("  --PREPROCESSING clip_extreme   # Clip extreme values + scaling")
+    print("\nThis is critical for meaningful results - preprocessing must match training exactly!")
+    sys.exit(1)
+
 ROOT_DIR = args.ROOT_DIR
 MODEL_NAME = args.MODEL_NAME
 L_ANALYSIS = args.L_ANALYSIS
 EXTRA_INPUTS = args.EXTRA_INPUTS
 ADD_RSD = args.ADD_RSD
 LAMBDA_CONDITIONING = args.LAMBDA_CONDITIONING
-PREPROCESSING = args.PREPROCESSING
+PREPROCESSING = args.PREPROCESSING  # Will be validated above
 MAX_SAMPLES = args.MAX_SAMPLES
 MAX_FILTERS = args.MAX_FILTERS
 USE_OVERLAPPING_SUBCUBES = args.USE_OVERLAPPING_SUBCUBES
@@ -129,7 +148,7 @@ if args.EXTRA_INPUTS is None:
     if 'g-r' in model_parts:
         EXTRA_INPUTS = 'g-r'
         print('Auto-detected: Model uses g-r color as extra input')
-    elif 'r-flux-density' in model_parts:
+    elif 'r-flux-density' in model_parts or 'r_flux_density' in model_parts:
         EXTRA_INPUTS = 'r_flux_density'
         print('Auto-detected: Model uses r-band flux density as extra input')
 
@@ -147,8 +166,37 @@ if ADD_RSD and not args.RSD_PRESERVING_ROTATIONS:
     RSD_PRESERVING_ROTATIONS = True
     print('Auto-enabled: RSD-preserving rotations (model trained with RSD data)')
 
+# Auto-detect preprocessing method from model name if not specified
+if args.PREPROCESSING is None:
+    if 'robust' in MODEL_NAME.lower():
+        PREPROCESSING = 'robust'
+        print('Auto-detected: Robust preprocessing')
+    elif 'log' in MODEL_NAME.lower():
+        PREPROCESSING = 'log_transform'
+        print('Auto-detected: Log transform preprocessing')
+    elif 'clip' in MODEL_NAME.lower():
+        PREPROCESSING = 'clip_extreme'
+        print('Auto-detected: Clip extreme preprocessing')
+    elif 'standard' in MODEL_NAME.lower() or 'std' in MODEL_NAME.lower():
+        PREPROCESSING = 'standard'
+        print('Auto-detected: Standard preprocessing')
+    else:
+        # Still require explicit specification if not auto-detected
+        print("ERROR: Could not auto-detect preprocessing method from model name!")
+        print("You must specify --PREPROCESSING explicitly.")
+        print("Common options:")
+        print("  --PREPROCESSING standard    # Standard normalization (mean=0, std=1)")
+        print("  --PREPROCESSING robust      # Robust scaling using median and IQR")
+        print("  --PREPROCESSING log_transform  # Log transformation + scaling")
+        print("  --PREPROCESSING clip_extreme   # Clip extreme values + scaling")
+        print("\nThis is critical for meaningful results - preprocessing must match training exactly!")
+        sys.exit(1)
+else:
+    PREPROCESSING = args.PREPROCESSING
+
 print(f'Final parameters: RSD={ADD_RSD}, EXTRA_INPUTS={EXTRA_INPUTS}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}, ATTENTION={USE_ATTENTION}')
 print(f'Data loading: Overlapping={USE_OVERLAPPING_SUBCUBES}, RSD-preserving={RSD_PRESERVING_ROTATIONS}, Extra-aug={EXTRA_AUGMENTATION}')
+print(f'Preprocessing: {PREPROCESSING} (CRITICAL: must match training preprocessing exactly!)')
 
 #================================================================
 # Set up paths and parameters
@@ -1205,6 +1253,8 @@ def run_interpretability_analysis():
     """
     Run comprehensive interpretability analysis.
     """
+    global EXTRA_INPUTS, EXTRA_INPUTS_INFO  # Allow modification of global variables
+    
     print('=' * 80)
     print('DEEPVOID MODEL INTERPRETABILITY ANALYSIS')
     print('=' * 80)
@@ -1227,6 +1277,65 @@ def run_interpretability_analysis():
     try:
         features, labels = load_analysis_data(L_ANALYSIS, MAX_SAMPLES)
         print(f'Data loaded: {features.shape} features, {labels.shape} labels')
+        
+        # Check if model expects more input channels than we loaded
+        expected_input_shape = model.input_shape
+        print(f'Model expects input shape: {expected_input_shape}')
+        print(f'Loaded data shape: {features.shape}')
+        
+        if expected_input_shape[-1] != features.shape[-1]:
+            print(f'WARNING: Model expects {expected_input_shape[-1]} input channels but data has {features.shape[-1]} channels')
+            
+            # Try to auto-detect missing extra inputs
+            if expected_input_shape[-1] == 2 and features.shape[-1] == 1 and EXTRA_INPUTS is None:
+                print('Attempting to auto-detect missing extra input...')
+                # Check model name for hints
+                if 'r_flux_density' in MODEL_NAME:
+                    EXTRA_INPUTS = 'r_flux_density'
+                    print('Auto-detected missing extra input: r_flux_density')
+                elif 'g-r' in MODEL_NAME:
+                    EXTRA_INPUTS = 'g-r' 
+                    print('Auto-detected missing extra input: g-r')
+                
+                if EXTRA_INPUTS is not None:
+                    print(f'Reloading data with extra input: {EXTRA_INPUTS}')
+                    
+                    # Update EXTRA_INPUTS_INFO if needed
+                    if EXTRA_INPUTS == 'r_flux_density' and not EXTRA_INPUTS_INFO:
+                        EXTRA_INPUTS_INFO = {
+                            '0.33': 'subs1_r_flux_density_Nm512_L3.fvol',
+                            '3': 'subs1_r_flux_density_Nm512_L3.fvol',
+                            '5': 'subs1_r_flux_density_Nm512_L5.fvol',
+                            '7': 'subs1_r_flux_density_Nm512_L7.fvol',
+                            '10': 'subs1_r_flux_density_Nm512_L10.fvol',
+                        }
+                        if ADD_RSD:
+                            for key in EXTRA_INPUTS_INFO:
+                                EXTRA_INPUTS_INFO[key] = EXTRA_INPUTS_INFO[key].replace('.fvol', '_RSD.fvol')
+                    elif EXTRA_INPUTS == 'g-r' and not EXTRA_INPUTS_INFO:
+                        EXTRA_INPUTS_INFO = {
+                            '0.33': 'subs1_g-r_Nm512_L3.fvol',
+                            '3': 'subs1_g-r_Nm512_L3.fvol',
+                            '5': 'subs1_g-r_Nm512_L5.fvol',
+                            '7': 'subs1_g-r_Nm512_L7.fvol',
+                            '10': 'subs1_g-r_Nm512_L10.fvol',
+                        }
+                        if ADD_RSD:
+                            for key in EXTRA_INPUTS_INFO:
+                                EXTRA_INPUTS_INFO[key] = EXTRA_INPUTS_INFO[key].replace('.fvol', '_RSD.fvol')
+                    
+                    try:
+                        features, labels = load_analysis_data(L_ANALYSIS, MAX_SAMPLES)
+                        print(f'Reloaded data: {features.shape} features, {labels.shape} labels')
+                    except Exception as e:
+                        print(f'Failed to reload with extra inputs: {e}')
+                        print('Continuing with original data - model inference may fail')
+                        
+            if expected_input_shape[-1] != features.shape[-1]:
+                print(f'ERROR: Cannot proceed - model expects {expected_input_shape[-1]} channels but data has {features.shape[-1]}')
+                print('Please specify the correct --EXTRA_INPUTS parameter or check your model')
+                return
+                
     except Exception as e:
         print(f'Error loading data: {e}')
         return
