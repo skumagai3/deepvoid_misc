@@ -143,7 +143,7 @@ if not args.ADD_RSD and 'RSD' in model_parts:
     ADD_RSD = True
     print('Auto-detected: Model trained with RSD data')
 
-# Auto-detect extra inputs
+# Auto-detect extra inputs early to avoid redundant loading
 if args.EXTRA_INPUTS is None:
     if 'g-r' in model_parts:
         EXTRA_INPUTS = 'g-r'
@@ -151,6 +151,29 @@ if args.EXTRA_INPUTS is None:
     elif 'r-flux-density' in model_parts or 'r_flux_density' in model_parts:
         EXTRA_INPUTS = 'r_flux_density'
         print('Auto-detected: Model uses r-band flux density as extra input')
+
+# Set up EXTRA_INPUTS_INFO early if we detected extra inputs
+if EXTRA_INPUTS == 'g-r':
+    EXTRA_INPUTS_INFO = {
+        '0.33': 'subs1_g-r_Nm512_L3.fvol',
+        '3': 'subs1_g-r_Nm512_L3.fvol',
+        '5': 'subs1_g-r_Nm512_L5.fvol',
+        '7': 'subs1_g-r_Nm512_L7.fvol',
+        '10': 'subs1_g-r_Nm512_L10.fvol',
+    }
+elif EXTRA_INPUTS == 'r_flux_density':
+    EXTRA_INPUTS_INFO = {
+        '0.33': 'subs1_r_flux_density_Nm512_L3.fvol',
+        '3': 'subs1_r_flux_density_Nm512_L3.fvol',
+        '5': 'subs1_r_flux_density_Nm512_L5.fvol',
+        '7': 'subs1_r_flux_density_Nm512_L7.fvol',
+        '10': 'subs1_r_flux_density_Nm512_L10.fvol',
+    }
+
+# Apply RSD suffix if needed
+if ADD_RSD and EXTRA_INPUTS is not None:
+    for key in EXTRA_INPUTS_INFO:
+        EXTRA_INPUTS_INFO[key] = EXTRA_INPUTS_INFO[key].replace('.fvol', '_RSD.fvol')
 
 # Auto-detect lambda conditioning
 if not args.LAMBDA_CONDITIONING and 'lambda' in model_parts:
@@ -237,26 +260,27 @@ if ADD_RSD:
     data_info['7'] = 'subs1_mass_Nm512_L7_RSD.fvol'
     data_info['10'] = 'subs1_mass_Nm512_L10_RSD.fvol'
 
-# Extra inputs mapping
-EXTRA_INPUTS_INFO = {}
-if EXTRA_INPUTS == 'g-r':
-    EXTRA_INPUTS_INFO = {
-        '0.33': 'subs1_g-r_Nm512_L3.fvol',
-        '3': 'subs1_g-r_Nm512_L3.fvol',
-        '5': 'subs1_g-r_Nm512_L5.fvol',
-        '7': 'subs1_g-r_Nm512_L7.fvol',
-        '10': 'subs1_g-r_Nm512_L10.fvol',
-    }
-elif EXTRA_INPUTS == 'r_flux_density':
-    EXTRA_INPUTS_INFO = {
-        '0.33': 'subs1_r_flux_density_Nm512_L3.fvol',
-        '3': 'subs1_r_flux_density_Nm512_L3.fvol',
-        '5': 'subs1_r_flux_density_Nm512_L5.fvol',
-        '7': 'subs1_r_flux_density_Nm512_L7.fvol',
-        '10': 'subs1_r_flux_density_Nm512_L10.fvol',
-    }
+# Extra inputs mapping (may be updated by auto-detection above)
+if not EXTRA_INPUTS_INFO:  # Only set if not already configured
+    if EXTRA_INPUTS == 'g-r':
+        EXTRA_INPUTS_INFO = {
+            '0.33': 'subs1_g-r_Nm512_L3.fvol',
+            '3': 'subs1_g-r_Nm512_L3.fvol',
+            '5': 'subs1_g-r_Nm512_L5.fvol',
+            '7': 'subs1_g-r_Nm512_L7.fvol',
+            '10': 'subs1_g-r_Nm512_L10.fvol',
+        }
+    elif EXTRA_INPUTS == 'r_flux_density':
+        EXTRA_INPUTS_INFO = {
+            '0.33': 'subs1_r_flux_density_Nm512_L3.fvol',
+            '3': 'subs1_r_flux_density_Nm512_L3.fvol',
+            '5': 'subs1_r_flux_density_Nm512_L5.fvol',
+            '7': 'subs1_r_flux_density_Nm512_L7.fvol',
+            '10': 'subs1_r_flux_density_Nm512_L10.fvol',
+        }
 
-if ADD_RSD and EXTRA_INPUTS is not None:
+# Apply RSD suffix if needed (may be redundant with above, but ensures consistency)
+if ADD_RSD and EXTRA_INPUTS is not None and EXTRA_INPUTS_INFO:
     for key in EXTRA_INPUTS_INFO:
         EXTRA_INPUTS_INFO[key] = EXTRA_INPUTS_INFO[key].replace('.fvol', '_RSD.fvol')
 
@@ -1319,8 +1343,13 @@ def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MA
                 for ch in range(n_channels):
                     channel_data = data_squeezed[:, :, :, ch]
                     
-                    # Power scaling for enhanced visualization
-                    enhanced_channel = np.power(np.abs(channel_data), 0.22) * np.sign(channel_data)
+                    # Use different scaling strategies for different channels
+                    if ch == 0:  # Density channel
+                        # More moderate power scaling for density
+                        enhanced_channel = np.power(np.abs(channel_data), 0.5) * np.sign(channel_data)
+                    else:  # Extra input channel
+                        # Even more moderate scaling for extra inputs
+                        enhanced_channel = np.power(np.abs(channel_data), 0.7) * np.sign(channel_data)
                     
                     # Central slices through the cube
                     center = enhanced_channel.shape[0] // 2
@@ -1328,8 +1357,11 @@ def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MA
                     slice_xz = enhanced_channel[:, center, :]  # XZ plane  
                     slice_yz = enhanced_channel[center, :, :]  # YZ plane
                     
-                    # Plot with enhanced contrast
-                    vmin, vmax = np.percentile(enhanced_channel, [5, 99])
+                    # Better contrast range - use different percentiles for different channels
+                    if ch == 0:  # Density
+                        vmin, vmax = np.percentile(enhanced_channel, [2, 98])
+                    else:  # Extra input
+                        vmin, vmax = np.percentile(enhanced_channel, [5, 95])
                     
                     # XY slice
                     im1 = axes_multi[ch, 0].imshow(slice_xy, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
@@ -1353,11 +1385,13 @@ def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MA
                     plt.colorbar(im3, ax=axes_multi[ch, 2], shrink=0.8)
                 
                 # Add overall title and statistics
-                orig_stats = f"Original data - Shape: {data_squeezed.shape}"
-                fig_multi.suptitle(f'Sample {i+1}: Multi-Channel Input Data\n{orig_stats}', fontsize=14, y=0.95)
+                density_stats = f"Density: Min={np.min(data_squeezed[:,:,:,0]):.2e}, Max={np.max(data_squeezed[:,:,:,0]):.2e}"
+                extra_stats = f"{channel_names[1]}: Min={np.min(data_squeezed[:,:,:,1]):.2e}, Max={np.max(data_squeezed[:,:,:,1]):.2e}"
+                fig_multi.suptitle(f'Sample {i+1}: Multi-Channel Input Data\n{density_stats}\n{extra_stats}', 
+                                 fontsize=12, y=0.95)
                 
                 plt.tight_layout()
-                plt.subplots_adjust(top=0.88)
+                plt.subplots_adjust(top=0.85)
                 
                 # Save this sample
                 sample_path = os.path.join(output_dir, f'input_data_enhanced_sample_{i+1}.png')
@@ -1366,7 +1400,7 @@ def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MA
                 plt.show()
                 plt.close(fig_multi)
                 
-                # For the main grid, use just the first channel (density)
+                # For the main grid, use just the first channel (density) with moderate scaling
                 data_for_main = data_squeezed[:, :, :, 0]
             else:
                 # For other multi-channel cases, use first channel
@@ -1375,8 +1409,8 @@ def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MA
             # Single channel data
             data_for_main = data_squeezed
         
-        # Power scaling for enhanced density visualization (makes low density regions more visible)
-        enhanced_data = np.power(np.abs(data_for_main), 0.22) * np.sign(data_for_main)
+        # More moderate power scaling for the main grid (less "funky" appearance)
+        enhanced_data = np.power(np.abs(data_for_main), 0.5) * np.sign(data_for_main)
         
         # Central slices through the cube
         center = enhanced_data.shape[0] // 2
@@ -1384,8 +1418,8 @@ def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MA
         slice_xz = enhanced_data[:, center, :]  # XZ plane  
         slice_yz = enhanced_data[center, :, :]  # YZ plane
         
-        # Plot with enhanced contrast
-        vmin, vmax = np.percentile(enhanced_data, [5, 99])  # Better contrast range
+        # Better contrast range - use wider percentiles for more visible structure
+        vmin, vmax = np.percentile(enhanced_data, [2, 98])  # Less aggressive clipping
         
         # XY slice
         im1 = axes[0, i].imshow(slice_xy, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
@@ -1427,18 +1461,18 @@ def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MA
     
     # Add density statistics as subtitle
     if vis_data[0].squeeze().ndim == 4:  # Multi-channel
-        # Show stats for first channel (density)
+        # Show stats for first channel (density) being displayed in main grid
         first_channel_data = vis_data[0].squeeze()[:, :, :, 0]
-        orig_stats = f"First channel (density) - Min: {np.min(first_channel_data):.2e}, Max: {np.max(first_channel_data):.2e}, Mean: {np.mean(first_channel_data):.2e}"
-        enhanced_stats = f"Enhanced density (power=0.22) - Min: {np.min(enhanced_data):.3f}, Max: {np.max(enhanced_data):.3f}, Mean: {np.mean(enhanced_data):.3f}"
-        title_text = f'Input Data Visualization - Multi-Channel ({vis_data[0].squeeze().shape[-1]} channels)\n{orig_stats}\n{enhanced_stats}'
+        orig_stats = f"Density Channel - Min: {np.min(first_channel_data):.2e}, Max: {np.max(first_channel_data):.2e}, Mean: {np.mean(first_channel_data):.2e}"
+        enhanced_stats = f"Enhanced (power=0.5) - Min: {np.min(enhanced_data):.3f}, Max: {np.max(enhanced_data):.3f}"
+        title_text = f'Input Data Comparison Grid - Density Channel Only\n{orig_stats}\n{enhanced_stats}\n(See individual sample files for detailed multi-channel analysis)'
     else:
         # Single channel
         orig_stats = f"Original density - Min: {np.min(input_data):.2e}, Max: {np.max(input_data):.2e}, Mean: {np.mean(input_data):.2e}"
-        enhanced_stats = f"Enhanced density (power=0.22) - Min: {np.min(enhanced_data):.3f}, Max: {np.max(enhanced_data):.3f}, Mean: {np.mean(enhanced_data):.3f}"
+        enhanced_stats = f"Enhanced (power=0.5) - Min: {np.min(enhanced_data):.3f}, Max: {np.max(enhanced_data):.3f}"
         title_text = f'Input Data Visualization - Enhanced Density Display\n{orig_stats}\n{enhanced_stats}'
     
-    fig.suptitle(title_text, fontsize=12, y=0.98)
+    fig.suptitle(title_text, fontsize=11, y=0.98)
     
     plt.tight_layout()
     plt.subplots_adjust(top=0.90)  # Make room for title
@@ -1490,8 +1524,9 @@ def run_interpretability_analysis():
     
     # Load data
     try:
+        # First, try to load with current settings
         features, labels = load_analysis_data(L_ANALYSIS, MAX_SAMPLES)
-        print(f'Data loaded: {features.shape} features, {labels.shape} labels')
+        print(f'Initial data loaded: {features.shape} features, {labels.shape} labels')
         
         # Check if model expects more input channels than we loaded
         expected_input_shape = model.input_shape
@@ -1501,7 +1536,7 @@ def run_interpretability_analysis():
         if expected_input_shape[-1] != features.shape[-1]:
             print(f'WARNING: Model expects {expected_input_shape[-1]} input channels but data has {features.shape[-1]} channels')
             
-            # Try to auto-detect missing extra inputs
+            # Try to auto-detect missing extra inputs ONLY if not already specified
             if expected_input_shape[-1] == 2 and features.shape[-1] == 1 and EXTRA_INPUTS is None:
                 print('Attempting to auto-detect missing extra input...')
                 # Check model name for hints
@@ -1513,7 +1548,7 @@ def run_interpretability_analysis():
                     print('Auto-detected missing extra input: g-r')
                 
                 if EXTRA_INPUTS is not None:
-                    print(f'Reloading data with extra input: {EXTRA_INPUTS}')
+                    print(f'Reloading data ONCE with extra input: {EXTRA_INPUTS}')
                     
                     # Update EXTRA_INPUTS_INFO if needed
                     if EXTRA_INPUTS == 'r_flux_density' and not EXTRA_INPUTS_INFO:
@@ -1539,13 +1574,18 @@ def run_interpretability_analysis():
                             for key in EXTRA_INPUTS_INFO:
                                 EXTRA_INPUTS_INFO[key] = EXTRA_INPUTS_INFO[key].replace('.fvol', '_RSD.fvol')
                     
+                    # Reload data ONLY ONCE with the detected extra input
                     try:
                         features, labels = load_analysis_data(L_ANALYSIS, MAX_SAMPLES)
-                        print(f'Reloaded data: {features.shape} features, {labels.shape} labels')
+                        print(f'Final data loaded: {features.shape} features, {labels.shape} labels')
                     except Exception as e:
                         print(f'Failed to reload with extra inputs: {e}')
                         print('Continuing with original data - model inference may fail')
+                        # Reset to original single-channel data
+                        EXTRA_INPUTS = None
+                        features, labels = load_analysis_data(L_ANALYSIS, MAX_SAMPLES)
                         
+            # Final check
             if expected_input_shape[-1] != features.shape[-1]:
                 print(f'ERROR: Cannot proceed - model expects {expected_input_shape[-1]} channels but data has {features.shape[-1]}')
                 print('Please specify the correct --EXTRA_INPUTS parameter or check your model')
