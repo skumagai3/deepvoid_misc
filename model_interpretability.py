@@ -613,7 +613,7 @@ def plot_void_correlation_analysis(correlations, save_path=None):
         ax.grid(True, alpha=0.3)
     
     # Bottom-left: Top void-selective filters
-    ax = axes[0, 2]
+    ax = axes[1, 0]
     all_corr_data = []
     for layer_name, corrs in correlations.items():
         for filter_idx, corr in enumerate(corrs):
