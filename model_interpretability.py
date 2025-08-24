@@ -152,6 +152,9 @@ if args.EXTRA_INPUTS is None:
         EXTRA_INPUTS = 'r_flux_density'
         print('Auto-detected: Model uses r-band flux density as extra input')
 
+# Initialize EXTRA_INPUTS_INFO
+EXTRA_INPUTS_INFO = {}
+
 # Set up EXTRA_INPUTS_INFO early if we detected extra inputs
 if EXTRA_INPUTS == 'g-r':
     EXTRA_INPUTS_INFO = {
@@ -171,7 +174,7 @@ elif EXTRA_INPUTS == 'r_flux_density':
     }
 
 # Apply RSD suffix if needed
-if ADD_RSD and EXTRA_INPUTS is not None:
+if ADD_RSD and EXTRA_INPUTS is not None and EXTRA_INPUTS_INFO:
     for key in EXTRA_INPUTS_INFO:
         EXTRA_INPUTS_INFO[key] = EXTRA_INPUTS_INFO[key].replace('.fvol', '_RSD.fvol')
 
@@ -260,29 +263,8 @@ if ADD_RSD:
     data_info['7'] = 'subs1_mass_Nm512_L7_RSD.fvol'
     data_info['10'] = 'subs1_mass_Nm512_L10_RSD.fvol'
 
-# Extra inputs mapping (may be updated by auto-detection above)
-if not EXTRA_INPUTS_INFO:  # Only set if not already configured
-    if EXTRA_INPUTS == 'g-r':
-        EXTRA_INPUTS_INFO = {
-            '0.33': 'subs1_g-r_Nm512_L3.fvol',
-            '3': 'subs1_g-r_Nm512_L3.fvol',
-            '5': 'subs1_g-r_Nm512_L5.fvol',
-            '7': 'subs1_g-r_Nm512_L7.fvol',
-            '10': 'subs1_g-r_Nm512_L10.fvol',
-        }
-    elif EXTRA_INPUTS == 'r_flux_density':
-        EXTRA_INPUTS_INFO = {
-            '0.33': 'subs1_r_flux_density_Nm512_L3.fvol',
-            '3': 'subs1_r_flux_density_Nm512_L3.fvol',
-            '5': 'subs1_r_flux_density_Nm512_L5.fvol',
-            '7': 'subs1_r_flux_density_Nm512_L7.fvol',
-            '10': 'subs1_r_flux_density_Nm512_L10.fvol',
-        }
-
-# Apply RSD suffix if needed (may be redundant with above, but ensures consistency)
-if ADD_RSD and EXTRA_INPUTS is not None and EXTRA_INPUTS_INFO:
-    for key in EXTRA_INPUTS_INFO:
-        EXTRA_INPUTS_INFO[key] = EXTRA_INPUTS_INFO[key].replace('.fvol', '_RSD.fvol')
+# Extra inputs mapping (configuration completed above during auto-detection)
+# This section is kept for any manual overrides if needed
 
 #================================================================
 # Custom objects for model loading
