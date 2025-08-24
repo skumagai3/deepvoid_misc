@@ -30,6 +30,7 @@ import seaborn as sns
 import tensorflow as tf
 from pathlib import Path
 import gc
+from datetime import datetime
 from scipy.ndimage import zoom
 from sklearn.metrics import matthews_corrcoef
 import warnings
@@ -561,6 +562,353 @@ def analyze_void_activation_correlation(feature_dict, void_mask, sample_idx=0):
     print(f'Calculated correlations for {len(correlations)} layers')
     return correlations
 
+def plot_layer_evolution_analysis(feature_dict, void_mask, sample_idx=0, save_path=None):
+    """
+    Plot how feature representations evolve through network depth.
+    """
+    print('Creating layer evolution analysis plot...')
+    
+    if not feature_dict:
+        print("No feature data to plot")
+        return None
+    
+    fig, axes = plt.subplots(2, 3, figsize=(18, 12))
+    
+    layer_names = list(feature_dict.keys())
+    layer_depths = np.arange(len(layer_names))
+    
+    # Calculate statistics for each layer
+    layer_stats = {
+        'sparsity': [],  # Fraction of near-zero activations
+        'max_activation': [],  # Maximum activation value
+        'mean_activation': [],  # Mean activation value
+        'std_activation': [],  # Standard deviation
+        'void_selectivity': [],  # Mean correlation with voids
+        'feature_diversity': []  # Inter-filter correlation
+    }
+    
+    for layer_name in layer_names:
+        features = feature_dict[layer_name][sample_idx]  # Shape: (H, W, D, C)
+        
+        # Sparsity (fraction of activations < 0.01 * max)
+        threshold = 0.01 * np.max(features)
+        sparsity = np.mean(features < threshold)
+        layer_stats['sparsity'].append(sparsity)
+        
+        # Activation statistics
+        layer_stats['max_activation'].append(np.max(features))
+        layer_stats['mean_activation'].append(np.mean(features))
+        layer_stats['std_activation'].append(np.std(features))
+        
+        # Void selectivity (if correlations available)
+        void_mask_resized = zoom(void_mask, 
+                               [features.shape[i]/void_mask.shape[i] for i in range(3)], 
+                               order=0)
+        correlations = []
+        for c in range(features.shape[-1]):
+            corr = np.corrcoef(features[:,:,:,c].flatten(), void_mask_resized.flatten())[0,1]
+            if not np.isnan(corr):
+                correlations.append(abs(corr))
+        layer_stats['void_selectivity'].append(np.mean(correlations) if correlations else 0)
+        
+        # Feature diversity (1 - mean inter-filter correlation)
+        if features.shape[-1] > 1:
+            flat_features = features.reshape(-1, features.shape[-1])
+            filter_corr_matrix = np.corrcoef(flat_features.T)
+            upper_tri = np.triu(filter_corr_matrix, k=1)
+            mean_inter_corr = np.mean(upper_tri[upper_tri != 0])
+            diversity = 1 - abs(mean_inter_corr) if not np.isnan(mean_inter_corr) else 0
+        else:
+            diversity = 0
+        layer_stats['feature_diversity'].append(diversity)
+    
+    # Plot 1: Sparsity evolution
+    ax = axes[0, 0]
+    ax.plot(layer_depths, layer_stats['sparsity'], 'o-', linewidth=2, markersize=6)
+    ax.set_xlabel('Layer Index')
+    ax.set_ylabel('Sparsity (fraction < 1% max)')
+    ax.set_title('Feature Sparsity Evolution')
+    ax.grid(True, alpha=0.3)
+    
+    # Plot 2: Activation magnitude evolution
+    ax = axes[0, 1]
+    ax.semilogy(layer_depths, layer_stats['max_activation'], 'o-', label='Max', linewidth=2)
+    ax.semilogy(layer_depths, layer_stats['mean_activation'], 's-', label='Mean', linewidth=2)
+    ax.set_xlabel('Layer Index')
+    ax.set_ylabel('Activation Magnitude (log scale)')
+    ax.set_title('Activation Magnitude Evolution')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # Plot 3: Void selectivity evolution
+    ax = axes[0, 2]
+    ax.plot(layer_depths, layer_stats['void_selectivity'], 'o-', color='red', linewidth=2, markersize=6)
+    ax.set_xlabel('Layer Index')
+    ax.set_ylabel('Mean |Correlation| with Voids')
+    ax.set_title('Void Selectivity Evolution')
+    ax.grid(True, alpha=0.3)
+    
+    # Plot 4: Feature diversity evolution
+    ax = axes[1, 0]
+    ax.plot(layer_depths, layer_stats['feature_diversity'], 'o-', color='green', linewidth=2, markersize=6)
+    ax.set_xlabel('Layer Index')
+    ax.set_ylabel('Feature Diversity (1 - inter-correlation)')
+    ax.set_title('Feature Diversity Evolution')
+    ax.grid(True, alpha=0.3)
+    
+    # Plot 5: Combined normalized metrics
+    ax = axes[1, 1]
+    metrics_norm = {}
+    for key, values in layer_stats.items():
+        if key != 'max_activation':  # Skip log-scale metric
+            norm_values = (np.array(values) - np.min(values)) / (np.max(values) - np.min(values) + 1e-8)
+            metrics_norm[key] = norm_values
+    
+    for key, values in metrics_norm.items():
+        ax.plot(layer_depths, values, 'o-', label=key.replace('_', ' ').title(), linewidth=2, markersize=4)
+    ax.set_xlabel('Layer Index')
+    ax.set_ylabel('Normalized Value')
+    ax.set_title('Normalized Metrics Evolution')
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3)
+    
+    # Plot 6: Activation distribution comparison (first vs last layer)
+    ax = axes[1, 2]
+    first_layer_features = feature_dict[layer_names[0]][sample_idx].flatten()
+    last_layer_features = feature_dict[layer_names[-1]][sample_idx].flatten()
+    
+    ax.hist(first_layer_features, bins=50, alpha=0.6, label=f'First Layer ({layer_names[0][:15]})', density=True)
+    ax.hist(last_layer_features, bins=50, alpha=0.6, label=f'Last Layer ({layer_names[-1][:15]})', density=True)
+    ax.set_xlabel('Activation Value')
+    ax.set_ylabel('Density')
+    ax.set_title('Activation Distribution: First vs Last Layer')
+    ax.legend(fontsize=8)
+    ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=DPI, bbox_inches='tight')
+        print(f'Layer evolution analysis saved to {save_path}')
+    
+    return fig
+
+def plot_class_specific_analysis(feature_dict, labels, sample_idx=0, save_path=None):
+    """
+    Analyze how different cosmic structure classes activate different filters.
+    """
+    print('Creating class-specific activation analysis plot...')
+    
+    if not feature_dict:
+        print("No feature data to plot")
+        return None
+    
+    fig, axes = plt.subplots(2, 2, figsize=(16, 12))
+    
+    # Get class masks for the sample
+    label_sample = labels[sample_idx, :, :, :, 0]  # Shape: (H, W, D)
+    class_masks = {}
+    class_names = ['void', 'wall', 'filament', 'halo']
+    
+    for class_idx, class_name in enumerate(class_names):
+        class_masks[class_name] = (label_sample == class_idx).astype(float)
+    
+    # Select a representative layer (middle of network)
+    layer_names = list(feature_dict.keys())
+    mid_layer_idx = len(layer_names) // 2
+    selected_layer = layer_names[mid_layer_idx]
+    features = feature_dict[selected_layer][sample_idx]  # Shape: (H, W, D, C)
+    
+    print(f'Using layer: {selected_layer} with {features.shape[-1]} filters')
+    
+    # Calculate class-specific activations
+    class_activations = {}
+    for class_name, mask in class_masks.items():
+        # Resize mask to match feature dimensions
+        mask_resized = zoom(mask, [features.shape[i]/mask.shape[i] for i in range(3)], order=0)
+        
+        # Calculate mean activation for each filter in this class region
+        activations = []
+        for c in range(features.shape[-1]):
+            feature_map = features[:, :, :, c]
+            if np.sum(mask_resized) > 0:
+                mean_activation = np.sum(feature_map * mask_resized) / np.sum(mask_resized)
+            else:
+                mean_activation = 0
+            activations.append(mean_activation)
+        class_activations[class_name] = np.array(activations)
+    
+    # Plot 1: Class-specific filter preferences
+    ax = axes[0, 0]
+    filter_indices = np.arange(min(32, features.shape[-1]))  # Show first 32 filters
+    
+    for class_name in class_names:
+        activations = class_activations[class_name][filter_indices]
+        ax.plot(filter_indices, activations, 'o-', label=class_name, linewidth=2, markersize=4)
+    
+    ax.set_xlabel('Filter Index')
+    ax.set_ylabel('Mean Activation in Class Region')
+    ax.set_title(f'Class-Specific Filter Activations\n({selected_layer})')
+    ax.legend()
+    ax.grid(True, alpha=0.3)
+    
+    # Plot 2: Filter selectivity matrix
+    ax = axes[0, 1]
+    selectivity_matrix = np.array([class_activations[name] for name in class_names])
+    
+    # Normalize by row (each class)
+    selectivity_norm = selectivity_matrix / (np.max(selectivity_matrix, axis=1, keepdims=True) + 1e-8)
+    
+    # Show only subset of filters for clarity
+    n_filters_show = min(20, selectivity_norm.shape[1])
+    im = ax.imshow(selectivity_norm[:, :n_filters_show], cmap='viridis', aspect='auto')
+    ax.set_yticks(range(len(class_names)))
+    ax.set_yticklabels(class_names)
+    ax.set_xlabel('Filter Index')
+    ax.set_title('Normalized Filter Selectivity by Class')
+    plt.colorbar(im, ax=ax, shrink=0.8)
+    
+    # Plot 3: Class discrimination analysis
+    ax = axes[1, 0]
+    
+    # Calculate how well each filter discriminates between classes
+    discrimination_scores = []
+    for c in range(features.shape[-1]):
+        activations = [class_activations[name][c] for name in class_names]
+        # Use coefficient of variation as discrimination measure
+        discrimination = np.std(activations) / (np.mean(activations) + 1e-8)
+        discrimination_scores.append(discrimination)
+    
+    # Show top discriminative filters
+    top_indices = np.argsort(discrimination_scores)[-20:]
+    top_scores = np.array(discrimination_scores)[top_indices]
+    
+    bars = ax.bar(range(len(top_scores)), top_scores)
+    ax.set_xlabel('Filter Rank (Top Discriminative)')
+    ax.set_ylabel('Discrimination Score (CV)')
+    ax.set_title('Most Class-Discriminative Filters')
+    ax.grid(True, alpha=0.3)
+    
+    # Color bars by score
+    max_score = max(top_scores) if len(top_scores) > 0 else 1
+    for bar, score in zip(bars, top_scores):
+        bar.set_color(plt.cm.plasma(score / max_score))
+    
+    # Plot 4: Class activation distributions
+    ax = axes[1, 1]
+    
+    # Select top discriminative filter for detailed analysis
+    if len(discrimination_scores) > 0:
+        best_filter_idx = np.argmax(discrimination_scores)
+        
+        for class_name in class_names:
+            mask = class_masks[class_name]
+            mask_resized = zoom(mask, [features.shape[i]/mask.shape[i] for i in range(3)], order=0)
+            feature_map = features[:, :, :, best_filter_idx]
+            
+            # Get activations in class regions
+            class_activations_detailed = feature_map[mask_resized > 0.5]
+            
+            if len(class_activations_detailed) > 0:
+                ax.hist(class_activations_detailed, bins=30, alpha=0.6, 
+                       label=f'{class_name} (n={len(class_activations_detailed)})', density=True)
+        
+        ax.set_xlabel('Activation Value')
+        ax.set_ylabel('Density')
+        ax.set_title(f'Activation Distribution by Class\n(Filter {best_filter_idx}, highest discrimination)')
+        ax.legend(fontsize=8)
+        ax.grid(True, alpha=0.3)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=DPI, bbox_inches='tight')
+        print(f'Class-specific analysis saved to {save_path}')
+    
+    return fig
+
+def plot_spatial_activation_patterns(feature_dict, original_input, void_mask, sample_idx=0, save_path=None):
+    """
+    Analyze spatial patterns of feature activations.
+    """
+    print('Creating spatial activation pattern analysis plot...')
+    
+    if not feature_dict:
+        print("No feature data to plot")
+        return None
+    
+    fig, axes = plt.subplots(3, 3, figsize=(15, 15))
+    
+    # Select layers at different depths
+    layer_names = list(feature_dict.keys())
+    if len(layer_names) >= 3:
+        selected_layers = [layer_names[0], layer_names[len(layer_names)//2], layer_names[-1]]
+        layer_labels = ['Early', 'Middle', 'Late']
+    else:
+        selected_layers = layer_names
+        layer_labels = [f'Layer {i+1}' for i in range(len(selected_layers))]
+    
+    # Get middle slice for visualization
+    slice_idx = original_input.shape[2] // 2
+    original_slice = original_input[sample_idx, :, :, slice_idx, 0]
+    void_slice = void_mask[:, :, slice_idx]
+    
+    for row, (layer_name, layer_label) in enumerate(zip(selected_layers, layer_labels)):
+        features = feature_dict[layer_name][sample_idx]  # Shape: (H, W, D, C)
+        
+        # Get middle slice of features
+        if len(features.shape) == 4:
+            feature_slice_idx = features.shape[2] // 2
+            feature_slice = features[:, :, feature_slice_idx, :]  # Shape: (H, W, C)
+        else:
+            feature_slice = features
+        
+        # Resize to match original if needed
+        if feature_slice.shape[:2] != original_slice.shape:
+            target_shape = original_slice.shape
+            feature_slice_resized = np.zeros(target_shape + (feature_slice.shape[-1],))
+            for c in range(feature_slice.shape[-1]):
+                feature_slice_resized[:, :, c] = zoom(feature_slice[:, :, c], 
+                                                    [target_shape[i]/feature_slice.shape[i] for i in range(2)], 
+                                                    order=1)
+            feature_slice = feature_slice_resized
+        
+        # Column 1: Original input with void overlay
+        ax = axes[row, 0]
+        ax.imshow(original_slice, cmap='gray', alpha=0.8)
+        ax.contour(void_slice, levels=[0.5], colors='red', alpha=0.6, linewidths=1)
+        ax.set_title(f'{layer_label}: Input + Void Contours')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        
+        # Column 2: Mean activation map
+        ax = axes[row, 1]
+        mean_activation = np.mean(feature_slice, axis=-1)
+        im = ax.imshow(mean_activation, cmap='hot')
+        ax.contour(void_slice, levels=[0.5], colors='cyan', alpha=0.8, linewidths=1)
+        ax.set_title(f'{layer_label}: Mean Activation')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        plt.colorbar(im, ax=ax, shrink=0.8)
+        
+        # Column 3: Activation standard deviation (feature diversity)
+        ax = axes[row, 2]
+        std_activation = np.std(feature_slice, axis=-1)
+        im = ax.imshow(std_activation, cmap='viridis')
+        ax.contour(void_slice, levels=[0.5], colors='white', alpha=0.8, linewidths=1)
+        ax.set_title(f'{layer_label}: Activation Diversity')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        plt.colorbar(im, ax=ax, shrink=0.8)
+    
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=DPI, bbox_inches='tight')
+        print(f'Spatial activation patterns saved to {save_path}')
+    
+    return fig
+
 def plot_void_correlation_analysis(correlations, save_path=None):
     """
     Plot analysis of void-activation correlations.
@@ -945,7 +1293,44 @@ def run_interpretability_analysis():
             np.savez(correlation_file, **correlations)
             print(f'Correlation data saved to {correlation_file}')
     
-    # 4. Generate summary report
+    # 4. Layer evolution analysis
+    print('\n--- Analyzing Layer Evolution ---')
+    if feature_dict and SAVE_ALL:
+        print('Creating layer evolution analysis...')
+        fig4 = plot_layer_evolution_analysis(
+            feature_dict, 
+            void_mask, 
+            sample_idx=0,
+            save_path=os.path.join(ANALYSIS_PATH, 'layer_evolution_analysis.png')
+        )
+        plt.close(fig4)
+    
+    # 5. Class-specific analysis
+    print('\n--- Analyzing Class-Specific Activations ---')
+    if feature_dict and SAVE_ALL:
+        print('Creating class-specific analysis...')
+        fig5 = plot_class_specific_analysis(
+            feature_dict, 
+            labels, 
+            sample_idx=0,
+            save_path=os.path.join(ANALYSIS_PATH, 'class_specific_analysis.png')
+        )
+        plt.close(fig5)
+    
+    # 6. Spatial activation patterns
+    print('\n--- Analyzing Spatial Activation Patterns ---')
+    if feature_dict and SAVE_ALL:
+        print('Creating spatial activation patterns...')
+        fig6 = plot_spatial_activation_patterns(
+            feature_dict, 
+            features, 
+            void_mask, 
+            sample_idx=0,
+            save_path=os.path.join(ANALYSIS_PATH, 'spatial_activation_patterns.png')
+        )
+        plt.close(fig6)
+    
+    # 7. Generate summary report
     print('\n--- Generating Analysis Summary ---')
     summary_file = os.path.join(ANALYSIS_PATH, 'analysis_summary.txt')
     with open(summary_file, 'w') as f:
@@ -989,8 +1374,12 @@ def run_interpretability_analysis():
             if USE_ATTENTION:
                 f.write(f"- attention_maps.png\n")
             f.write(f"- void_correlation_analysis.png\n")
+            f.write(f"- layer_evolution_analysis.png\n")
+            f.write(f"- class_specific_analysis.png\n")
+            f.write(f"- spatial_activation_patterns.png\n")
             f.write(f"- void_correlations.npz\n")
         f.write(f"- analysis_summary.txt\n")
+        f.write(f"\nAnalysis completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
     
     print(f'Analysis summary saved to {summary_file}')
     
