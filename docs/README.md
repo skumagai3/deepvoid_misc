@@ -122,28 +122,29 @@ The `model_interpretability.py` script provides comprehensive analysis tools to 
 
 **Basic Analysis**:
 ```bash
-# Analyze a trained model with test data
-python model_interpretability.py /path/to/trained_model.h5 /path/to/test_data.h5
+# Analyze a trained curricular model with specific lambda
+python model_interpretability.py /content/drive/MyDrive/ TNG_curricular_model_name 10
 ```
 
 **Advanced Analysis with Custom Parameters**:
 ```bash
-python model_interpretability.py model.h5 data.h5 \
-    --output_dir ./interpretability_results \
-    --num_samples 50 \
-    --slice_indices 16 32 48 64 80 \
-    --correlation_threshold 0.25 \
-    --dpi 300 \
-    --feature_maps_only
+python model_interpretability.py /content/drive/MyDrive/ TNG_curricular_SCCE_Class_Penalty_Fixed_D4_F16_RSD_attention 10 \
+    --MAX_SAMPLES 50 \
+    --SLICE_IDX 64 \
+    --DPI 300 \
+    --SAVE_ALL \
+    --EXTRA_INPUTS g-r \
+    --ADD_RSD \
+    --USE_OVERLAPPING_SUBCUBES \
+    --RSD_PRESERVING_ROTATIONS
 ```
 
 **Quick Feature Extraction for Multiple Models**:
 ```bash
-# Batch analyze multiple models
-for model in models/*.h5; do
-    python model_interpretability.py "$model" test_data.h5 \
-        --output_dir "analysis_$(basename $model .h5)" \
-        --num_samples 20
+# Batch analyze multiple curricular models
+for model_name in TNG_curricular_model1 TNG_curricular_model2; do
+    python model_interpretability.py /content/drive/MyDrive/ "$model_name" 10 \
+        --MAX_SAMPLES 20 --SAVE_ALL
 done
 ```
 
@@ -169,12 +170,17 @@ interpretability_results/
 
 #### Key Parameters
 
-- `--num_samples`: Number of test samples to analyze (default: 10)
-- `--slice_indices`: Which 3D slices to visualize (default: center slices)
-- `--correlation_threshold`: Minimum correlation to report (default: 0.3)
-- `--output_dir`: Where to save analysis results
-- `--feature_maps_only`: Skip correlation analysis for faster execution
-- `--dpi`: Figure resolution for publications (default: 150)
+- `--MAX_SAMPLES`: Number of test samples to analyze (default: 3)
+- `--MAX_FILTERS`: Maximum filters to visualize per layer (default: 16)
+- `--SLICE_IDX`: Which 3D slice to visualize (default: middle slice)
+- `--DPI`: Figure resolution for publications (default: 300)
+- `--SAVE_ALL`: Save all analysis plots (feature maps, attention, etc.)
+- `--EXTRA_INPUTS`: Extra inputs used in training (g-r, r_flux_density)
+- `--ADD_RSD`: Model trained with redshift-space distortions
+- `--LAMBDA_CONDITIONING`: Model uses lambda conditioning
+- `--USE_OVERLAPPING_SUBCUBES`: Use overlapping subcubes (more diverse samples, uses more memory)
+- `--RSD_PRESERVING_ROTATIONS`: Use RSD-preserving rotations (auto-enabled for RSD models)
+- `--EXTRA_AUGMENTATION`: Use extra data augmentation (match training settings)
 
 #### Scientific Applications
 
@@ -195,8 +201,8 @@ interpretability_results/
 
 #### Technical Requirements
 
-- TensorFlow/Keras models (`.h5` format)
-- Test data in HDF5 format with `density` and `labels` datasets
+- TensorFlow/Keras models (`.h5` or `.keras` format)
+- Test data in `.fvol` format (same as training data)
 - Sufficient memory for feature map extraction (adjust `num_samples` if needed)
 - Matplotlib and scipy for visualizations and statistics
 
@@ -215,7 +221,7 @@ python model_interpretability.py model.h5 data.h5 --feature_maps_only
 ```
 
 **Custom Data Format**:
-The script expects HDF5 files with `density` and `labels` datasets. If your data format differs, modify the data loading section in the script.
+The script uses `.fvol` files exactly like the training scripts (`curricular.py`, `DV_MULTI_TRAIN.py`). Data files should be in the same format and location as used during training.
 
 ---
 

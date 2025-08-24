@@ -17,6 +17,8 @@ This will generate comprehensive interpretability analysis including:
 - Void-specific activation analysis
 - Feature evolution through network depth
 - Correlation analysis between activations and cosmic structures
+
+Data Format: Uses .fvol files exactly like curricular.py and curricular_pred.py
 """
 
 import os
@@ -36,6 +38,11 @@ warnings.filterwarnings('ignore')
 # Import custom modules
 sys.path.append('.')
 import NETS_LITE as nets
+try:
+    import volumes  # For .fvol file loading
+except ImportError:
+    print("Warning: volumes module not found. Data loading may fail.")
+    volumes = None
 
 print('>>> Running model_interpretability.py')
 print('TensorFlow version:', tf.__version__)
@@ -70,6 +77,12 @@ optional.add_argument('--MAX_SAMPLES', type=int, default=3,
                       help='Maximum number of samples to analyze. Default is 3.')
 optional.add_argument('--MAX_FILTERS', type=int, default=16,
                       help='Maximum number of filters to show per layer. Default is 16.')
+optional.add_argument('--USE_OVERLAPPING_SUBCUBES', action='store_true',
+                      help='Use overlapping subcubes for more diverse samples (uses more memory).')
+optional.add_argument('--RSD_PRESERVING_ROTATIONS', action='store_true',
+                      help='Use RSD-preserving rotations (for models trained with RSD data).')
+optional.add_argument('--EXTRA_AUGMENTATION', action='store_true',
+                      help='Use extra data augmentation (for models trained with extra augmentation).')
 optional.add_argument('--SAVE_ALL', action='store_true',
                       help='Save all analysis plots (feature maps, attention, evolution, etc.).')
 optional.add_argument('--SLICE_IDX', type=int, default=None,
@@ -88,12 +101,16 @@ LAMBDA_CONDITIONING = args.LAMBDA_CONDITIONING
 PREPROCESSING = args.PREPROCESSING
 MAX_SAMPLES = args.MAX_SAMPLES
 MAX_FILTERS = args.MAX_FILTERS
+USE_OVERLAPPING_SUBCUBES = args.USE_OVERLAPPING_SUBCUBES
+RSD_PRESERVING_ROTATIONS = args.RSD_PRESERVING_ROTATIONS
+EXTRA_AUGMENTATION = args.EXTRA_AUGMENTATION
 SAVE_ALL = args.SAVE_ALL
 SLICE_IDX = args.SLICE_IDX
 DPI = args.DPI
 
 print(f'Analysis parameters: MODEL={MODEL_NAME}, L={L_ANALYSIS}, SAMPLES={MAX_SAMPLES}')
 print(f'Extra inputs: {EXTRA_INPUTS}, RSD: {ADD_RSD}, Preprocessing: {PREPROCESSING}')
+print(f'Data loading: Overlapping={USE_OVERLAPPING_SUBCUBES}, RSD-preserving={RSD_PRESERVING_ROTATIONS}, Extra-aug={EXTRA_AUGMENTATION}')
 
 #================================================================
 # Auto-detect model parameters from model name
@@ -110,10 +127,10 @@ if not args.ADD_RSD and 'RSD' in model_parts:
 if args.EXTRA_INPUTS is None:
     if 'g-r' in model_parts:
         EXTRA_INPUTS = 'g-r'
-        print('Auto-detected: Model trained with g-r color extra inputs')
+        print('Auto-detected: Model uses g-r color as extra input')
     elif 'r-flux-density' in model_parts:
         EXTRA_INPUTS = 'r_flux_density'
-        print('Auto-detected: Model trained with r flux density extra inputs')
+        print('Auto-detected: Model uses r-band flux density as extra input')
 
 # Auto-detect lambda conditioning
 if not args.LAMBDA_CONDITIONING and 'lambda' in model_parts:
@@ -124,7 +141,13 @@ if not args.LAMBDA_CONDITIONING and 'lambda' in model_parts:
 USE_ATTENTION = 'attention' in model_parts
 print(f'Auto-detected: Attention architecture = {USE_ATTENTION}')
 
+# Auto-detect and enable RSD-preserving rotations if model was trained with RSD
+if ADD_RSD and not args.RSD_PRESERVING_ROTATIONS:
+    RSD_PRESERVING_ROTATIONS = True
+    print('Auto-enabled: RSD-preserving rotations (model trained with RSD data)')
+
 print(f'Final parameters: RSD={ADD_RSD}, EXTRA_INPUTS={EXTRA_INPUTS}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}, ATTENTION={USE_ATTENTION}')
+print(f'Data loading: Overlapping={USE_OVERLAPPING_SUBCUBES}, RSD-preserving={RSD_PRESERVING_ROTATIONS}, Extra-aug={EXTRA_AUGMENTATION}')
 
 #================================================================
 # Set up paths and parameters
@@ -671,25 +694,72 @@ def load_analysis_data(inter_sep, max_samples=MAX_SAMPLES):
     preproc_param = preproc_mapping.get(PREPROCESSING, 'mm')
     
     try:
-        # Load features
+        # Load features using appropriate method based on training configuration
         print('Loading density features...')
-        features = nets.load_dataset(
-            file_in=data_file,
-            SUBGRID=SUBGRID,
-            OFF=OFF,
-            preproc=preproc_param,
-            sigma=None
-        )
         
-        # Load labels
+        if USE_OVERLAPPING_SUBCUBES:
+            # Use overlapping subcubes for more diverse samples
+            if RSD_PRESERVING_ROTATIONS:
+                if EXTRA_AUGMENTATION:
+                    features = nets.load_dataset_all_overlap_rsd_preserving(
+                        data_file, FILE_MASK, SUBGRID, OFF, preproc=preproc_param, preprocessing=PREPROCESSING
+                    )[0]  # Only get features, not labels
+                else:
+                    features = nets.load_dataset_all_overlap_rsd_preserving_light(
+                        data_file, FILE_MASK, SUBGRID, OFF, preproc=preproc_param, preprocessing=PREPROCESSING
+                    )[0]  # Only get features, not labels
+            else:
+                if EXTRA_AUGMENTATION:
+                    features = nets.load_dataset_all_overlap(
+                        data_file, FILE_MASK, SUBGRID, OFF, preproc=preproc_param, preprocessing=PREPROCESSING
+                    )[0]  # Only get features, not labels
+                else:
+                    features = nets.load_dataset_all_overlap_light(
+                        data_file, FILE_MASK, SUBGRID, OFF, preproc=preproc_param, preprocessing=PREPROCESSING
+                    )[0]  # Only get features, not labels
+        else:
+            # Use non-overlapping subcubes (memory efficient)
+            if RSD_PRESERVING_ROTATIONS:
+                features = nets.load_dataset_all_rsd_preserving_light(
+                    data_file, FILE_MASK, SUBGRID, preproc=preproc_param, preprocessing=PREPROCESSING
+                )[0]  # Only get features, not labels
+            else:
+                features = nets.load_dataset_all_light(
+                    data_file, FILE_MASK, SUBGRID, preproc=preproc_param, preprocessing=PREPROCESSING
+                )[0]  # Only get features, not labels
+        
+        # Load labels using the same method
         print('Loading structure labels...')
-        labels = nets.load_dataset(
-            file_in=FILE_MASK,
-            SUBGRID=SUBGRID,
-            OFF=OFF,
-            preproc=None,
-            sigma=None
-        )
+        
+        if USE_OVERLAPPING_SUBCUBES:
+            if RSD_PRESERVING_ROTATIONS:
+                if EXTRA_AUGMENTATION:
+                    labels = nets.load_dataset_all_overlap_rsd_preserving(
+                        data_file, FILE_MASK, SUBGRID, OFF, preproc=None, preprocessing=None
+                    )[1]  # Only get labels, not features
+                else:
+                    labels = nets.load_dataset_all_overlap_rsd_preserving_light(
+                        data_file, FILE_MASK, SUBGRID, OFF, preproc=None, preprocessing=None
+                    )[1]  # Only get labels, not features
+            else:
+                if EXTRA_AUGMENTATION:
+                    labels = nets.load_dataset_all_overlap(
+                        data_file, FILE_MASK, SUBGRID, OFF, preproc=None, preprocessing=None
+                    )[1]  # Only get labels, not features
+                else:
+                    labels = nets.load_dataset_all_overlap_light(
+                        data_file, FILE_MASK, SUBGRID, OFF, preproc=None, preprocessing=None
+                    )[1]  # Only get labels, not features
+        else:
+            if RSD_PRESERVING_ROTATIONS:
+                labels = nets.load_dataset_all_rsd_preserving_light(
+                    data_file, FILE_MASK, SUBGRID, preproc=None, preprocessing=None
+                )[1]  # Only get labels, not features
+            else:
+                labels = nets.load_dataset_all_light(
+                    data_file, FILE_MASK, SUBGRID, preproc=None, preprocessing=None
+                )[1]  # Only get labels, not features
+        
         labels = labels.astype(np.int32)
         
         print(f'Loaded features: {features.shape}, labels: {labels.shape}')
@@ -702,13 +772,34 @@ def load_analysis_data(inter_sep, max_samples=MAX_SAMPLES):
             if not os.path.exists(extra_input_file):
                 raise FileNotFoundError(f'Extra input file not found: {extra_input_file}')
             
-            extra_features = nets.load_dataset(
-                file_in=extra_input_file,
-                SUBGRID=SUBGRID,
-                OFF=OFF,
-                preproc=preproc_param,
-                sigma=None
-            )
+            if USE_OVERLAPPING_SUBCUBES:
+                if RSD_PRESERVING_ROTATIONS:
+                    if EXTRA_AUGMENTATION:
+                        extra_features = nets.load_dataset_all_overlap_rsd_preserving(
+                            extra_input_file, FILE_MASK, SUBGRID, OFF, preproc=preproc_param, preprocessing=PREPROCESSING
+                        )[0]  # Only get features, not labels
+                    else:
+                        extra_features = nets.load_dataset_all_overlap_rsd_preserving_light(
+                            extra_input_file, FILE_MASK, SUBGRID, OFF, preproc=preproc_param, preprocessing=PREPROCESSING
+                        )[0]  # Only get features, not labels
+                else:
+                    if EXTRA_AUGMENTATION:
+                        extra_features = nets.load_dataset_all_overlap(
+                            extra_input_file, FILE_MASK, SUBGRID, OFF, preproc=preproc_param, preprocessing=PREPROCESSING
+                        )[0]  # Only get features, not labels
+                    else:
+                        extra_features = nets.load_dataset_all_overlap_light(
+                            extra_input_file, FILE_MASK, SUBGRID, OFF, preproc=preproc_param, preprocessing=PREPROCESSING
+                        )[0]  # Only get features, not labels
+            else:
+                if RSD_PRESERVING_ROTATIONS:
+                    extra_features = nets.load_dataset_all_rsd_preserving_light(
+                        extra_input_file, FILE_MASK, SUBGRID, preproc=preproc_param, preprocessing=PREPROCESSING
+                    )[0]  # Only get features, not labels
+                else:
+                    extra_features = nets.load_dataset_all_light(
+                        extra_input_file, FILE_MASK, SUBGRID, preproc=preproc_param, preprocessing=PREPROCESSING
+                    )[0]  # Only get features, not labels
             
             print(f'Extra inputs loaded: {extra_features.shape}')
             features = np.concatenate([features, extra_features], axis=-1)
@@ -866,6 +957,10 @@ def run_interpretability_analysis():
         f.write(f"Extra Inputs: {EXTRA_INPUTS}\n")
         f.write(f"RSD: {ADD_RSD}\n")
         f.write(f"Attention: {USE_ATTENTION}\n")
+        f.write(f"Data Loading Method:\n")
+        f.write(f"- Overlapping subcubes: {USE_OVERLAPPING_SUBCUBES}\n")
+        f.write(f"- RSD-preserving rotations: {RSD_PRESERVING_ROTATIONS}\n")
+        f.write(f"- Extra augmentation: {EXTRA_AUGMENTATION}\n")
         f.write(f"Samples Analyzed: {MAX_SAMPLES}\n")
         f.write(f"Slice Index: {slice_idx_use}\n\n")
         
