@@ -1303,8 +1303,80 @@ def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MA
         # Squeeze the data to remove batch dimension
         data_squeezed = data.squeeze()
         
+        # Handle multi-channel data - process each channel separately
+        if len(data_squeezed.shape) == 4:  # Multi-channel: (H, W, D, C)
+            n_channels = data_squeezed.shape[-1]
+            print(f'  Sample {i+1}: Multi-channel data with {n_channels} channels')
+            
+            # For visualization, show each channel separately or combine them
+            if n_channels == 2:
+                # Assume channels are [density, extra_input]
+                channel_names = ['Density', EXTRA_INPUTS or 'Extra Input']
+                
+                # Create subplots for each channel
+                fig_multi, axes_multi = plt.subplots(2, 3, figsize=(15, 10))
+                
+                for ch in range(n_channels):
+                    channel_data = data_squeezed[:, :, :, ch]
+                    
+                    # Power scaling for enhanced visualization
+                    enhanced_channel = np.power(np.abs(channel_data), 0.22) * np.sign(channel_data)
+                    
+                    # Central slices through the cube
+                    center = enhanced_channel.shape[0] // 2
+                    slice_xy = enhanced_channel[:, :, center]  # XY plane
+                    slice_xz = enhanced_channel[:, center, :]  # XZ plane  
+                    slice_yz = enhanced_channel[center, :, :]  # YZ plane
+                    
+                    # Plot with enhanced contrast
+                    vmin, vmax = np.percentile(enhanced_channel, [5, 99])
+                    
+                    # XY slice
+                    im1 = axes_multi[ch, 0].imshow(slice_xy, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
+                    axes_multi[ch, 0].set_title(f'{channel_names[ch]} - XY plane (z={center})')
+                    axes_multi[ch, 0].set_xlabel('X')
+                    axes_multi[ch, 0].set_ylabel('Y')
+                    plt.colorbar(im1, ax=axes_multi[ch, 0], shrink=0.8)
+                    
+                    # XZ slice
+                    im2 = axes_multi[ch, 1].imshow(slice_xz, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
+                    axes_multi[ch, 1].set_title(f'{channel_names[ch]} - XZ plane (y={center})')
+                    axes_multi[ch, 1].set_xlabel('X')
+                    axes_multi[ch, 1].set_ylabel('Z')
+                    plt.colorbar(im2, ax=axes_multi[ch, 1], shrink=0.8)
+                    
+                    # YZ slice
+                    im3 = axes_multi[ch, 2].imshow(slice_yz, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
+                    axes_multi[ch, 2].set_title(f'{channel_names[ch]} - YZ plane (x={center})')
+                    axes_multi[ch, 2].set_xlabel('Y')
+                    axes_multi[ch, 2].set_ylabel('Z')
+                    plt.colorbar(im3, ax=axes_multi[ch, 2], shrink=0.8)
+                
+                # Add overall title and statistics
+                orig_stats = f"Original data - Shape: {data_squeezed.shape}"
+                fig_multi.suptitle(f'Sample {i+1}: Multi-Channel Input Data\n{orig_stats}', fontsize=14, y=0.95)
+                
+                plt.tight_layout()
+                plt.subplots_adjust(top=0.88)
+                
+                # Save this sample
+                sample_path = os.path.join(output_dir, f'input_data_enhanced_sample_{i+1}.png')
+                fig_multi.savefig(sample_path, dpi=300, bbox_inches='tight')
+                print(f'  Multi-channel visualization saved to: {sample_path}')
+                plt.show()
+                plt.close(fig_multi)
+                
+                # For the main grid, use just the first channel (density)
+                data_for_main = data_squeezed[:, :, :, 0]
+            else:
+                # For other multi-channel cases, use first channel
+                data_for_main = data_squeezed[:, :, :, 0]
+        else:
+            # Single channel data
+            data_for_main = data_squeezed
+        
         # Power scaling for enhanced density visualization (makes low density regions more visible)
-        enhanced_data = np.power(data_squeezed, 0.22)  # Power scaling instead of log to avoid issues with zeros
+        enhanced_data = np.power(np.abs(data_for_main), 0.22) * np.sign(data_for_main)
         
         # Central slices through the cube
         center = enhanced_data.shape[0] // 2
@@ -1354,19 +1426,33 @@ def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MA
                            verticalalignment='top', fontsize=10)
     
     # Add density statistics as subtitle
-    orig_stats = f"Original density - Min: {np.min(input_data):.2e}, Max: {np.max(input_data):.2e}, Mean: {np.mean(input_data):.2e}"
-    enhanced_stats = f"Enhanced density (power=0.22) - Min: {np.min(enhanced_data):.3f}, Max: {np.max(enhanced_data):.3f}, Mean: {np.mean(enhanced_data):.3f}"
+    if vis_data[0].squeeze().ndim == 4:  # Multi-channel
+        # Show stats for first channel (density)
+        first_channel_data = vis_data[0].squeeze()[:, :, :, 0]
+        orig_stats = f"First channel (density) - Min: {np.min(first_channel_data):.2e}, Max: {np.max(first_channel_data):.2e}, Mean: {np.mean(first_channel_data):.2e}"
+        enhanced_stats = f"Enhanced density (power=0.22) - Min: {np.min(enhanced_data):.3f}, Max: {np.max(enhanced_data):.3f}, Mean: {np.mean(enhanced_data):.3f}"
+        title_text = f'Input Data Visualization - Multi-Channel ({vis_data[0].squeeze().shape[-1]} channels)\n{orig_stats}\n{enhanced_stats}'
+    else:
+        # Single channel
+        orig_stats = f"Original density - Min: {np.min(input_data):.2e}, Max: {np.max(input_data):.2e}, Mean: {np.mean(input_data):.2e}"
+        enhanced_stats = f"Enhanced density (power=0.22) - Min: {np.min(enhanced_data):.3f}, Max: {np.max(enhanced_data):.3f}, Mean: {np.mean(enhanced_data):.3f}"
+        title_text = f'Input Data Visualization - Enhanced Density Display\n{orig_stats}\n{enhanced_stats}'
     
-    fig.suptitle(f'Input Data Visualization - Enhanced Density Display\n{orig_stats}\n{enhanced_stats}', 
-                 fontsize=12, y=0.98)
+    fig.suptitle(title_text, fontsize=12, y=0.98)
     
     plt.tight_layout()
     plt.subplots_adjust(top=0.90)  # Make room for title
     
     # Save visualization
-    output_path = os.path.join(output_dir, 'input_data_enhanced.png')
+    if vis_data[0].squeeze().ndim == 4:
+        output_path = os.path.join(output_dir, f'input_data_enhanced_multichannel.png')
+        info_text = f'Multi-channel enhanced input data visualization (showing first channel) saved to: {output_path}'
+    else:
+        output_path = os.path.join(output_dir, 'input_data_enhanced.png')
+        info_text = f'Enhanced input data visualization saved to: {output_path}'
+    
     plt.savefig(output_path, dpi=300, bbox_inches='tight')
-    print(f'Enhanced input data visualization saved to: {output_path}')
+    print(info_text)
     plt.show()
     
     return output_path
