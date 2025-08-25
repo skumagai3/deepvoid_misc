@@ -517,11 +517,11 @@ def plot_feature_maps_3d(feature_dict, sample_idx=0, slice_idx=None, max_filters
             activation = feature_slice[:, :, filter_idx]
             im = ax.imshow(activation, cmap='plasma', aspect='equal')
             
-            # Overlay void regions if provided
+            # Overlay non-void structures if provided (contour around walls/filaments/halos)
             if void_regions is not None and void_regions.shape[:2] == activation.shape:
-                # Create cross-hatch pattern for void regions
-                void_mask_binary = void_regions > 0.5
-                ax.contourf(void_mask_binary, levels=[0.5, 1.5], colors=['red'], alpha=0.15, hatches=['///'])
+                # Create non-void mask (everything that is NOT void)
+                non_void_mask = void_regions < 0.5
+                ax.contour(non_void_mask, levels=[0.5], colors=['white'], linewidths=1.5, alpha=0.8)
             
             if layer_idx == 0:
                 ax.set_title(f'Filter {filter_idx}', fontsize=8)
@@ -624,10 +624,10 @@ def plot_attention_maps_3d(attention_dict, original_input, void_mask=None,
                 else:
                     void_slice = void_mask
                 
-                # Cross-hatch void regions instead of contours
-                void_mask_binary = void_slice > 0.5
-                ax1.contourf(void_mask_binary, levels=[0.5, 1.5], colors=['cyan'], alpha=0.15, hatches=['///'])
-                ax2.contourf(void_mask_binary, levels=[0.5, 1.5], colors=['cyan'], alpha=0.15, hatches=['///'])
+                # Draw contours around non-void structures (walls/filaments/halos)
+                non_void_mask = void_slice < 0.5
+                ax1.contour(non_void_mask, levels=[0.5], colors=['white'], linewidths=1.5, alpha=0.8)
+                ax2.contour(non_void_mask, levels=[0.5], colors=['white'], linewidths=1.5, alpha=0.8)
             except Exception as e:
                 print(f'Warning: Could not overlay void mask: {e}')
     
@@ -993,10 +993,10 @@ def plot_spatial_activation_patterns(feature_dict, original_input, void_mask, sa
         # Column 1: Original input with void overlay
         ax = axes[row, 0]
         ax.imshow(original_slice, cmap='gray', alpha=0.8)
-        # Cross-hatch void regions instead of contours
-        void_mask_binary = void_slice > 0.5
-        ax.contourf(void_mask_binary, levels=[0.5, 1.5], colors=['red'], alpha=0.2, hatches=['///'])
-        ax.set_title(f'{layer_label}: Input + Void Regions')
+        # Draw contours around non-void structures (walls/filaments/halos)
+        non_void_mask = void_slice < 0.5
+        ax.contour(non_void_mask, levels=[0.5], colors=['white'], linewidths=1.5, alpha=0.8)
+        ax.set_title(f'{layer_label}: Input + Structure Contours')
         ax.set_xticks([])
         ax.set_yticks([])
         
@@ -1004,8 +1004,8 @@ def plot_spatial_activation_patterns(feature_dict, original_input, void_mask, sa
         ax = axes[row, 1]
         mean_activation = np.mean(feature_slice, axis=-1)
         im = ax.imshow(mean_activation, cmap='hot')
-        # Cross-hatch void regions
-        ax.contourf(void_mask_binary, levels=[0.5, 1.5], colors=['cyan'], alpha=0.2, hatches=['///'])
+        # Draw contours around non-void structures
+        ax.contour(non_void_mask, levels=[0.5], colors=['white'], linewidths=1.5, alpha=0.8)
         ax.set_title(f'{layer_label}: Mean Activation')
         ax.set_xticks([])
         ax.set_yticks([])
@@ -1015,8 +1015,8 @@ def plot_spatial_activation_patterns(feature_dict, original_input, void_mask, sa
         ax = axes[row, 2]
         std_activation = np.std(feature_slice, axis=-1)
         im = ax.imshow(std_activation, cmap='viridis')
-        # Cross-hatch void regions
-        ax.contourf(void_mask_binary, levels=[0.5, 1.5], colors=['white'], alpha=0.2, hatches=['///'])
+        # Draw contours around non-void structures
+        ax.contour(non_void_mask, levels=[0.5], colors=['white'], linewidths=1.5, alpha=0.8)
         ax.set_title(f'{layer_label}: Activation Diversity')
         ax.set_xticks([])
         ax.set_yticks([])
