@@ -1308,9 +1308,9 @@ def load_model_for_analysis():
 
 def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MAX_SAMPLES):
     """
-    Visualize input data with RAW values (no power transformation).
+    Visualize input data with log scaling for better dynamic range visualization.
     """
-    print(f'Visualizing RAW input data for {min(len(input_data), max_samples)} samples...')
+    print(f'Visualizing input data with log scaling for {min(len(input_data), max_samples)} samples...')
     
     # Limit to max_samples for visualization
     vis_data = input_data[:max_samples] if len(input_data) > max_samples else input_data
@@ -1336,14 +1336,18 @@ def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MA
             for ch in range(n_channels):
                 channel_data = data[:, :, :, ch]
                 
-                # Central slices through the cube - NO POWER TRANSFORMATION
-                center = channel_data.shape[0] // 2
-                slice_xy = channel_data[:, :, center]  # XY plane
-                slice_xz = channel_data[:, center, :]  # XZ plane  
-                slice_yz = channel_data[center, :, :]  # YZ plane
+                # Add small epsilon to prevent log(0) and ensure positive values
+                epsilon = 1e-10
+                log_data = np.log10(channel_data + epsilon)
                 
-                # Use robust range calculation to avoid blank displays
-                data_flat = channel_data.flatten()
+                # Central slices through the cube - LOG SCALED
+                center = log_data.shape[0] // 2
+                slice_xy = log_data[:, :, center]  # XY plane
+                slice_xz = log_data[:, center, :]  # XZ plane  
+                slice_yz = log_data[center, :, :]  # YZ plane
+                
+                # Use robust range calculation for log data
+                data_flat = log_data.flatten()
                 data_flat = data_flat[np.isfinite(data_flat)]  # Remove NaN/inf
                 
                 if len(data_flat) > 0:
@@ -1354,49 +1358,52 @@ def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MA
                         vmin = np.min(data_flat)
                         vmax = np.max(data_flat)
                         if vmax == vmin:  # All values identical
-                            vmin = vmin - abs(vmin) * 0.1 if vmin != 0 else -0.1
-                            vmax = vmax + abs(vmax) * 0.1 if vmax != 0 else 0.1
+                            vmin = vmin - 0.1
+                            vmax = vmax + 0.1
                 else:
-                    vmin, vmax = -1, 1  # Fallback range
+                    vmin, vmax = -10, 1  # Fallback range for log scale
                 
-                print(f'  {channel_names[ch]}: data range [{vmin:.6e}, {vmax:.6e}] for visualization')
+                print(f'  {channel_names[ch]}: log data range [{vmin:.3f}, {vmax:.3f}] for visualization')
                 
                 # XY slice
                 im1 = axes[ch, 0].imshow(slice_xy, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
-                axes[ch, 0].set_title(f'{channel_names[ch]} - XY plane (z={center})')
+                axes[ch, 0].set_title(f'Log10({channel_names[ch]}) - XY plane (z={center})')
                 axes[ch, 0].set_xlabel('X')
                 axes[ch, 0].set_ylabel('Y')
-                plt.colorbar(im1, ax=axes[ch, 0], shrink=0.8)
+                cbar1 = plt.colorbar(im1, ax=axes[ch, 0], shrink=0.8)
+                cbar1.set_label('log10(value)', rotation=270, labelpad=20)
                 
                 # XZ slice
                 im2 = axes[ch, 1].imshow(slice_xz, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
-                axes[ch, 1].set_title(f'{channel_names[ch]} - XZ plane (y={center})')
+                axes[ch, 1].set_title(f'Log10({channel_names[ch]}) - XZ plane (y={center})')
                 axes[ch, 1].set_xlabel('X')
                 axes[ch, 1].set_ylabel('Z')
-                plt.colorbar(im2, ax=axes[ch, 1], shrink=0.8)
+                cbar2 = plt.colorbar(im2, ax=axes[ch, 1], shrink=0.8)
+                cbar2.set_label('log10(value)', rotation=270, labelpad=20)
                 
                 # YZ slice
                 im3 = axes[ch, 2].imshow(slice_yz, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
-                axes[ch, 2].set_title(f'{channel_names[ch]} - YZ plane (x={center})')
+                axes[ch, 2].set_title(f'Log10({channel_names[ch]}) - YZ plane (x={center})')
                 axes[ch, 2].set_xlabel('Y')
                 axes[ch, 2].set_ylabel('Z')
-                plt.colorbar(im3, ax=axes[ch, 2], shrink=0.8)
+                cbar3 = plt.colorbar(im3, ax=axes[ch, 2], shrink=0.8)
+                cbar3.set_label('log10(value)', rotation=270, labelpad=20)
             
             # Add title with statistics
             if n_channels == 2:
                 density_stats = f"Density: Min={np.min(data[:,:,:,0]):.2e}, Max={np.max(data[:,:,:,0]):.2e}"
                 extra_stats = f"{channel_names[1]}: Min={np.min(data[:,:,:,1]):.2e}, Max={np.max(data[:,:,:,1]):.2e}"
-                fig.suptitle(f'Sample {i+1}: RAW Multi-Channel Input Data\n{density_stats}\n{extra_stats}', fontsize=12)
+                fig.suptitle(f'Sample {i+1}: Log-Scaled Multi-Channel Input Data\n{density_stats}\n{extra_stats}', fontsize=12)
             else:
-                fig.suptitle(f'Sample {i+1}: RAW Input Data', fontsize=12)
+                fig.suptitle(f'Sample {i+1}: Log-Scaled Input Data', fontsize=12)
             
             plt.tight_layout()
             plt.subplots_adjust(top=0.85 if n_channels == 2 else 0.9)
             
             # Save this sample
-            sample_path = os.path.join(output_dir, f'input_data_RAW_sample_{i+1}.png')
+            sample_path = os.path.join(output_dir, f'input_data_log_sample_{i+1}.png')
             fig.savefig(sample_path, dpi=300, bbox_inches='tight')
-            print(f'  RAW visualization saved to: {sample_path}')
+            print(f'  Log-scaled visualization saved to: {sample_path}')
             plt.show()
             plt.close(fig)
         
@@ -1404,14 +1411,18 @@ def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MA
             # Single channel data
             fig, axes = plt.subplots(1, 3, figsize=(15, 5))
             
-            # Central slices through the cube - NO POWER TRANSFORMATION
-            center = data.shape[0] // 2
-            slice_xy = data[:, :, center]  # XY plane
-            slice_xz = data[:, center, :]  # XZ plane  
-            slice_yz = data[center, :, :]  # YZ plane
+            # Add small epsilon to prevent log(0) and ensure positive values
+            epsilon = 1e-10
+            log_data = np.log10(data + epsilon)
             
-            # Use robust range calculation to avoid blank displays
-            data_flat = data.flatten()
+            # Central slices through the cube - LOG SCALED
+            center = log_data.shape[0] // 2
+            slice_xy = log_data[:, :, center]  # XY plane
+            slice_xz = log_data[:, center, :]  # XZ plane  
+            slice_yz = log_data[center, :, :]  # YZ plane
+            
+            # Use robust range calculation for log data
+            data_flat = log_data.flatten()
             data_flat = data_flat[np.isfinite(data_flat)]  # Remove NaN/inf
             
             if len(data_flat) > 0:
@@ -1422,48 +1433,51 @@ def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MA
                     vmin = np.min(data_flat)
                     vmax = np.max(data_flat)
                     if vmax == vmin:  # All values identical
-                        vmin = vmin - abs(vmin) * 0.1 if vmin != 0 else -0.1
-                        vmax = vmax + abs(vmax) * 0.1 if vmax != 0 else 0.1
+                        vmin = vmin - 0.1
+                        vmax = vmax + 0.1
             else:
-                vmin, vmax = -1, 1  # Fallback range
+                vmin, vmax = -10, 1  # Fallback range for log scale
             
-            print(f'  Single channel: data range [{vmin:.6e}, {vmax:.6e}] for visualization')
+            print(f'  Single channel: log data range [{vmin:.3f}, {vmax:.3f}] for visualization')
             
             # XY slice
             im1 = axes[0].imshow(slice_xy, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
-            axes[0].set_title(f'Sample {i+1} - XY plane (z={center})')
+            axes[0].set_title(f'Sample {i+1} - Log10(Density) XY plane (z={center})')
             axes[0].set_xlabel('X')
             axes[0].set_ylabel('Y')
-            plt.colorbar(im1, ax=axes[0], shrink=0.8)
+            cbar1 = plt.colorbar(im1, ax=axes[0], shrink=0.8)
+            cbar1.set_label('log10(density)', rotation=270, labelpad=20)
             
             # XZ slice
             im2 = axes[1].imshow(slice_xz, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
-            axes[1].set_title(f'Sample {i+1} - XZ plane (y={center})')
+            axes[1].set_title(f'Sample {i+1} - Log10(Density) XZ plane (y={center})')
             axes[1].set_xlabel('X')
             axes[1].set_ylabel('Z')
-            plt.colorbar(im2, ax=axes[1], shrink=0.8)
+            cbar2 = plt.colorbar(im2, ax=axes[1], shrink=0.8)
+            cbar2.set_label('log10(density)', rotation=270, labelpad=20)
             
             # YZ slice
             im3 = axes[2].imshow(slice_yz, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
-            axes[2].set_title(f'Sample {i+1} - YZ plane (x={center})')
+            axes[2].set_title(f'Sample {i+1} - Log10(Density) YZ plane (x={center})')
             axes[2].set_xlabel('Y')
             axes[2].set_ylabel('Z')
-            plt.colorbar(im3, ax=axes[2], shrink=0.8)
+            cbar3 = plt.colorbar(im3, ax=axes[2], shrink=0.8)
+            cbar3.set_label('log10(density)', rotation=270, labelpad=20)
             
-            # Add title with statistics
-            fig.suptitle(f'Sample {i+1}: RAW Input Data\nMin={vmin:.2e}, Max={vmax:.2e}', fontsize=12)
+            # Add title with statistics (showing original data stats)
+            fig.suptitle(f'Sample {i+1}: Log-Scaled Input Data\nOriginal Min={np.min(data):.2e}, Max={np.max(data):.2e}', fontsize=12)
             
             plt.tight_layout()
             plt.subplots_adjust(top=0.85)
             
             # Save this sample
-            sample_path = os.path.join(output_dir, f'input_data_RAW_sample_{i+1}.png')
+            sample_path = os.path.join(output_dir, f'input_data_log_sample_{i+1}.png')
             fig.savefig(sample_path, dpi=300, bbox_inches='tight')
-            print(f'  RAW visualization saved to: {sample_path}')
+            print(f'  Log-scaled visualization saved to: {sample_path}')
             plt.show()
             plt.close(fig)
     
-    return f'{output_dir}/input_data_RAW_sample_*.png'
+    return f'{output_dir}/input_data_log_sample_*.png'
 
 #================================================================
 # Main analysis function
@@ -1549,17 +1563,33 @@ def run_interpretability_analysis():
         print(f'Error loading data: {e}')
         return
     
-    # Extract void mask from labels (assuming void = class 0)
-    void_mask = (labels[0, :, :, :, 0] == 0).astype(float)
-    print(f'Void mask shape: {void_mask.shape}')
-    print(f'Void fraction: {np.mean(void_mask):.3f}')
-    
     # Get slice index
     slice_idx_use = SLICE_IDX if SLICE_IDX is not None else void_mask.shape[2] // 2
     print(f'Using slice index: {slice_idx_use}')
     
-    # 0. Visualize input data with enhanced display
-    print('\n--- Visualizing Input Data ---')
+    # Select different subcubes for different analyses to get diverse views
+    n_available_samples = min(len(features), MAX_SAMPLES)
+    sample_indices = {
+        'input_viz': 0,  # First sample for input visualization
+        'feature_maps': min(1, n_available_samples - 1),  # Second sample for feature maps
+        'attention': min(2, n_available_samples - 1),  # Third sample for attention maps
+        'correlation': min(3, n_available_samples - 1),  # Fourth sample for correlations
+        'evolution': min(0, n_available_samples - 1),  # First sample for evolution (needs consistency)
+        'class_analysis': min(4, n_available_samples - 1),  # Fifth sample for class analysis
+        'spatial': min(5, n_available_samples - 1)  # Sixth sample for spatial patterns
+    }
+    
+    print(f'Using different subcubes for analysis diversity:')
+    for analysis_type, idx in sample_indices.items():
+        print(f'  {analysis_type}: subcube {idx}')
+        
+    # Update void mask to use the sample for feature maps (most commonly used)
+    void_mask = (labels[sample_indices['feature_maps'], :, :, :, 0] == 0).astype(float)
+    print(f'Void mask shape: {void_mask.shape}')
+    print(f'Void fraction: {np.mean(void_mask):.3f} (from subcube {sample_indices["feature_maps"]})')
+    
+    # 0. Visualize input data with log scaling
+    print('\n--- Visualizing Input Data with Log Scaling ---')
     input_viz_path = visualize_input_data(
         features, 
         labels, 
@@ -1575,7 +1605,7 @@ def run_interpretability_analysis():
         print('Creating feature maps visualization...')
         fig1 = plot_feature_maps_3d(
             feature_dict, 
-            sample_idx=0, 
+            sample_idx=sample_indices['feature_maps'], 
             slice_idx=slice_idx_use,
             max_filters=MAX_FILTERS,
             void_regions=void_mask[:, :, slice_idx_use],
@@ -1595,7 +1625,7 @@ def run_interpretability_analysis():
                 attention_dict,
                 features,
                 void_mask=void_mask,
-                sample_idx=0,
+                sample_idx=sample_indices['attention'],
                 slice_idx=slice_idx_use,
                 save_path=os.path.join(ANALYSIS_PATH, 'attention_maps.png')
             )
@@ -1606,7 +1636,9 @@ def run_interpretability_analysis():
     # 3. Analyze void-activation correlations
     print('\n--- Analyzing Void-Activation Correlations ---')
     if feature_dict:
-        correlations = analyze_void_activation_correlation(feature_dict, void_mask, sample_idx=0)
+        # Use void mask from the correlation sample for accurate analysis
+        correlation_void_mask = (labels[sample_indices['correlation'], :, :, :, 0] == 0).astype(float)
+        correlations = analyze_void_activation_correlation(feature_dict, correlation_void_mask, sample_idx=sample_indices['correlation'])
         
         if correlations and SAVE_ALL:
             print('Creating void correlation analysis...')
@@ -1625,10 +1657,12 @@ def run_interpretability_analysis():
     print('\n--- Analyzing Layer Evolution ---')
     if feature_dict and SAVE_ALL:
         print('Creating layer evolution analysis...')
+        # Use void mask from the evolution sample for consistency
+        evolution_void_mask = (labels[sample_indices['evolution'], :, :, :, 0] == 0).astype(float)
         fig4 = plot_layer_evolution_analysis(
             feature_dict, 
-            void_mask, 
-            sample_idx=0,
+            evolution_void_mask, 
+            sample_idx=sample_indices['evolution'],
             save_path=os.path.join(ANALYSIS_PATH, 'layer_evolution_analysis.png')
         )
         plt.close(fig4)
@@ -1640,7 +1674,7 @@ def run_interpretability_analysis():
         fig5 = plot_class_specific_analysis(
             feature_dict, 
             labels, 
-            sample_idx=0,
+            sample_idx=sample_indices['class_analysis'],
             save_path=os.path.join(ANALYSIS_PATH, 'class_specific_analysis.png')
         )
         plt.close(fig5)
@@ -1649,11 +1683,13 @@ def run_interpretability_analysis():
     print('\n--- Analyzing Spatial Activation Patterns ---')
     if feature_dict and SAVE_ALL:
         print('Creating spatial activation patterns...')
+        # Use void mask from the spatial sample for consistency
+        spatial_void_mask = (labels[sample_indices['spatial'], :, :, :, 0] == 0).astype(float)
         fig6 = plot_spatial_activation_patterns(
             feature_dict, 
             features, 
-            void_mask, 
-            sample_idx=0,
+            spatial_void_mask, 
+            sample_idx=sample_indices['spatial'],
             save_path=os.path.join(ANALYSIS_PATH, 'spatial_activation_patterns.png')
         )
         plt.close(fig6)
@@ -1697,7 +1733,7 @@ def run_interpretability_analysis():
                 f.write(f"- {layer_name}: mean={mean_corr:.3f}, max_abs={max_corr:.3f}\n")
         
         f.write(f"\nFiles Generated:\n")
-        f.write(f"- input_data_enhanced.png (enhanced density visualization)\n")
+        f.write(f"- input_data_log_sample_*.png (log-scaled density visualization)\n")
         if SAVE_ALL:
             f.write(f"- feature_activation_maps.png\n")
             if USE_ATTENTION:
