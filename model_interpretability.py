@@ -1563,10 +1563,6 @@ def run_interpretability_analysis():
         print(f'Error loading data: {e}')
         return
     
-    # Get slice index
-    slice_idx_use = SLICE_IDX if SLICE_IDX is not None else void_mask.shape[2] // 2
-    print(f'Using slice index: {slice_idx_use}')
-    
     # Select different subcubes for different analyses to get diverse views
     n_available_samples = min(len(features), MAX_SAMPLES)
     sample_indices = {
@@ -1583,10 +1579,14 @@ def run_interpretability_analysis():
     for analysis_type, idx in sample_indices.items():
         print(f'  {analysis_type}: subcube {idx}')
         
-    # Update void mask to use the sample for feature maps (most commonly used)
+    # Create void mask to use the sample for feature maps (most commonly used)
     void_mask = (labels[sample_indices['feature_maps'], :, :, :, 0] == 0).astype(float)
     print(f'Void mask shape: {void_mask.shape}')
     print(f'Void fraction: {np.mean(void_mask):.3f} (from subcube {sample_indices["feature_maps"]})')
+    
+    # Get slice index (now that void_mask is defined)
+    slice_idx_use = SLICE_IDX if SLICE_IDX is not None else void_mask.shape[2] // 2
+    print(f'Using slice index: {slice_idx_use}')
     
     # 0. Visualize input data with log scaling
     print('\n--- Visualizing Input Data with Log Scaling ---')
