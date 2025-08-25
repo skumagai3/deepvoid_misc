@@ -1155,77 +1155,44 @@ def load_analysis_data(inter_sep, max_samples=MAX_SAMPLES):
     preproc_param = preproc_mapping.get(PREPROCESSING, 'mm')
     
     try:
-        # Load features using appropriate method based on training configuration
-        print('Loading density features...')
+        # SINGLE LOAD: Get both features and labels in one call to avoid redundancy
+        print('Loading density features and labels together (SINGLE LOAD)...')
         
         if USE_OVERLAPPING_SUBCUBES:
             # Use overlapping subcubes for more diverse samples
             if RSD_PRESERVING_ROTATIONS:
                 if EXTRA_AUGMENTATION:
-                    features = nets.load_dataset_all_overlap_rsd_preserving(
+                    features, labels = nets.load_dataset_all_overlap_rsd_preserving(
                         data_file, FILE_MASK, SUBGRID, OFF, preproc=preproc_param, preprocessing=PREPROCESSING
-                    )[0]  # Only get features, not labels
+                    )
                 else:
-                    features = nets.load_dataset_all_overlap_rsd_preserving_light(
+                    features, labels = nets.load_dataset_all_overlap_rsd_preserving_light(
                         data_file, FILE_MASK, SUBGRID, OFF, preproc=preproc_param, preprocessing=PREPROCESSING
-                    )[0]  # Only get features, not labels
+                    )
             else:
                 if EXTRA_AUGMENTATION:
-                    features = nets.load_dataset_all_overlap(
+                    features, labels = nets.load_dataset_all_overlap(
                         data_file, FILE_MASK, SUBGRID, OFF, preproc=preproc_param, preprocessing=PREPROCESSING
-                    )[0]  # Only get features, not labels
+                    )
                 else:
-                    features = nets.load_dataset_all_overlap_light(
+                    features, labels = nets.load_dataset_all_overlap_light(
                         data_file, FILE_MASK, SUBGRID, OFF, preproc=preproc_param, preprocessing=PREPROCESSING
-                    )[0]  # Only get features, not labels
+                    )
         else:
             # Use non-overlapping subcubes (memory efficient)
             if RSD_PRESERVING_ROTATIONS:
-                features = nets.load_dataset_all_rsd_preserving_light(
+                features, labels = nets.load_dataset_all_rsd_preserving_light(
                     data_file, FILE_MASK, SUBGRID, preproc=preproc_param, preprocessing=PREPROCESSING
-                )[0]  # Only get features, not labels
+                )
             else:
-                features = nets.load_dataset_all_light(
+                features, labels = nets.load_dataset_all_light(
                     data_file, FILE_MASK, SUBGRID, preproc=preproc_param, preprocessing=PREPROCESSING
-                )[0]  # Only get features, not labels
-        
-        # Load labels using the same method
-        print('Loading structure labels...')
-        
-        if USE_OVERLAPPING_SUBCUBES:
-            if RSD_PRESERVING_ROTATIONS:
-                if EXTRA_AUGMENTATION:
-                    labels = nets.load_dataset_all_overlap_rsd_preserving(
-                        data_file, FILE_MASK, SUBGRID, OFF, preproc=None, preprocessing=None
-                    )[1]  # Only get labels, not features
-                else:
-                    labels = nets.load_dataset_all_overlap_rsd_preserving_light(
-                        data_file, FILE_MASK, SUBGRID, OFF, preproc=None, preprocessing=None
-                    )[1]  # Only get labels, not features
-            else:
-                if EXTRA_AUGMENTATION:
-                    labels = nets.load_dataset_all_overlap(
-                        data_file, FILE_MASK, SUBGRID, OFF, preproc=None, preprocessing=None
-                    )[1]  # Only get labels, not features
-                else:
-                    labels = nets.load_dataset_all_overlap_light(
-                        data_file, FILE_MASK, SUBGRID, OFF, preproc=None, preprocessing=None
-                    )[1]  # Only get labels, not features
-        else:
-            if RSD_PRESERVING_ROTATIONS:
-                labels = nets.load_dataset_all_rsd_preserving_light(
-                    data_file, FILE_MASK, SUBGRID, preproc=None, preprocessing=None
-                )[1]  # Only get labels, not features
-            else:
-                labels = nets.load_dataset_all_light(
-                    data_file, FILE_MASK, SUBGRID, preproc=None, preprocessing=None
-                )[1]  # Only get labels, not features
+                )
         
         labels = labels.astype(np.int32)
-        
         print(f'Loaded features: {features.shape}, labels: {labels.shape}')
         
-        # Load extra inputs if specified
+        # Load extra inputs if specified (only one additional load)
         if EXTRA_INPUTS is not None:
             print(f'Loading extra inputs: {EXTRA_INPUTS}...')
             extra_input_file = DATA_PATH + EXTRA_INPUTS_INFO[inter_sep]
@@ -1236,37 +1203,57 @@ def load_analysis_data(inter_sep, max_samples=MAX_SAMPLES):
             if USE_OVERLAPPING_SUBCUBES:
                 if RSD_PRESERVING_ROTATIONS:
                     if EXTRA_AUGMENTATION:
-                        extra_features = nets.load_dataset_all_overlap_rsd_preserving(
+                        extra_features, _ = nets.load_dataset_all_overlap_rsd_preserving(
                             extra_input_file, FILE_MASK, SUBGRID, OFF, preproc=preproc_param, preprocessing=PREPROCESSING
-                        )[0]  # Only get features, not labels
+                        )
                     else:
-                        extra_features = nets.load_dataset_all_overlap_rsd_preserving_light(
+                        extra_features, _ = nets.load_dataset_all_overlap_rsd_preserving_light(
                             extra_input_file, FILE_MASK, SUBGRID, OFF, preproc=preproc_param, preprocessing=PREPROCESSING
-                        )[0]  # Only get features, not labels
+                        )
                 else:
                     if EXTRA_AUGMENTATION:
-                        extra_features = nets.load_dataset_all_overlap(
+                        extra_features, _ = nets.load_dataset_all_overlap(
                             extra_input_file, FILE_MASK, SUBGRID, OFF, preproc=preproc_param, preprocessing=PREPROCESSING
-                        )[0]  # Only get features, not labels
+                        )
                     else:
-                        extra_features = nets.load_dataset_all_overlap_light(
+                        extra_features, _ = nets.load_dataset_all_overlap_light(
                             extra_input_file, FILE_MASK, SUBGRID, OFF, preproc=preproc_param, preprocessing=PREPROCESSING
-                        )[0]  # Only get features, not labels
+                        )
             else:
                 if RSD_PRESERVING_ROTATIONS:
-                    extra_features = nets.load_dataset_all_rsd_preserving_light(
+                    extra_features, _ = nets.load_dataset_all_rsd_preserving_light(
                         extra_input_file, FILE_MASK, SUBGRID, preproc=preproc_param, preprocessing=PREPROCESSING
-                    )[0]  # Only get features, not labels
+                    )
                 else:
-                    extra_features = nets.load_dataset_all_light(
+                    extra_features, _ = nets.load_dataset_all_light(
                         extra_input_file, FILE_MASK, SUBGRID, preproc=preproc_param, preprocessing=PREPROCESSING
-                    )[0]  # Only get features, not labels
+                    )
             
             print(f'Extra inputs loaded: {extra_features.shape}')
             features = np.concatenate([features, extra_features], axis=-1)
             print(f'Combined features: {features.shape}')
             del extra_features
             gc.collect()
+        
+        # Add epsilon to avoid zero values that cause visualization issues
+        epsilon = 1e-10
+        print(f'Adding epsilon ({epsilon}) to prevent zero-value visualization issues...')
+        features = features + epsilon
+        
+        # Log data statistics for debugging visualization issues
+        print('=== DATA LOGGING FOR DEBUGGING ===')
+        print(f'Features shape: {features.shape}')
+        print(f'Features dtype: {features.dtype}')
+        for ch in range(features.shape[-1]):
+            ch_data = features[:, :, :, :, ch]
+            ch_name = ['Density', EXTRA_INPUTS or 'Extra'][ch] if features.shape[-1] == 2 else f'Channel {ch}'
+            print(f'{ch_name}: min={np.min(ch_data):.6e}, max={np.max(ch_data):.6e}, mean={np.mean(ch_data):.6e}, std={np.std(ch_data):.6e}')
+            # Check for problematic values
+            n_zeros = np.sum(ch_data == 0)
+            n_infs = np.sum(~np.isfinite(ch_data))
+            n_nans = np.sum(np.isnan(ch_data))
+            print(f'{ch_name}: zeros={n_zeros}/{ch_data.size}, non-finite={n_infs}/{ch_data.size}, nans={n_nans}/{ch_data.size}')
+        print('==================================')
         
         # Limit samples if requested
         if max_samples and features.shape[0] > max_samples:
@@ -1347,8 +1334,24 @@ def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MA
                 slice_xz = channel_data[:, center, :]  # XZ plane  
                 slice_yz = channel_data[center, :, :]  # YZ plane
                 
-                # Use raw data range
-                vmin, vmax = np.min(channel_data), np.max(channel_data)
+                # Use robust range calculation to avoid blank displays
+                data_flat = channel_data.flatten()
+                data_flat = data_flat[np.isfinite(data_flat)]  # Remove NaN/inf
+                
+                if len(data_flat) > 0:
+                    # Use percentile range to handle extreme values
+                    vmin, vmax = np.percentile(data_flat, [1, 99])
+                    # Ensure we have some range
+                    if vmax == vmin:
+                        vmin = np.min(data_flat)
+                        vmax = np.max(data_flat)
+                        if vmax == vmin:  # All values identical
+                            vmin = vmin - abs(vmin) * 0.1 if vmin != 0 else -0.1
+                            vmax = vmax + abs(vmax) * 0.1 if vmax != 0 else 0.1
+                else:
+                    vmin, vmax = -1, 1  # Fallback range
+                
+                print(f'  {ch_name}: data range [{vmin:.6e}, {vmax:.6e}] for visualization')
                 
                 # XY slice
                 im1 = axes[ch, 0].imshow(slice_xy, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
@@ -1399,8 +1402,24 @@ def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MA
             slice_xz = data[:, center, :]  # XZ plane  
             slice_yz = data[center, :, :]  # YZ plane
             
-            # Use raw data range
-            vmin, vmax = np.min(data), np.max(data)
+            # Use robust range calculation to avoid blank displays
+            data_flat = data.flatten()
+            data_flat = data_flat[np.isfinite(data_flat)]  # Remove NaN/inf
+            
+            if len(data_flat) > 0:
+                # Use percentile range to handle extreme values
+                vmin, vmax = np.percentile(data_flat, [1, 99])
+                # Ensure we have some range
+                if vmax == vmin:
+                    vmin = np.min(data_flat)
+                    vmax = np.max(data_flat)
+                    if vmax == vmin:  # All values identical
+                        vmin = vmin - abs(vmin) * 0.1 if vmin != 0 else -0.1
+                        vmax = vmax + abs(vmax) * 0.1 if vmax != 0 else 0.1
+            else:
+                vmin, vmax = -1, 1  # Fallback range
+            
+            print(f'  Single channel: data range [{vmin:.6e}, {vmax:.6e}] for visualization')
             
             # XY slice
             im1 = axes[0].imshow(slice_xy, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
