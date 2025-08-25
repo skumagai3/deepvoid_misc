@@ -1351,7 +1351,7 @@ def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MA
                 else:
                     vmin, vmax = -1, 1  # Fallback range
                 
-                print(f'  {ch_name}: data range [{vmin:.6e}, {vmax:.6e}] for visualization')
+                print(f'  {channel_names[ch]}: data range [{vmin:.6e}, {vmax:.6e}] for visualization')
                 
                 # XY slice
                 im1 = axes[ch, 0].imshow(slice_xy, cmap='viridis', vmin=vmin, vmax=vmax, origin='lower')
