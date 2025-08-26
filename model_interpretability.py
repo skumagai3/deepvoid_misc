@@ -25,6 +25,9 @@ This will generate comprehensive interpretability analysis including:
 - Feature evolution through network depth
 - Correlation analysis between activations and cosmic structures
 
+All output files include the lambda value in their names (e.g., *_L10.png) to prevent 
+overwriting when analyzing different interparticle separations.
+
 Data Format: Uses .fvol files exactly like curricular.py and curricular_pred.py
 """
 
@@ -1560,7 +1563,7 @@ def load_model_for_analysis():
     
     raise FileNotFoundError(f'Could not find or load model: {MODEL_NAME}')
 
-def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MAX_SAMPLES):
+def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MAX_SAMPLES, lambda_val=None):
     """
     Visualize input data with log scaling for better dynamic range visualization.
     """
@@ -1655,7 +1658,8 @@ def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MA
             plt.subplots_adjust(top=0.85 if n_channels == 2 else 0.9)
             
             # Save this sample
-            sample_path = os.path.join(output_dir, f'input_data_log_sample_{i+1}.png')
+            lambda_suffix = f'_L{lambda_val}' if lambda_val is not None else ''
+            sample_path = os.path.join(output_dir, f'input_data_log_sample_{i+1}{lambda_suffix}.png')
             fig.savefig(sample_path, dpi=300, bbox_inches='tight')
             print(f'  Log-scaled visualization saved to: {sample_path}')
             plt.show()
@@ -1725,13 +1729,15 @@ def visualize_input_data(input_data, labels=None, output_dir='.', max_samples=MA
             plt.subplots_adjust(top=0.85)
             
             # Save this sample
-            sample_path = os.path.join(output_dir, f'input_data_log_sample_{i+1}.png')
+            lambda_suffix = f'_L{lambda_val}' if lambda_val is not None else ''
+            sample_path = os.path.join(output_dir, f'input_data_log_sample_{i+1}{lambda_suffix}.png')
             fig.savefig(sample_path, dpi=300, bbox_inches='tight')
             print(f'  Log-scaled visualization saved to: {sample_path}')
             plt.show()
             plt.close(fig)
     
-    return f'{output_dir}/input_data_log_sample_*.png'
+    lambda_suffix = f'_L{lambda_val}' if lambda_val is not None else ''
+    return f'{output_dir}/input_data_log_sample_*{lambda_suffix}.png'
 
 #================================================================
 # Main analysis function
@@ -1848,7 +1854,8 @@ def run_interpretability_analysis():
         features, 
         labels, 
         output_dir=ANALYSIS_PATH, 
-        max_samples=min(3, MAX_SAMPLES)  # Limit to 3 samples for visualization
+        max_samples=min(3, MAX_SAMPLES),  # Limit to 3 samples for visualization
+        lambda_val=L_ANALYSIS
     )
     
     # 1. Extract feature activation maps
@@ -1864,7 +1871,7 @@ def run_interpretability_analysis():
             max_filters=MAX_FILTERS,
             void_regions=void_mask[:, :, slice_idx_use],
             input_data=features,  # Pass input data for context
-            save_path=os.path.join(ANALYSIS_PATH, 'feature_activation_maps.png')
+            save_path=os.path.join(ANALYSIS_PATH, f'feature_activation_maps_L{L_ANALYSIS}.png')
         )
         plt.close(fig1)
         
@@ -1876,7 +1883,7 @@ def run_interpretability_analysis():
             slice_idx=slice_idx_use,
             void_regions=void_mask[:, :, slice_idx_use],
             input_data=features,  # Pass input data for context
-            save_path=os.path.join(ANALYSIS_PATH, 'feature_activation_maps_publication.png')
+            save_path=os.path.join(ANALYSIS_PATH, f'feature_activation_maps_publication_L{L_ANALYSIS}.png')
         )
         plt.close(fig1_pub)
     
@@ -1893,7 +1900,7 @@ def run_interpretability_analysis():
                 void_mask=void_mask,
                 sample_idx=sample_indices['attention'],
                 slice_idx=slice_idx_use,
-                save_path=os.path.join(ANALYSIS_PATH, 'attention_maps.png')
+                save_path=os.path.join(ANALYSIS_PATH, f'attention_maps_L{L_ANALYSIS}.png')
             )
             plt.close(fig2)
             
@@ -1905,7 +1912,7 @@ def run_interpretability_analysis():
                 void_mask=void_mask,
                 sample_idx=sample_indices['attention'],
                 slice_idx=slice_idx_use,
-                save_path=os.path.join(ANALYSIS_PATH, 'attention_maps_publication.png')
+                save_path=os.path.join(ANALYSIS_PATH, f'attention_maps_publication_L{L_ANALYSIS}.png')
             )
             plt.close(fig2_pub)
     else:
@@ -1922,12 +1929,12 @@ def run_interpretability_analysis():
             print('Creating void correlation analysis...')
             fig3 = plot_void_correlation_analysis(
                 correlations,
-                save_path=os.path.join(ANALYSIS_PATH, 'void_correlation_analysis.png')
+                save_path=os.path.join(ANALYSIS_PATH, f'void_correlation_analysis_L{L_ANALYSIS}.png')
             )
             plt.close(fig3)
             
             # Save correlation data
-            correlation_file = os.path.join(ANALYSIS_PATH, 'void_correlations.npz')
+            correlation_file = os.path.join(ANALYSIS_PATH, f'void_correlations_L{L_ANALYSIS}.npz')
             np.savez(correlation_file, **correlations)
             print(f'Correlation data saved to {correlation_file}')
     
@@ -1941,7 +1948,7 @@ def run_interpretability_analysis():
             feature_dict, 
             evolution_void_mask, 
             sample_idx=sample_indices['evolution'],
-            save_path=os.path.join(ANALYSIS_PATH, 'layer_evolution_analysis.png')
+            save_path=os.path.join(ANALYSIS_PATH, f'layer_evolution_analysis_L{L_ANALYSIS}.png')
         )
         plt.close(fig4)
     
@@ -1953,7 +1960,7 @@ def run_interpretability_analysis():
             feature_dict, 
             labels, 
             sample_idx=sample_indices['class_analysis'],
-            save_path=os.path.join(ANALYSIS_PATH, 'class_specific_analysis.png')
+            save_path=os.path.join(ANALYSIS_PATH, f'class_specific_analysis_L{L_ANALYSIS}.png')
         )
         plt.close(fig5)
     
@@ -1968,13 +1975,13 @@ def run_interpretability_analysis():
             features, 
             spatial_void_mask, 
             sample_idx=sample_indices['spatial'],
-            save_path=os.path.join(ANALYSIS_PATH, 'spatial_activation_patterns.png')
+            save_path=os.path.join(ANALYSIS_PATH, f'spatial_activation_patterns_L{L_ANALYSIS}.png')
         )
         plt.close(fig6)
     
     # 7. Generate summary report
     print('\n--- Generating Analysis Summary ---')
-    summary_file = os.path.join(ANALYSIS_PATH, 'analysis_summary.txt')
+    summary_file = os.path.join(ANALYSIS_PATH, f'analysis_summary_L{L_ANALYSIS}.txt')
     with open(summary_file, 'w') as f:
         f.write(f"DeepVoid Model Interpretability Analysis\n")
         f.write(f"=" * 50 + "\n\n")
@@ -2010,20 +2017,20 @@ def run_interpretability_analysis():
                 max_corr = np.max(np.abs(corrs))
                 f.write(f"- {layer_name}: mean={mean_corr:.3f}, max_abs={max_corr:.3f}\n")
         
-        f.write(f"\nFiles Generated:\n")
-        f.write(f"- input_data_log_sample_*.png (log-scaled density visualization)\n")
+        f.write(f"\nFiles Generated (L={L_ANALYSIS} Mpc/h):\n")
+        f.write(f"- input_data_log_sample_*_L{L_ANALYSIS}.png (log-scaled density visualization)\n")
         if SAVE_ALL:
-            f.write(f"- feature_activation_maps.png (detailed version with colorbars)\n")
-            f.write(f"- feature_activation_maps_publication.png (clean version for papers)\n")
+            f.write(f"- feature_activation_maps_L{L_ANALYSIS}.png (detailed version with colorbars)\n")
+            f.write(f"- feature_activation_maps_publication_L{L_ANALYSIS}.png (clean version for papers)\n")
             if USE_ATTENTION:
-                f.write(f"- attention_maps.png (detailed version with colorbars)\n")
-                f.write(f"- attention_maps_publication.png (clean version focusing on 4 gates)\n")
-            f.write(f"- void_correlation_analysis.png\n")
-            f.write(f"- layer_evolution_analysis.png\n")
-            f.write(f"- class_specific_analysis.png\n")
-            f.write(f"- spatial_activation_patterns.png\n")
-            f.write(f"- void_correlations.npz\n")
-        f.write(f"- analysis_summary.txt\n")
+                f.write(f"- attention_maps_L{L_ANALYSIS}.png (detailed version with colorbars)\n")
+                f.write(f"- attention_maps_publication_L{L_ANALYSIS}.png (clean version focusing on 4 gates)\n")
+            f.write(f"- void_correlation_analysis_L{L_ANALYSIS}.png\n")
+            f.write(f"- layer_evolution_analysis_L{L_ANALYSIS}.png\n")
+            f.write(f"- class_specific_analysis_L{L_ANALYSIS}.png\n")
+            f.write(f"- spatial_activation_patterns_L{L_ANALYSIS}.png\n")
+            f.write(f"- void_correlations_L{L_ANALYSIS}.npz\n")
+        f.write(f"- analysis_summary_L{L_ANALYSIS}.txt\n")
         f.write(f"\nAnalysis completed at: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n")
     
     print(f'Analysis summary saved to {summary_file}')
