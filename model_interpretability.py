@@ -19,8 +19,8 @@ Common preprocessing methods:
 - clip_extreme: Clip extreme values + scaling
 
 This will generate comprehensive interpretability analysis including:
-- Feature activation maps across all network layers
-- Attention maps (for attention models)
+- Feature activation maps across all network layers (detailed + publication versions)
+- Attention maps (for attention models) (detailed + publication versions focusing on 4 gates)
 - Void-specific activation analysis
 - Feature evolution through network depth
 - Correlation analysis between activations and cosmic structures
@@ -550,6 +550,141 @@ def plot_feature_maps_3d(feature_dict, sample_idx=0, slice_idx=None, max_filters
     
     return fig
 
+def plot_feature_maps_3d_publication(feature_dict, sample_idx=0, slice_idx=None, 
+                                    save_path=None, void_regions=None, input_data=None):
+    """
+    Create publication-quality feature activation maps with clean formatting.
+    - Shows only 7 filters per layer
+    - No colorbars for cleaner appearance
+    - Uniform square sizes
+    - Fewer layers for clarity
+    """
+    print(f'Creating publication-quality feature maps plot for sample {sample_idx}...')
+    
+    if not feature_dict:
+        print("No feature maps to plot")
+        return None
+    
+    # Select 5 representative layers for publication
+    layer_names = list(feature_dict.keys())
+    if len(layer_names) > 5:
+        # Sample layers more sparsely for publication
+        indices = np.linspace(0, len(layer_names)-1, 5, dtype=int)
+        selected_layers = [layer_names[i] for i in indices]
+    else:
+        selected_layers = layer_names
+    
+    n_layers = len(selected_layers)
+    n_filters_pub = 7  # Fixed number of filters for publication
+    
+    # Add one extra column for input data if provided
+    n_cols = n_filters_pub + (1 if input_data is not None else 0)
+    
+    # Create figure with uniform square subplots
+    fig, axes = plt.subplots(n_layers, n_cols, figsize=(n_cols*2.5, n_layers*2.5))
+    if n_layers == 1:
+        axes = axes[np.newaxis, :]
+    
+    # Ensure all subplots are square with equal aspect ratio
+    for ax_row in axes:
+        for ax in (ax_row if hasattr(ax_row, '__iter__') else [ax_row]):
+            ax.set_aspect('equal')
+    
+    for layer_idx, layer_name in enumerate(selected_layers):
+        if layer_name not in feature_dict:
+            continue
+            
+        features = feature_dict[layer_name]
+        if len(features) <= sample_idx:
+            continue
+            
+        feature_map = features[sample_idx]  # Shape: (H, W, D, C)
+        
+        if slice_idx is None:
+            slice_idx_use = feature_map.shape[2] // 2  # Middle slice
+        else:
+            slice_idx_use = min(slice_idx, feature_map.shape[2] - 1)
+        
+        # First column: Input data for context (if provided)
+        col_offset = 0
+        if input_data is not None:
+            ax_input = axes[layer_idx, 0] if n_layers > 1 else axes[0]
+            
+            # Show input data slice
+            input_slice = input_data[sample_idx, :, :, slice_idx_use, 0]  # First channel
+            im_input = ax_input.imshow(input_slice, cmap='viridis', aspect='equal')
+            
+            if layer_idx == 0:
+                ax_input.set_title('Input\nData', fontsize=12, weight='bold')
+            
+            # Clean layer name for publication
+            clean_layer_name = layer_name.replace('encoder_block_', 'E').replace('decoder_block_', 'D').replace('_', ' ')
+            ax_input.set_ylabel(f'{clean_layer_name}', fontsize=10, weight='bold')
+            ax_input.set_xticks([])
+            ax_input.set_yticks([])
+            
+            # NO colorbar for publication version
+            col_offset = 1
+        
+        # Remaining columns: Feature maps
+        feature_slice = feature_map[:, :, slice_idx_use, :]  # Shape: (H, W, C)
+        
+        # Select 7 most diverse filters for publication
+        if feature_slice.shape[-1] >= n_filters_pub:
+            # Calculate variance for each filter to select most diverse ones
+            filter_variances = []
+            for f_idx in range(feature_slice.shape[-1]):
+                variance = np.var(feature_slice[:, :, f_idx])
+                filter_variances.append((variance, f_idx))
+            
+            # Sort by variance and select top diverse filters
+            filter_variances.sort(reverse=True)
+            selected_filter_indices = [idx for _, idx in filter_variances[:n_filters_pub]]
+        else:
+            # Use all available filters if fewer than 7
+            selected_filter_indices = list(range(feature_slice.shape[-1]))
+        
+        for plot_idx, filter_idx in enumerate(selected_filter_indices):
+            if plot_idx >= n_filters_pub:
+                break
+                
+            ax = axes[layer_idx, plot_idx + col_offset] if n_layers > 1 else axes[plot_idx + col_offset]
+            
+            # Plot activation map
+            activation = feature_slice[:, :, filter_idx]
+            im = ax.imshow(activation, cmap='plasma', aspect='equal')
+            
+            # Overlay non-void structures if provided (contour around walls/filaments/halos)
+            if void_regions is not None and void_regions.shape[:2] == activation.shape:
+                # Create non-void mask (everything that is NOT void)
+                non_void_mask = void_regions < 0.5
+                ax.contour(non_void_mask, levels=[0.5], colors=['white'], linewidths=1.0, alpha=0.7)
+            
+            if layer_idx == 0:
+                ax.set_title(f'F{filter_idx}', fontsize=11, weight='bold')
+            
+            ax.set_xticks([])
+            ax.set_yticks([])
+            
+            # NO colorbars for publication version
+        
+        # Hide unused subplots if any
+        for plot_idx in range(len(selected_filter_indices), n_filters_pub):
+            col_idx = plot_idx + col_offset
+            if col_idx < n_cols:
+                ax = axes[layer_idx, col_idx] if n_layers > 1 else axes[col_idx]
+                ax.set_visible(False)
+    
+    # Clean title for publication
+    plt.suptitle(f'Feature Activation Maps - Sample {sample_idx}', fontsize=16, weight='bold')
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=DPI, bbox_inches='tight')
+        print(f'Publication-quality feature maps saved to {save_path}')
+    
+    return fig
+
 def plot_attention_maps_3d(attention_dict, original_input, void_mask=None, 
                           sample_idx=0, slice_idx=None, save_path=None):
     """
@@ -637,6 +772,125 @@ def plot_attention_maps_3d(attention_dict, original_input, void_mask=None,
     if save_path:
         plt.savefig(save_path, dpi=DPI, bbox_inches='tight')
         print(f'Attention maps saved to {save_path}')
+    
+    return fig
+
+def plot_attention_maps_3d_publication(attention_dict, original_input, void_mask=None, 
+                                      sample_idx=0, slice_idx=None, save_path=None):
+    """
+    Create publication-quality attention maps focusing only on the four attention multiply layers.
+    - Shows only multiply layers (the core attention gates)
+    - No colorbars for cleaner appearance
+    - Single row layout for compactness
+    - Clean formatting suitable for papers
+    """
+    print(f'Creating publication-quality attention maps for sample {sample_idx}...')
+    
+    if not attention_dict:
+        print("No attention maps to plot")
+        return None
+    
+    # Filter to only multiply layers (the core attention gates)
+    multiply_layers = {}
+    for layer_name, attention_map in attention_dict.items():
+        if 'multiply' in layer_name.lower():
+            multiply_layers[layer_name] = attention_map
+    
+    if not multiply_layers:
+        print("No multiply layers found in attention dict")
+        return None
+    
+    print(f'Found {len(multiply_layers)} multiply layers for publication plot')
+    
+    # Limit to 4 multiply layers for publication clarity
+    layer_names = list(multiply_layers.keys())
+    if len(layer_names) > 4:
+        # Select 4 evenly spaced layers
+        indices = np.linspace(0, len(layer_names)-1, 4, dtype=int)
+        selected_layers = {layer_names[i]: multiply_layers[layer_names[i]] for i in indices}
+    else:
+        selected_layers = multiply_layers
+    
+    n_layers = len(selected_layers)
+    
+    # Single row layout for publication
+    fig, axes = plt.subplots(1, n_layers, figsize=(n_layers*3, 3))
+    if n_layers == 1:
+        axes = [axes]
+    
+    # Get original input slice
+    if slice_idx is None:
+        slice_idx_use = original_input.shape[2] // 2
+    else:
+        slice_idx_use = slice_idx
+    
+    original_slice = original_input[sample_idx, :, :, slice_idx_use, 0]
+    
+    # Create void contours if mask is provided
+    void_contours = None
+    if void_mask is not None:
+        try:
+            if len(void_mask.shape) == 4:
+                void_slice = void_mask[sample_idx, :, :, slice_idx_use]
+            elif len(void_mask.shape) == 3:
+                void_slice = void_mask[:, :, slice_idx_use]
+            else:
+                void_slice = void_mask
+            
+            # Draw contours around non-void structures
+            non_void_mask = void_slice < 0.5
+            void_contours = non_void_mask
+        except Exception as e:
+            print(f'Warning: Could not prepare void contours: {e}')
+    
+    for i, (layer_name, attention_map) in enumerate(selected_layers.items()):
+        ax = axes[i]
+        
+        # Show original input as background
+        ax.imshow(original_slice, cmap='gray', alpha=0.6)
+        
+        # Get attention slice
+        attention_data = attention_map[sample_idx]
+        if len(attention_data.shape) == 4:  # (H, W, D, C)
+            attention_slice_idx = min(slice_idx_use // max(1, 2**i), attention_data.shape[2] - 1)
+            attention_slice = attention_data[:, :, attention_slice_idx, :]
+            # Average across channels if multiple
+            if attention_slice.shape[-1] > 1:
+                attention_slice = np.mean(attention_slice, axis=-1)
+            else:
+                attention_slice = attention_slice[:, :, 0]
+        else:
+            attention_slice = attention_data
+        
+        # Resize attention to match original if needed
+        if attention_slice.shape != original_slice.shape:
+            scale_factors = [original_slice.shape[j] / attention_slice.shape[j] for j in range(2)]
+            attention_slice = zoom(attention_slice, scale_factors, order=1)
+        
+        # Overlay attention map (no colorbar for publication)
+        im = ax.imshow(attention_slice, cmap='hot', alpha=0.7)
+        
+        # Add structure contours if available
+        if void_contours is not None:
+            ax.contour(void_contours, levels=[0.5], colors=['white'], linewidths=1, alpha=0.8)
+        
+        # Clean layer name for publication
+        clean_name = layer_name.replace('multiply', 'Gate').replace('_', ' ')
+        if len(clean_name) > 15:
+            clean_name = f"Gate {i+1}"  # Simple naming for space
+        
+        ax.set_title(clean_name, fontsize=12, weight='bold')
+        ax.set_xticks([])
+        ax.set_yticks([])
+        ax.set_aspect('equal')
+    
+    # Clean title for publication
+    plt.suptitle(f'Attention Gates - Sample {sample_idx}', fontsize=14, weight='bold')
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=DPI, bbox_inches='tight')
+        print(f'Publication-quality attention maps saved to {save_path}')
     
     return fig
 
@@ -1613,6 +1867,18 @@ def run_interpretability_analysis():
             save_path=os.path.join(ANALYSIS_PATH, 'feature_activation_maps.png')
         )
         plt.close(fig1)
+        
+        # Also create publication-quality version
+        print('Creating publication-quality feature maps visualization...')
+        fig1_pub = plot_feature_maps_3d_publication(
+            feature_dict, 
+            sample_idx=sample_indices['feature_maps'], 
+            slice_idx=slice_idx_use,
+            void_regions=void_mask[:, :, slice_idx_use],
+            input_data=features,  # Pass input data for context
+            save_path=os.path.join(ANALYSIS_PATH, 'feature_activation_maps_publication.png')
+        )
+        plt.close(fig1_pub)
     
     # 2. Extract attention maps (if attention model)
     if USE_ATTENTION:
@@ -1630,6 +1896,18 @@ def run_interpretability_analysis():
                 save_path=os.path.join(ANALYSIS_PATH, 'attention_maps.png')
             )
             plt.close(fig2)
+            
+            # Also create publication-quality attention maps
+            print('Creating publication-quality attention maps...')
+            fig2_pub = plot_attention_maps_3d_publication(
+                attention_dict,
+                features,
+                void_mask=void_mask,
+                sample_idx=sample_indices['attention'],
+                slice_idx=slice_idx_use,
+                save_path=os.path.join(ANALYSIS_PATH, 'attention_maps_publication.png')
+            )
+            plt.close(fig2_pub)
     else:
         print('\n--- Skipping Attention Analysis (Standard U-Net) ---')
     
@@ -1735,9 +2013,11 @@ def run_interpretability_analysis():
         f.write(f"\nFiles Generated:\n")
         f.write(f"- input_data_log_sample_*.png (log-scaled density visualization)\n")
         if SAVE_ALL:
-            f.write(f"- feature_activation_maps.png\n")
+            f.write(f"- feature_activation_maps.png (detailed version with colorbars)\n")
+            f.write(f"- feature_activation_maps_publication.png (clean version for papers)\n")
             if USE_ATTENTION:
-                f.write(f"- attention_maps.png\n")
+                f.write(f"- attention_maps.png (detailed version with colorbars)\n")
+                f.write(f"- attention_maps_publication.png (clean version focusing on 4 gates)\n")
             f.write(f"- void_correlation_analysis.png\n")
             f.write(f"- layer_evolution_analysis.png\n")
             f.write(f"- class_specific_analysis.png\n")
