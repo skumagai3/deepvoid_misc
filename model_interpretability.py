@@ -559,6 +559,7 @@ def plot_feature_maps_3d_publication(feature_dict, sample_idx=0, slice_idx=None,
     Create publication-quality feature activation maps with clean formatting.
     - Shows only 7 filters per layer
     - No colorbars for cleaner appearance
+    - No filter numbers or input data subtitles
     - Uniform square sizes
     - Fewer layers for clarity
     """
@@ -618,7 +619,7 @@ def plot_feature_maps_3d_publication(feature_dict, sample_idx=0, slice_idx=None,
             im_input = ax_input.imshow(input_slice, cmap='viridis', aspect='equal')
             
             if layer_idx == 0:
-                ax_input.set_title('Input\nData', fontsize=12, weight='bold')
+                ax_input.set_title('Input', fontsize=12, weight='bold')
             
             # Clean layer name for publication
             clean_layer_name = layer_name.replace('encoder_block_', 'E').replace('decoder_block_', 'D').replace('_', ' ')
@@ -663,8 +664,7 @@ def plot_feature_maps_3d_publication(feature_dict, sample_idx=0, slice_idx=None,
                 non_void_mask = void_regions < 0.5
                 ax.contour(non_void_mask, levels=[0.5], colors=['white'], linewidths=1.0, alpha=0.7)
             
-            if layer_idx == 0:
-                ax.set_title(f'F{filter_idx}', fontsize=11, weight='bold')
+            # No titles for individual filters in publication version
             
             ax.set_xticks([])
             ax.set_yticks([])
