@@ -158,11 +158,21 @@ python DV_MULTI_TRANSFER.py /data model_name density_file TL_TYPE TNG 512 \
 If you use DeepVoid in your research, please cite:
 
 ```bibtex
-@article{deepvoid2024,
-  title={Deep Learning for Cosmic Void Detection in Large-Scale Structure},
-  author={[Author Names]},
-  journal={[Journal]},
-  year={2024}
+@ARTICLE{2025arXiv250421134K,
+       author = {{Kumagai}, Sam and {Vogeley}, Michael S. and {Aragon-Calvo}, Miguel A. and {Douglass}, Kelly A. and {BenZvi}, Segev and {Neyrinck}, Mark},
+        title = "{DeepVoid: A Deep Learning Void Detector}",
+      journal = {arXiv e-prints},
+     keywords = {Instrumentation and Methods for Astrophysics},
+         year = 2025,
+        month = apr,
+          eid = {arXiv:2504.21134},
+        pages = {arXiv:2504.21134},
+          doi = {10.48550/arXiv.2504.21134},
+archivePrefix = {arXiv},
+       eprint = {2504.21134},
+ primaryClass = {astro-ph.IM},
+       adsurl = {https://ui.adsabs.harvard.edu/abs/2025arXiv250421134K},
+      adsnote = {Provided by the SAO/NASA Astrophysics Data System}
 }
 ```
 
