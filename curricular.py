@@ -1345,10 +1345,7 @@ for i, inter_sep in enumerate(inter_seps):
         verbose=1,
         restore_best_weights=True
     )
-    void_fraction_monitor = nets.VoidFractionMonitor(
-        val_dataset=val_dataset,
-        max_batches=16
-    )
+    
     checkpt_path = MODEL_PATH + MODEL_NAME + f'_L{inter_sep}.keras'
     weights_path = MODEL_PATH + MODEL_NAME + f'_L{inter_sep}_weights.h5'
     
@@ -1363,9 +1360,16 @@ for i, inter_sep in enumerate(inter_seps):
         ),
         tensor_board_callback,
         reduce_LR,
-        early_stop,
-        void_fraction_monitor
+        early_stop
     ]
+    
+    # Only add VoidFractionMonitor if we have a validation dataset
+    if val_dataset is not None:
+        void_fraction_monitor = nets.VoidFractionMonitor(
+            val_dataset=val_dataset,
+            max_batches=16
+        )
+        callbacks.append(void_fraction_monitor)
     
     # Add learning rate warmup if specified
     if WARMUP_EPOCHS > 0 and i == 0:  # Only add warmup for the first interparticle separation
