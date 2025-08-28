@@ -1168,7 +1168,7 @@ if validation_strategy == 'hybrid':
     print('Creating stage validation datasets for hybrid validation...')
     for sep in inter_seps:
         print(f'  Creating validation dataset for L={sep} Mpc/h...')
-        stage_datasets[sep] = create_validation_dataset(float(sep), val_indices=GLOBAL_VAL_INDICES)
+        stage_datasets[sep] = create_validation_dataset(sep, val_indices=GLOBAL_VAL_INDICES)
         
     validation_callback = HybridValidationCallback(
         target_dataset=target_val_dataset,
