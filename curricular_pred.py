@@ -98,7 +98,10 @@ optional.add_argument('--TEST_MODE', action='store_true',
                       help='Test mode: use only a small subset of data for quick testing.')
 optional.add_argument('--PREPROCESSING', type=str, default='standard',
                       choices=['standard', 'robust', 'log_transform', 'clip_extreme'],
-                      help='Preprocessing method to apply to input data. Must match training preprocessing.')
+                      help='Preprocessing method to apply to density data. Must match training preprocessing.')
+optional.add_argument('--COLOR_PREPROCESSING', type=str, default='standard',
+                      choices=['standard', 'robust', 'symmetric_minmax', 'none'],
+                      help='Preprocessing method for color data (g-r). Must match training preprocessing. Default is standard.')
 
 args = parser.parse_args()
 
@@ -115,12 +118,13 @@ SKIP_SCORING = args.SKIP_SCORING
 MAX_PRED_BATCHES = args.MAX_PRED_BATCHES
 TEST_MODE = args.TEST_MODE
 PREPROCESSING = args.PREPROCESSING
+COLOR_PREPROCESSING = args.COLOR_PREPROCESSING
 
 print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, MODEL_NAME={MODEL_NAME}, L_PRED={L_PRED}')
 print(f'BATCH_SIZE={BATCH_SIZE}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}')
 print(f'LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}, SAVE_PREDICTIONS={SAVE_PREDICTIONS}')
 print(f'SKIP_SLICE_PLOTS={SKIP_SLICE_PLOTS}, SKIP_SCORING={SKIP_SCORING}')
-print(f'PREPROCESSING={PREPROCESSING}')
+print(f'PREPROCESSING={PREPROCESSING}, COLOR_PREPROCESSING={COLOR_PREPROCESSING}')
 
 #================================================================
 # Auto-detect model parameters from model name
@@ -263,9 +267,19 @@ def check_memory_usage():
 #================================================================
 # Memory-efficient data loading function
 #================================================================
-def load_data_for_prediction(inter_sep, extra_inputs=None, max_samples=None, preprocessing='standard'):
+def load_data_for_prediction(inter_sep, extra_inputs=None, max_samples=None, preprocessing='standard', color_preprocessing='standard'):
     """
     Load data for prediction with memory management.
+    
+    Args:
+        inter_sep (str): Interparticle separation value
+        extra_inputs (str, optional): Type of extra inputs ('g-r', 'r_flux_density')
+        max_samples (int, optional): Maximum number of samples to load
+        preprocessing (str): Preprocessing method for density data
+        color_preprocessing (str): Preprocessing method for color data (g-r)
+    
+    Returns:
+        tuple: (features, labels) arrays
     """
     if inter_sep not in inter_seps:
         raise ValueError(f'Invalid interparticle separation: {inter_sep}. Must be one of {inter_seps}.')
@@ -273,6 +287,8 @@ def load_data_for_prediction(inter_sep, extra_inputs=None, max_samples=None, pre
     data_file = DATA_PATH + data_info[inter_sep]
     print(f'Loading prediction data from {data_file}...')
     print(f'Using preprocessing method: {preprocessing}')
+    if extra_inputs == 'g-r':
+        print(f'Using color preprocessing method: {color_preprocessing}')
     
     # Check if file exists
     if not os.path.exists(data_file):
@@ -348,13 +364,34 @@ def load_data_for_prediction(inter_sep, extra_inputs=None, max_samples=None, pre
         # Load extra inputs using the same non-augmented approach as main features
         # For prediction, we use load_dataset which doesn't do rotations
         # so we get the same subcube pattern as the main features
-        extra_features = nets.load_dataset(
-            file_in=extra_input_file,
-            SUBGRID=SUBGRID,
-            OFF=OFF,
-            preproc=preproc_param,  # Use same mapped preprocessing parameter
-            sigma=None
-        )
+        
+        if extra_inputs == 'g-r':
+            # For color data, load raw and apply color-specific preprocessing
+            extra_features = nets.load_dataset(
+                file_in=extra_input_file,
+                SUBGRID=SUBGRID,
+                OFF=OFF,
+                preproc=None,  # Load raw color data first
+                sigma=None
+            )
+            
+            # Apply color-specific preprocessing to each subcube
+            for i in range(extra_features.shape[0]):
+                extra_features[i, :, :, :, 0] = nets.apply_color_preprocessing(
+                    extra_features[i, :, :, :, 0], 
+                    color_preprocessing
+                )
+            print(f'Applied {color_preprocessing} preprocessing to g-r color data')
+        else:
+            # For non-color extra inputs, use standard preprocessing
+            extra_features = nets.load_dataset(
+                file_in=extra_input_file,
+                SUBGRID=SUBGRID,
+                OFF=OFF,
+                preproc=preproc_param,  # Use same mapped preprocessing parameter
+                sigma=None
+            )
+            print(f'Applied {preprocessing} preprocessing to {extra_inputs} data')
         
         print(f'Extra inputs loaded. Shape: {extra_features.shape}')
         print(f'Main features shape: {features.shape}')
@@ -674,7 +711,8 @@ def main():
             L_PRED, 
             extra_inputs=EXTRA_INPUTS,
             max_samples=max_samples,
-            preprocessing=PREPROCESSING
+            preprocessing=PREPROCESSING,
+            color_preprocessing=COLOR_PREPROCESSING
         )
         
         # Force garbage collection after data loading

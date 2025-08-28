@@ -69,6 +69,60 @@ def standardize(a):
   if std_val == 0:
     return np.zeros_like(a)
   return (a-np.mean(a))/std_val
+
+#---------------------------------------------------------
+# Color-specific preprocessing functions
+#---------------------------------------------------------
+def preprocess_color_standardization(color_data):
+    """
+    Standard z-score normalization for color data.
+    Preserves the meaning of zero and handles negative values properly.
+    """
+    mean = np.mean(color_data)
+    std = np.std(color_data)
+    return (color_data - mean) / (std + 1e-8)  # Small epsilon to avoid division by zero
+
+def preprocess_color_robust(color_data):
+    """
+    Robust standardization using median and MAD (Median Absolute Deviation).
+    Less sensitive to outliers than standard z-score.
+    """
+    median = np.median(color_data)
+    mad = np.median(np.abs(color_data - median))
+    return (color_data - median) / (1.4826 * mad + 1e-8)  # 1.4826 makes MAD consistent with std
+
+def preprocess_color_symmetric_minmax(color_data):
+    """
+    Symmetric min-max scaling that preserves zero meaning.
+    Maps to [0,1] but keeps zero at a meaningful position.
+    """
+    abs_max = np.max(np.abs(color_data))
+    # Scale to [-1, 1] first, then shift to [0, 1]
+    normalized = color_data / (abs_max + 1e-8)
+    return (normalized + 1) / 2
+
+def apply_color_preprocessing(color_data, preprocessing_method='standard'):
+    """
+    Apply the specified preprocessing method to color data.
+    
+    Args:
+        color_data (np.ndarray): Color data (e.g., g-r)
+        preprocessing_method (str): Preprocessing method to apply
+        
+    Returns:
+        np.ndarray: Preprocessed color data
+    """
+    if preprocessing_method == 'standard':
+        return preprocess_color_standardization(color_data)
+    elif preprocessing_method == 'robust':
+        return preprocess_color_robust(color_data)
+    elif preprocessing_method == 'symmetric_minmax':
+        return preprocess_color_symmetric_minmax(color_data)
+    elif preprocessing_method == 'none':
+        return color_data  # No preprocessing
+    else:
+        print(f'Warning: Unknown color preprocessing method "{preprocessing_method}". Using standard z-score.')
+        return preprocess_color_standardization(color_data)
 #---------------------------------------------------------
 # Convert multiclass mask to binary void/not void mask
 #---------------------------------------------------------

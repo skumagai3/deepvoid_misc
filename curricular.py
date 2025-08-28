@@ -137,6 +137,9 @@ optional.add_argument('--N_EPOCHS_PER_INTER_SEP', type=int, default=50,
 optional.add_argument('--PREPROCESSING', type=str, default='standard',
                       choices=['standard', 'robust', 'log_transform', 'clip_extreme'],
                       help='Preprocessing method for density data. Default is standard.')
+optional.add_argument('--COLOR_PREPROCESSING', type=str, default='standard',
+                      choices=['standard', 'robust', 'symmetric_minmax', 'none'],
+                      help='Preprocessing method specifically for color data (g-r). Default is standard (z-score normalization).')
 optional.add_argument('--WARMUP_EPOCHS', type=int, default=0,
                       help='Number of warmup epochs with gradual learning rate increase. Default is 0 (no warmup).')
 optional.add_argument('--FOCAL_ALPHA', nargs=4, type=float, default=[0.6, 0.3, 0.09, 0.02],
@@ -173,6 +176,7 @@ USE_ATTENTION = args.USE_ATTENTION
 LAMBDA_CONDITIONING = args.LAMBDA_CONDITIONING
 N_EPOCHS_PER_INTER_SEP = args.N_EPOCHS_PER_INTER_SEP
 PREPROCESSING = args.PREPROCESSING
+COLOR_PREPROCESSING = args.COLOR_PREPROCESSING
 WARMUP_EPOCHS = args.WARMUP_EPOCHS
 FOCAL_ALPHA = args.FOCAL_ALPHA
 FOCAL_GAMMA = args.FOCAL_GAMMA
@@ -192,7 +196,7 @@ if ADD_RSD and not args.RSD_PRESERVING_ROTATIONS and 'RSD_PRESERVING_ROTATIONS' 
 validation_strategy = args.VALIDATION_STRATEGY
 target_lambda = args.TARGET_LAMBDA or args.L_VAL  # Default to L_VAL if not specified
 
-print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, L_VAL={L_VAL}, USE_ATTENTION={USE_ATTENTION}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}, N_EPOCHS_PER_INTER_SEP={N_EPOCHS_PER_INTER_SEP}, VALIDATION_STRATEGY={validation_strategy}, TARGET_LAMBDA={target_lambda}, PREPROCESSING={PREPROCESSING}, WARMUP_EPOCHS={WARMUP_EPOCHS}, FOCAL_ALPHA={FOCAL_ALPHA}, FOCAL_GAMMA={FOCAL_GAMMA}, USE_OVERLAPPING_SUBCUBES={USE_OVERLAPPING_SUBCUBES}, RSD_PRESERVING_ROTATIONS={RSD_PRESERVING_ROTATIONS}, EXTRA_AUGMENTATION={EXTRA_AUGMENTATION}, VALIDATION_SPLIT={VALIDATION_SPLIT}, SPLIT_SEED={SPLIT_SEED}, SPLIT_METHOD={SPLIT_METHOD}')
+print(f'Parsed arguments: ROOT_DIR={ROOT_DIR}, DEPTH={DEPTH}, FILTERS={FILTERS}, LOSS={LOSS}, UNIFORM_FLAG={UNIFORM_FLAG}, BATCH_SIZE={BATCH_SIZE}, LEARNING_RATE={LEARNING_RATE}, LEARNING_RATE_PATIENCE={LEARNING_RATE_PATIENCE}, L_VAL={L_VAL}, USE_ATTENTION={USE_ATTENTION}, EXTRA_INPUTS={EXTRA_INPUTS}, ADD_RSD={ADD_RSD}, LAMBDA_CONDITIONING={LAMBDA_CONDITIONING}, N_EPOCHS_PER_INTER_SEP={N_EPOCHS_PER_INTER_SEP}, VALIDATION_STRATEGY={validation_strategy}, TARGET_LAMBDA={target_lambda}, PREPROCESSING={PREPROCESSING}, COLOR_PREPROCESSING={COLOR_PREPROCESSING}, WARMUP_EPOCHS={WARMUP_EPOCHS}, FOCAL_ALPHA={FOCAL_ALPHA}, FOCAL_GAMMA={FOCAL_GAMMA}, USE_OVERLAPPING_SUBCUBES={USE_OVERLAPPING_SUBCUBES}, RSD_PRESERVING_ROTATIONS={RSD_PRESERVING_ROTATIONS}, EXTRA_AUGMENTATION={EXTRA_AUGMENTATION}, VALIDATION_SPLIT={VALIDATION_SPLIT}, SPLIT_SEED={SPLIT_SEED}, SPLIT_METHOD={SPLIT_METHOD}')
 
 # Validate split parameters
 if not 0.0 < VALIDATION_SPLIT < 1.0:
@@ -412,7 +416,7 @@ def apply_split_to_data(features, labels, train_indices, val_indices, dataset_na
 #================================================================
 # Define loading function
 #================================================================
-def load_data(inter_sep, extra_inputs=None, verbose=True, preprocessing='standard', split_data=False, train_indices=None, val_indices=None):
+def load_data(inter_sep, extra_inputs=None, verbose=True, preprocessing='standard', color_preprocessing='standard', split_data=False, train_indices=None, val_indices=None):
     '''
     Load the data for a given interparticle separation.
     Args:
@@ -420,6 +424,7 @@ def load_data(inter_sep, extra_inputs=None, verbose=True, preprocessing='standar
         extra_inputs (str, optional): Additional inputs file name. Defaults to None.
         verbose (bool): Whether to print detailed loading statistics. Defaults to True.
         preprocessing (str): Preprocessing method for density data. Defaults to 'standard'.
+        color_preprocessing (str): Preprocessing method for color data (g-r). Defaults to 'standard'.
         split_data (bool): Whether to split data into train/validation. Defaults to False.
         train_indices (np.ndarray, optional): Pre-computed training indices for consistent splitting.
         val_indices (np.ndarray, optional): Pre-computed validation indices for consistent splitting.
@@ -547,8 +552,24 @@ def load_data(inter_sep, extra_inputs=None, verbose=True, preprocessing='standar
         
         # Use the same subcube method for consistency
         if USE_OVERLAPPING_SUBCUBES:
-            # Use overlapping subcubes (like load_dataset) but ensure same number of samples as features
-            extra_input = nets.load_dataset(extra_input_file, SUBGRID, OFF, preprocessing)
+            # For overlapping subcubes, apply appropriate preprocessing based on input type
+            if extra_inputs == 'g-r':
+                # Load raw color data first
+                raw_extra_input = nets.load_dataset(extra_input_file, SUBGRID, OFF, preproc=None)
+                # Apply color-specific preprocessing
+                extra_input = raw_extra_input.copy()
+                for i in range(raw_extra_input.shape[0]):
+                    extra_input[i, :, :, :, 0] = nets.apply_color_preprocessing(
+                        raw_extra_input[i, :, :, :, 0], 
+                        color_preprocessing
+                    )
+                if verbose:
+                    print(f'Applied {color_preprocessing} preprocessing to g-r color data')
+            else:
+                # For non-color extra inputs (like flux density), use standard preprocessing
+                extra_input = nets.load_dataset(extra_input_file, SUBGRID, OFF, preprocessing)
+                if verbose:
+                    print(f'Applied {preprocessing} preprocessing to {extra_inputs} data')
             
             if RSD_PRESERVING_ROTATIONS:
                 # We need to replicate the data to match the 8 RSD-preserving rotations
@@ -602,13 +623,22 @@ def load_data(inter_sep, extra_inputs=None, verbose=True, preprocessing='standar
             # that matches the non-overlapping pattern of load_dataset_all but for single files
             den = volumes.read_fvolume(extra_input_file)
             
-            # Apply preprocessing
-            if preprocessing == 'log_transform':
-                den = np.log10(den + 1e-6)
-                den = (den - np.mean(den)) / (np.std(den) + 1e-8)
-            elif preprocessing == 'standard' or preprocessing is None:
-                den = nets.minmax(den)
-            # Add other preprocessing methods as needed
+            # Apply appropriate preprocessing based on input type
+            if extra_inputs == 'g-r':
+                # Apply color-specific preprocessing
+                den = nets.apply_color_preprocessing(den, color_preprocessing)
+                if verbose:
+                    print(f'Applied {color_preprocessing} preprocessing to g-r color data')
+            else:
+                # Apply standard preprocessing for non-color inputs
+                if preprocessing == 'log_transform':
+                    den = np.log10(den + 1e-6)
+                    den = (den - np.mean(den)) / (np.std(den) + 1e-8)
+                elif preprocessing == 'standard' or preprocessing is None:
+                    den = nets.minmax(den)
+                # Add other preprocessing methods as needed
+                if verbose:
+                    print(f'Applied {preprocessing} preprocessing to {extra_inputs} data')
             
             # Extract non-overlapping subcubes with rotations (matching load_dataset_all pattern)
             n_bins = den.shape[0] // SUBGRID
@@ -864,14 +894,14 @@ def create_validation_dataset(lambda_val, cache_key=None, val_indices=None):
         # Load full data and apply pre-computed split
         _, _, val_features, val_labels, _, _ = load_data(
             lambda_val, extra_inputs=EXTRA_INPUTS, verbose=False, 
-            preprocessing=PREPROCESSING, split_data=True, val_indices=val_indices
+            preprocessing=PREPROCESSING, color_preprocessing=COLOR_PREPROCESSING, split_data=True, val_indices=val_indices
         )
     else:
         # Legacy mode - load without splitting (for backwards compatibility)
         print("Warning: No validation indices provided - using full dataset for validation")
         print("This may lead to data leakage! Consider using proper train/val split.")
         val_features, val_labels = load_data(
-            lambda_val, extra_inputs=EXTRA_INPUTS, verbose=False, preprocessing=PREPROCESSING
+            lambda_val, extra_inputs=EXTRA_INPUTS, verbose=False, preprocessing=PREPROCESSING, color_preprocessing=COLOR_PREPROCESSING
         )
     
     val_dataset = make_dataset(val_features, val_labels, batch_size=BATCH_SIZE, shuffle=False, one_hot=ONE_HOT, 
@@ -1111,7 +1141,7 @@ print(f'Initializing train/validation split using data from L={first_lambda_for_
 # Load initial data to determine split indices
 print('Loading initial data to compute train/validation split indices...')
 initial_features, initial_labels = load_data(first_lambda_for_split, extra_inputs=EXTRA_INPUTS, 
-                                            verbose=True, preprocessing=PREPROCESSING, split_data=False)
+                                            verbose=True, preprocessing=PREPROCESSING, color_preprocessing=COLOR_PREPROCESSING, split_data=False)
 
 # Compute split indices based on the total number of subcubes
 total_subcubes = initial_features.shape[0]
@@ -1205,13 +1235,13 @@ for i, inter_sep in enumerate(inter_seps):
     if EXTRA_INPUTS is not None:
         train_features, train_labels, _, _, _, _ = load_data(
             inter_sep, extra_inputs=EXTRA_INPUTS, verbose=verbose_load, 
-            preprocessing=PREPROCESSING, split_data=True, 
+            preprocessing=PREPROCESSING, color_preprocessing=COLOR_PREPROCESSING, split_data=True, 
             train_indices=GLOBAL_TRAIN_INDICES, val_indices=GLOBAL_VAL_INDICES
         )
     else:
         train_features, train_labels, _, _, _, _ = load_data(
             inter_sep, verbose=verbose_load, preprocessing=PREPROCESSING, 
-            split_data=True, train_indices=GLOBAL_TRAIN_INDICES, val_indices=GLOBAL_VAL_INDICES
+            color_preprocessing=COLOR_PREPROCESSING, split_data=True, train_indices=GLOBAL_TRAIN_INDICES, val_indices=GLOBAL_VAL_INDICES
         )
     
     # Monitor memory after data loading
