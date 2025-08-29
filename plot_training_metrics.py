@@ -188,18 +188,8 @@ def find_log_files(model_name, logs_path):
             log_files['logfile'].append(target_log)
             print(f'Found exact match: {target_log}')
         else:
-            print(f'Exact match not found. Checking alternative patterns...')
-            # Fallback: check for any log with the same date and hour
-            fallback_patterns = [
-                os.path.join(ROOT_DIR, 'logs', 'stdout', f'{date_part}_{hour}:*_curr_out.log'),
-                os.path.join(ROOT_DIR, 'logs', 'stdout', f'{date_part}_*_curr_out.log'),
-            ]
-            for pattern in fallback_patterns:
-                matches = glob.glob(pattern)
-                if matches:
-                    print(f'Found fallback matches: {matches}')
-                    log_files['logfile'].extend(matches)
-                    break
+            print(f'Exact match not found: {target_log}')
+            print(f'No fallback patterns will be used - only exact model name matches allowed')
     else:
         print(f'Could not extract datetime from model name: {model_name}')
         # Fallback to broader search only if datetime extraction failed
@@ -396,6 +386,23 @@ def parse_log_file(log_files):
             
             if found_any_metrics:
                 print(f'Successfully parsed {global_epoch} epochs from {log_file}')
+                
+                # Debug: Show sample lines to understand validation format
+                print('Debug: Looking for validation metrics format...')
+                val_lines = [line for line in lines if 'val_' in line]
+                if val_lines:
+                    print(f'Found {len(val_lines)} lines with "val_" - showing first 3:')
+                    for i, line in enumerate(val_lines[:3]):
+                        print(f'  Val line {i+1}: {line.strip()}')
+                else:
+                    print('No lines found containing "val_" - validation metrics may not be logged')
+                
+                # Also check for lines that might contain validation metrics in different format
+                potential_val_lines = [line for line in lines if 'validation' in line.lower() or 'val ' in line]
+                if potential_val_lines:
+                    print(f'Found {len(potential_val_lines)} lines with "validation" - showing first 3:')
+                    for i, line in enumerate(potential_val_lines[:3]):
+                        print(f'  Potential val line {i+1}: {line.strip()}')
             else:
                 print(f'No training metrics found in {log_file}')
                 # Show sample lines to help debug the format
