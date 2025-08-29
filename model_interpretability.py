@@ -1013,9 +1013,6 @@ def plot_attention_maps_3d_publication(attention_dict, original_input, void_mask
     for i, (layer_name, attention_map) in enumerate(selected_layers.items()):
         ax = axes[i]
         
-        # Show original input as background
-        ax.imshow(original_slice, cmap='gray', alpha=0.6)
-        
         # Get attention slice
         attention_data = attention_map[sample_idx]
         if len(attention_data.shape) == 4:  # (H, W, D, C)
@@ -1034,8 +1031,8 @@ def plot_attention_maps_3d_publication(attention_dict, original_input, void_mask
             scale_factors = [original_slice.shape[j] / attention_slice.shape[j] for j in range(2)]
             attention_slice = zoom(attention_slice, scale_factors, order=1)
         
-        # Overlay attention map (no colorbar for publication)
-        im = ax.imshow(attention_slice, cmap='hot', alpha=0.7)
+        # Show pure attention map (no input overlay for publication)
+        im = ax.imshow(attention_slice, cmap='hot')
         
         # Add structure contours if available
         if void_contours is not None:
@@ -1046,8 +1043,8 @@ def plot_attention_maps_3d_publication(attention_dict, original_input, void_mask
         ax.set_yticks([])
         ax.set_aspect('equal')
     
-    # Clean title for publication
-    plt.suptitle(f'Attention Gates - Sample {sample_idx}', fontsize=14, weight='bold')
+    # Clean title for publication (no sample reference)
+    plt.suptitle(f'Attention Gates', fontsize=14, weight='bold')
     plt.tight_layout()
     
     if save_path:
