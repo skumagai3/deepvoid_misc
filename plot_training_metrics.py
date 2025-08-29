@@ -196,17 +196,27 @@ def find_log_files(model_name, logs_path):
     for pattern in csv_patterns:
         log_files['csv'].extend(glob.glob(pattern))
     
-    # Search for log files
+    # Search for log files - more comprehensive patterns
     log_patterns = [
         os.path.join(ROOT_DIR, f'{model_name}*.log'),
+        os.path.join(ROOT_DIR, f'*{model_name}*.log'),  # Model name anywhere in filename
         os.path.join(ROOT_DIR, '_stage', f'*{model_name[-20:]}*.log'),  # Match end of model name
         os.path.join(ROOT_DIR, '_stage', '*curr_out.log'),  # Generic curricular output logs
         os.path.join(ROOT_DIR, '_stage', '*.log'),  # Any log file in _stage directory
         os.path.join(ROOT_DIR, 'logs', f'{model_name}*.log'),
-        os.path.join(ROOT_DIR, '*.log')  # Any log file in root directory
+        os.path.join(ROOT_DIR, 'logs', f'*{model_name}*.log'),
+        os.path.join(ROOT_DIR, '*.log'),  # Any log file in root directory
+        os.path.join(ROOT_DIR, '**', '*.log'),  # Recursive search for any log file
     ]
+    
+    print(f'Searching for log files with patterns:')
     for pattern in log_patterns:
-        log_files['logfile'].extend(glob.glob(pattern))
+        matches = glob.glob(pattern, recursive=True)
+        print(f'  {pattern}: {len(matches)} matches')
+        log_files['logfile'].extend(matches)
+        if matches:
+            for match in matches[:3]:  # Show first 3 matches
+                print(f'    - {match}')
     
     # Remove duplicates
     log_files['logfile'] = list(set(log_files['logfile']))
@@ -629,23 +639,31 @@ def main():
     
     if LOG_SOURCE == 'auto':
         # Try in order of preference: TensorBoard -> CSV -> Log file
-        # But skip TensorBoard if no data found and go straight to log files
+        # But prioritize log files if TensorBoard is empty
+        
+        # First try TensorBoard if available
         if log_files['tensorboard'] and TENSORBOARD_AVAILABLE:
             print('Trying TensorBoard files first...')
             df = parse_tensorboard_logs(log_files['tensorboard'])
+            if df is not None and not df.empty:
+                print('Successfully loaded data from TensorBoard')
+            else:
+                print('TensorBoard files found but no metrics extracted')
         
-        if df is None and log_files['csv']:
-            print('TensorBoard failed or empty, trying CSV files...')
+        # If TensorBoard failed or was empty, try log files
+        if df is None or df.empty:
+            if log_files['logfile']:
+                print('TensorBoard failed/empty, trying log files...')
+                df = parse_log_file(log_files['logfile'])
+                if df is not None and not df.empty:
+                    print('Successfully loaded data from log files')
+            else:
+                print('No log files found for fallback')
+        
+        # Last resort: try CSV files
+        if (df is None or df.empty) and log_files['csv']:
+            print('Log files failed/empty, trying CSV files...')
             df = parse_csv_logs(log_files['csv'])
-        
-        if df is None and log_files['logfile']:
-            print('TensorBoard/CSV failed or empty, trying log files...')
-            df = parse_log_file(log_files['logfile'])
-        
-        # If TensorBoard was empty but we have log files, prioritize log files
-        if df is None and log_files['logfile']:
-            print('Forcing log file parsing since TensorBoard was empty...')
-            df = parse_log_file(log_files['logfile'])
     
     elif LOG_SOURCE == 'tensorboard':
         if not TENSORBOARD_AVAILABLE:
