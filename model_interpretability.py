@@ -679,12 +679,146 @@ def plot_feature_maps_3d_publication(feature_dict, sample_idx=0, slice_idx=None,
                 ax.set_visible(False)
     
     # Clean title for publication
-    plt.suptitle(f'Feature Activation Maps - Sample {sample_idx}', fontsize=16, weight='bold')
+    plt.suptitle(f'Feature Activation Maps', fontsize=16, weight='bold')
     plt.tight_layout()
     
     if save_path:
         plt.savefig(save_path, dpi=DPI, bbox_inches='tight')
         print(f'Publication-quality feature maps saved to {save_path}')
+    
+    return fig
+
+def plot_feature_maps_3d_publication_portrait(feature_dict, sample_idx=0, slice_idx=None, 
+                                             save_path=None, void_regions=None, input_data=None):
+    """
+    Create publication-quality feature activation maps in portrait orientation.
+    - Shows only 5 filters per layer in a vertical layout
+    - Portrait orientation for better column layout in papers
+    - No colorbars for cleaner appearance
+    - No filter numbers or input data subtitles
+    - Uniform square sizes
+    """
+    print(f'Creating publication-quality portrait feature maps plot for sample {sample_idx}...')
+    
+    if not feature_dict:
+        print("No feature maps to plot")
+        return None
+    
+    # Select 7 representative layers for publication portrait
+    layer_names = list(feature_dict.keys())
+    if len(layer_names) > 7:
+        # Sample layers more sparsely for publication
+        indices = np.linspace(0, len(layer_names)-1, 7, dtype=int)
+        selected_layers = [layer_names[i] for i in indices]
+    else:
+        selected_layers = layer_names
+    
+    n_layers = len(selected_layers)
+    n_filters_pub = 5  # Fewer filters for portrait layout
+    
+    # Add one extra column for input data if provided
+    n_cols = n_filters_pub + (1 if input_data is not None else 0)
+    
+    # Create figure with portrait orientation (taller than wide)
+    fig, axes = plt.subplots(n_layers, n_cols, figsize=(n_cols*2, n_layers*2.2))
+    if n_layers == 1:
+        axes = axes[np.newaxis, :]
+    
+    # Ensure all subplots are square with equal aspect ratio
+    for ax_row in axes:
+        for ax in (ax_row if hasattr(ax_row, '__iter__') else [ax_row]):
+            ax.set_aspect('equal')
+    
+    for layer_idx, layer_name in enumerate(selected_layers):
+        if layer_name not in feature_dict:
+            continue
+            
+        features = feature_dict[layer_name]
+        if len(features) <= sample_idx:
+            continue
+            
+        feature_map = features[sample_idx]  # Shape: (H, W, D, C)
+        
+        if slice_idx is None:
+            slice_idx_use = feature_map.shape[2] // 2  # Middle slice
+        else:
+            slice_idx_use = min(slice_idx, feature_map.shape[2] - 1)
+        
+        # First column: Input data for context (if provided)
+        col_offset = 0
+        if input_data is not None:
+            ax_input = axes[layer_idx, 0] if n_layers > 1 else axes[0]
+            
+            # Show input data slice
+            input_slice = input_data[sample_idx, :, :, slice_idx_use, 0]  # First channel
+            im_input = ax_input.imshow(input_slice, cmap='viridis', aspect='equal')
+            
+            if layer_idx == 0:
+                ax_input.set_title('Input', fontsize=10, weight='bold')
+            
+            # Clean layer name for publication
+            clean_layer_name = layer_name.replace('encoder_block_', 'E').replace('decoder_block_', 'D').replace('_', ' ')
+            ax_input.set_ylabel(f'{clean_layer_name}', fontsize=9, weight='bold')
+            ax_input.set_xticks([])
+            ax_input.set_yticks([])
+            
+            # NO colorbar for publication version
+            col_offset = 1
+        
+        # Remaining columns: Feature maps
+        feature_slice = feature_map[:, :, slice_idx_use, :]  # Shape: (H, W, C)
+        
+        # Select 5 most diverse filters for publication portrait
+        if feature_slice.shape[-1] >= n_filters_pub:
+            # Calculate variance for each filter to select most diverse ones
+            filter_variances = []
+            for f_idx in range(feature_slice.shape[-1]):
+                variance = np.var(feature_slice[:, :, f_idx])
+                filter_variances.append((variance, f_idx))
+            
+            # Sort by variance and select top diverse filters
+            filter_variances.sort(reverse=True)
+            selected_filter_indices = [idx for _, idx in filter_variances[:n_filters_pub]]
+        else:
+            # Use all available filters if fewer than 5
+            selected_filter_indices = list(range(feature_slice.shape[-1]))
+        
+        for plot_idx, filter_idx in enumerate(selected_filter_indices):
+            if plot_idx >= n_filters_pub:
+                break
+                
+            ax = axes[layer_idx, plot_idx + col_offset] if n_layers > 1 else axes[plot_idx + col_offset]
+            
+            # Plot activation map
+            activation = feature_slice[:, :, filter_idx]
+            im = ax.imshow(activation, cmap='plasma', aspect='equal')
+            
+            # Overlay non-void structures if provided (contour around walls/filaments/halos)
+            if void_regions is not None and void_regions.shape[:2] == activation.shape:
+                # Create non-void mask (everything that is NOT void)
+                non_void_mask = void_regions < 0.5
+                ax.contour(non_void_mask, levels=[0.5], colors=['white'], linewidths=1.0, alpha=0.7)
+            
+            # No titles for individual filters in publication version
+            ax.set_xticks([])
+            ax.set_yticks([])
+            
+            # NO colorbars for publication version
+        
+        # Hide unused subplots if any
+        for plot_idx in range(len(selected_filter_indices), n_filters_pub):
+            col_idx = plot_idx + col_offset
+            if col_idx < n_cols:
+                ax = axes[layer_idx, col_idx] if n_layers > 1 else axes[col_idx]
+                ax.set_visible(False)
+    
+    # Clean title for publication
+    plt.suptitle(f'Feature Activation Maps', fontsize=14, weight='bold')
+    plt.tight_layout()
+    
+    if save_path:
+        plt.savefig(save_path, dpi=DPI, bbox_inches='tight')
+        print(f'Publication-quality portrait feature maps saved to {save_path}')
     
     return fig
 
@@ -877,12 +1011,7 @@ def plot_attention_maps_3d_publication(attention_dict, original_input, void_mask
         if void_contours is not None:
             ax.contour(void_contours, levels=[0.5], colors=['white'], linewidths=1, alpha=0.8)
         
-        # Clean layer name for publication
-        clean_name = layer_name.replace('multiply', 'Gate').replace('_', ' ')
-        if len(clean_name) > 15:
-            clean_name = f"Gate {i+1}"  # Simple naming for space
-        
-        ax.set_title(clean_name, fontsize=12, weight='bold')
+        # No titles for cleaner publication appearance
         ax.set_xticks([])
         ax.set_yticks([])
         ax.set_aspect('equal')
@@ -1886,6 +2015,18 @@ def run_interpretability_analysis():
             save_path=os.path.join(ANALYSIS_PATH, f'feature_activation_maps_publication_L{L_ANALYSIS}.png')
         )
         plt.close(fig1_pub)
+        
+        # Also create portrait publication-quality version
+        print('Creating portrait publication-quality feature maps visualization...')
+        fig1_portrait = plot_feature_maps_3d_publication_portrait(
+            feature_dict, 
+            sample_idx=sample_indices['feature_maps'], 
+            slice_idx=slice_idx_use,
+            void_regions=void_mask[:, :, slice_idx_use],
+            input_data=features,  # Pass input data for context
+            save_path=os.path.join(ANALYSIS_PATH, f'feature_activation_maps_publication_portrait_L{L_ANALYSIS}.png')
+        )
+        plt.close(fig1_portrait)
     
     # 2. Extract attention maps (if attention model)
     if USE_ATTENTION:
