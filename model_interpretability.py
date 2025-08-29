@@ -476,6 +476,13 @@ def plot_feature_maps_3d(feature_dict, sample_idx=0, slice_idx=None, max_filters
     if n_layers == 1:
         axes = axes[np.newaxis, :]
     
+    # Calculate input slice index once, independent of feature map dimensions
+    if input_data is not None:
+        if slice_idx is None:
+            input_slice_idx = input_data.shape[2] // 2  # Middle slice of input data
+        else:
+            input_slice_idx = min(slice_idx, input_data.shape[2] - 1)
+    
     for layer_idx, layer_name in enumerate(selected_layers):
         if layer_name not in feature_dict:
             continue
@@ -486,18 +493,19 @@ def plot_feature_maps_3d(feature_dict, sample_idx=0, slice_idx=None, max_filters
             
         feature_map = features[sample_idx]  # Shape: (H, W, D, C)
         
+        # Calculate feature slice index based on feature map dimensions
         if slice_idx is None:
-            slice_idx_use = feature_map.shape[2] // 2  # Middle slice
+            feature_slice_idx = feature_map.shape[2] // 2  # Middle slice
         else:
-            slice_idx_use = min(slice_idx, feature_map.shape[2] - 1)
+            feature_slice_idx = min(slice_idx, feature_map.shape[2] - 1)
         
-        # First column: Input data for context (if provided)
+        # First column: Input data for context (if provided) - use consistent input slice
         col_offset = 0
         if input_data is not None:
             ax_input = axes[layer_idx, 0] if n_layers > 1 else axes[0]
             
-            # Show input data slice
-            input_slice = input_data[sample_idx, :, :, slice_idx_use, 0]  # First channel
+            # Show input data slice - use input_slice_idx consistently
+            input_slice = input_data[sample_idx, :, :, input_slice_idx, 0]  # First channel
             im_input = ax_input.imshow(input_slice, cmap='viridis', aspect='equal')
             
             if layer_idx == 0:
@@ -510,8 +518,8 @@ def plot_feature_maps_3d(feature_dict, sample_idx=0, slice_idx=None, max_filters
             plt.colorbar(im_input, ax=ax_input, shrink=0.6)
             col_offset = 1
         
-        # Remaining columns: Feature maps
-        feature_slice = feature_map[:, :, slice_idx_use, :]  # Shape: (H, W, C)
+        # Remaining columns: Feature maps - use feature_slice_idx for features
+        feature_slice = feature_map[:, :, feature_slice_idx, :]  # Shape: (H, W, C)
         n_filters = min(feature_slice.shape[-1], max_filters)
         
         for filter_idx in range(n_filters):
@@ -547,7 +555,7 @@ def plot_feature_maps_3d(feature_dict, sample_idx=0, slice_idx=None, max_filters
                 ax = axes[layer_idx, col_idx] if n_layers > 1 else axes[col_idx]
                 ax.set_visible(False)
     
-    title = f'Feature Activation Maps with Input Context - Sample {sample_idx}, Slice {slice_idx_use}' if input_data is not None else f'Feature Activation Maps - Sample {sample_idx}, Slice {slice_idx_use}'
+    title = f'Feature Activation Maps with Input Context - Sample {sample_idx}, Slice {input_slice_idx if input_data is not None else feature_slice_idx}' if input_data is not None else f'Feature Activation Maps - Sample {sample_idx}, Slice {feature_slice_idx}'
     plt.suptitle(title, fontsize=14)
     plt.tight_layout()
     
@@ -599,6 +607,13 @@ def plot_feature_maps_3d_publication(feature_dict, sample_idx=0, slice_idx=None,
         for ax in (ax_row if hasattr(ax_row, '__iter__') else [ax_row]):
             ax.set_aspect('equal')
     
+    # Calculate input slice index once, independent of feature map dimensions
+    if input_data is not None:
+        if slice_idx is None:
+            input_slice_idx = input_data.shape[2] // 2  # Middle slice of input data
+        else:
+            input_slice_idx = min(slice_idx, input_data.shape[2] - 1)
+    
     for layer_idx, layer_name in enumerate(selected_layers):
         if layer_name not in feature_dict:
             continue
@@ -609,18 +624,19 @@ def plot_feature_maps_3d_publication(feature_dict, sample_idx=0, slice_idx=None,
             
         feature_map = features[sample_idx]  # Shape: (H, W, D, C)
         
+        # Calculate feature slice index based on feature map dimensions
         if slice_idx is None:
-            slice_idx_use = feature_map.shape[2] // 2  # Middle slice
+            feature_slice_idx = feature_map.shape[2] // 2  # Middle slice
         else:
-            slice_idx_use = min(slice_idx, feature_map.shape[2] - 1)
+            feature_slice_idx = min(slice_idx, feature_map.shape[2] - 1)
         
-        # First column: Input data for context (if provided)
+        # First column: Input data for context (if provided) - use consistent input slice
         col_offset = 0
         if input_data is not None:
             ax_input = axes[layer_idx, 0] if n_layers > 1 else axes[0]
             
-            # Show input data slice
-            input_slice = input_data[sample_idx, :, :, slice_idx_use, 0]  # First channel
+            # Show input data slice - use input_slice_idx consistently
+            input_slice = input_data[sample_idx, :, :, input_slice_idx, 0]  # First channel
             
             # Apply log scaling if requested for better dynamic range
             if log_scale_input:
@@ -647,8 +663,8 @@ def plot_feature_maps_3d_publication(feature_dict, sample_idx=0, slice_idx=None,
             # NO colorbar for publication version
             col_offset = 1
         
-        # Remaining columns: Feature maps
-        feature_slice = feature_map[:, :, slice_idx_use, :]  # Shape: (H, W, C)
+        # Remaining columns: Feature maps - use feature_slice_idx for features
+        feature_slice = feature_map[:, :, feature_slice_idx, :]  # Shape: (H, W, C)
         
         # Select 7 most diverse filters for publication
         if feature_slice.shape[-1] >= n_filters_pub:
@@ -747,6 +763,13 @@ def plot_feature_maps_3d_publication_portrait(feature_dict, sample_idx=0, slice_
         for ax in (ax_row if hasattr(ax_row, '__iter__') else [ax_row]):
             ax.set_aspect('equal')
     
+    # Calculate input slice index once, independent of feature map dimensions
+    if input_data is not None:
+        if slice_idx is None:
+            input_slice_idx = input_data.shape[2] // 2  # Middle slice of input data
+        else:
+            input_slice_idx = min(slice_idx, input_data.shape[2] - 1)
+    
     for layer_idx, layer_name in enumerate(selected_layers):
         if layer_name not in feature_dict:
             continue
@@ -757,18 +780,19 @@ def plot_feature_maps_3d_publication_portrait(feature_dict, sample_idx=0, slice_
             
         feature_map = features[sample_idx]  # Shape: (H, W, D, C)
         
+        # Calculate feature slice index based on feature map dimensions
         if slice_idx is None:
-            slice_idx_use = feature_map.shape[2] // 2  # Middle slice
+            feature_slice_idx = feature_map.shape[2] // 2  # Middle slice
         else:
-            slice_idx_use = min(slice_idx, feature_map.shape[2] - 1)
+            feature_slice_idx = min(slice_idx, feature_map.shape[2] - 1)
         
-        # First column: Input data for context (if provided)
+        # First column: Input data for context (if provided) - use consistent input slice
         col_offset = 0
         if input_data is not None:
             ax_input = axes[layer_idx, 0] if n_layers > 1 else axes[0]
             
-            # Show input data slice
-            input_slice = input_data[sample_idx, :, :, slice_idx_use, 0]  # First channel
+            # Show input data slice - use input_slice_idx consistently
+            input_slice = input_data[sample_idx, :, :, input_slice_idx, 0]  # First channel
             
             # Apply log scaling if requested for better dynamic range
             if log_scale_input:
@@ -795,8 +819,8 @@ def plot_feature_maps_3d_publication_portrait(feature_dict, sample_idx=0, slice_
             # NO colorbar for publication version
             col_offset = 1
         
-        # Remaining columns: Feature maps
-        feature_slice = feature_map[:, :, slice_idx_use, :]  # Shape: (H, W, C)
+        # Remaining columns: Feature maps - use feature_slice_idx for features
+        feature_slice = feature_map[:, :, feature_slice_idx, :]  # Shape: (H, W, C)
         
         # Select 5 most diverse filters for publication portrait
         if feature_slice.shape[-1] >= n_filters_pub:
