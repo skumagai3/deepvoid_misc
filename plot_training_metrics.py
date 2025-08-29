@@ -124,41 +124,13 @@ os.makedirs(FIG_PATH, exist_ok=True)
 def setup_publication_style():
     """Set up publication-ready matplotlib styling."""
     if STYLE == 'publication':
-        # Custom publication style
-        plt.rcParams.update({
-            'figure.facecolor': 'white',
-            'axes.facecolor': 'white',
-            'savefig.facecolor': 'white',
-            'figure.edgecolor': 'none',
-            'font.size': 12,
-            'axes.labelsize': 14,
-            'axes.titlesize': 16,
-            'xtick.labelsize': 11,
-            'ytick.labelsize': 11,
-            'legend.fontsize': 12,
-            'figure.titlesize': 18,
-            'font.family': 'serif',
-            'font.serif': ['Times New Roman', 'DejaVu Serif', 'serif'],
-            'mathtext.fontset': 'dejavuserif',
-            'axes.linewidth': 1.2,
-            'grid.linewidth': 0.8,
-            'lines.linewidth': 2.0,
-            'lines.markersize': 6,
-            'xtick.major.width': 1.2,
-            'ytick.major.width': 1.2,
-            'xtick.minor.width': 0.8,
-            'ytick.minor.width': 0.8,
-            'axes.grid': True,
-            'grid.alpha': 0.3,
-            'axes.axisbelow': True,
-            'legend.frameon': True,
-            'legend.fancybox': True,
-            'legend.shadow': False,
-            'legend.framealpha': 0.9,
-            'savefig.dpi': DPI,
-            'savefig.bbox': 'tight',
-            'savefig.pad_inches': 0.1
-        })
+        # Set global font sizes
+        plt.rc('font', size=12)          # Default text size
+        plt.rc('axes', titlesize=16)     # Title font size
+        plt.rc('axes', labelsize=14)     # Axis label font size
+        plt.rc('xtick', labelsize=12)    # X-tick label font size
+        plt.rc('ytick', labelsize=12)    # Y-tick label font size
+        plt.rc('legend', fontsize=12)    # Legend font size
     else:
         plt.style.use(STYLE)
     
@@ -346,7 +318,7 @@ def parse_log_file(log_files):
             # Parse epoch metrics - separate patterns for training and validation
             # Training metrics pattern
             train_pattern = r'(\d+)/\d+.*?loss:\s*([\d.]+).*?accuracy:\s*([\d.]+).*?f1_micro:\s*([\d.]+).*?mcc:\s*([\d.-]+e?-?\d*).*?void_f1:\s*([\d.]+)'
-            # Validation metrics pattern  
+            # Validation metrics pattern (more flexible)
             val_pattern = r'val_loss:\s*([\d.]+).*?val_accuracy:\s*([\d.]+).*?val_f1_micro:\s*([\d.]+).*?val_mcc:\s*([\d.-]+e?-?\d*).*?val_void_f1:\s*([\d.]+)'
             
             stage_pattern = r'Starting training for interparticle separation L=([\d.]+) Mpc/h \(stage (\d+)/\d+\)'
@@ -387,9 +359,13 @@ def parse_log_file(log_files):
                     
                     # Look for validation metrics in the same line or nearby lines
                     val_match = re.search(val_pattern, line)
-                    if not val_match and line_num < len(lines) - 1:
-                        # Check next line for validation metrics
-                        val_match = re.search(val_pattern, lines[line_num + 1])
+                    if not val_match:
+                        # Check next few lines for validation metrics
+                        for next_offset in range(1, min(5, len(lines) - line_num)):
+                            next_line = lines[line_num + next_offset]
+                            val_match = re.search(val_pattern, next_line)
+                            if val_match:
+                                break
                     
                     if val_match:
                         current_train_metrics.update({
@@ -403,7 +379,8 @@ def parse_log_file(log_files):
                     all_metrics_data.append(current_train_metrics)
                     
                     if global_epoch <= 5:  # Debug first few epochs
-                        print(f'Epoch {global_epoch}: loss={current_train_metrics["loss"]:.4f}, void_f1={current_train_metrics["void_f1"]:.4f}, mcc={current_train_metrics["mcc"]:.4f}')
+                        val_status = "with validation" if val_match else "no validation"
+                        print(f'Epoch {global_epoch}: loss={current_train_metrics["loss"]:.4f}, void_f1={current_train_metrics["void_f1"]:.4f}, mcc={current_train_metrics["mcc"]:.4f} ({val_status})')
                 
                 # Check for validation metrics on separate lines
                 elif current_train_metrics and re.search(val_pattern, line):
