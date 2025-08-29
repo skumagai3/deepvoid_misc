@@ -98,6 +98,8 @@ optional.add_argument('--SAVE_ALL', action='store_true',
                       help='Save all analysis plots (feature maps, attention, evolution, etc.).')
 optional.add_argument('--SLICE_IDX', type=int, default=None,
                       help='Specific Z-slice index to analyze (None = middle slice).')
+optional.add_argument('--LOG_SCALE_INPUT', action='store_true',
+                      help='Apply log scaling to input data for better dynamic range visualization.')
 optional.add_argument('--DPI', type=int, default=300,
                       help='DPI for saved figures. Default is 300.')
 
@@ -129,11 +131,13 @@ RSD_PRESERVING_ROTATIONS = args.RSD_PRESERVING_ROTATIONS
 EXTRA_AUGMENTATION = args.EXTRA_AUGMENTATION
 SAVE_ALL = args.SAVE_ALL
 SLICE_IDX = args.SLICE_IDX
+LOG_SCALE_INPUT = args.LOG_SCALE_INPUT
 DPI = args.DPI
 
 print(f'Analysis parameters: MODEL={MODEL_NAME}, L={L_ANALYSIS}, SAMPLES={MAX_SAMPLES}')
 print(f'Extra inputs: {EXTRA_INPUTS}, RSD: {ADD_RSD}, Preprocessing: {PREPROCESSING}')
 print(f'Data loading: Overlapping={USE_OVERLAPPING_SUBCUBES}, RSD-preserving={RSD_PRESERVING_ROTATIONS}, Extra-aug={EXTRA_AUGMENTATION}')
+print(f'Visualization: Log-scale input={LOG_SCALE_INPUT}, DPI={DPI}')
 
 #================================================================
 # Auto-detect model parameters from model name
@@ -554,7 +558,7 @@ def plot_feature_maps_3d(feature_dict, sample_idx=0, slice_idx=None, max_filters
     return fig
 
 def plot_feature_maps_3d_publication(feature_dict, sample_idx=0, slice_idx=None, 
-                                    save_path=None, void_regions=None, input_data=None):
+                                    save_path=None, void_regions=None, input_data=None, log_scale_input=True):
     """
     Create publication-quality feature activation maps with clean formatting.
     - Shows only 7 filters per layer
@@ -562,6 +566,7 @@ def plot_feature_maps_3d_publication(feature_dict, sample_idx=0, slice_idx=None,
     - No filter numbers or input data subtitles
     - Uniform square sizes
     - Fewer layers for clarity
+    - Optional log scaling for input data for better dynamic range visualization
     """
     print(f'Creating publication-quality feature maps plot for sample {sample_idx}...')
     
@@ -616,7 +621,19 @@ def plot_feature_maps_3d_publication(feature_dict, sample_idx=0, slice_idx=None,
             
             # Show input data slice
             input_slice = input_data[sample_idx, :, :, slice_idx_use, 0]  # First channel
-            im_input = ax_input.imshow(input_slice, cmap='viridis', aspect='equal')
+            
+            # Apply log scaling if requested for better dynamic range
+            if log_scale_input:
+                # Add small epsilon to avoid log(0) and handle negative values
+                input_slice_processed = np.log10(np.abs(input_slice) + 1e-10)
+                # Preserve sign for negative values
+                input_slice_processed = np.sign(input_slice) * input_slice_processed
+                cmap_input = 'RdBu_r'  # Better colormap for log-scaled data
+            else:
+                input_slice_processed = input_slice
+                cmap_input = 'viridis'
+            
+            im_input = ax_input.imshow(input_slice_processed, cmap=cmap_input, aspect='equal')
             
             if layer_idx == 0:
                 ax_input.set_title('Input', fontsize=12, weight='bold')
@@ -689,7 +706,7 @@ def plot_feature_maps_3d_publication(feature_dict, sample_idx=0, slice_idx=None,
     return fig
 
 def plot_feature_maps_3d_publication_portrait(feature_dict, sample_idx=0, slice_idx=None, 
-                                             save_path=None, void_regions=None, input_data=None):
+                                             save_path=None, void_regions=None, input_data=None, log_scale_input=True):
     """
     Create publication-quality feature activation maps in portrait orientation.
     - Shows only 5 filters per layer in a vertical layout
@@ -697,6 +714,7 @@ def plot_feature_maps_3d_publication_portrait(feature_dict, sample_idx=0, slice_
     - No colorbars for cleaner appearance
     - No filter numbers or input data subtitles
     - Uniform square sizes
+    - Optional log scaling for input data for better dynamic range visualization
     """
     print(f'Creating publication-quality portrait feature maps plot for sample {sample_idx}...')
     
@@ -751,7 +769,19 @@ def plot_feature_maps_3d_publication_portrait(feature_dict, sample_idx=0, slice_
             
             # Show input data slice
             input_slice = input_data[sample_idx, :, :, slice_idx_use, 0]  # First channel
-            im_input = ax_input.imshow(input_slice, cmap='viridis', aspect='equal')
+            
+            # Apply log scaling if requested for better dynamic range
+            if log_scale_input:
+                # Add small epsilon to avoid log(0) and handle negative values
+                input_slice_processed = np.log10(np.abs(input_slice) + 1e-10)
+                # Preserve sign for negative values
+                input_slice_processed = np.sign(input_slice) * input_slice_processed
+                cmap_input = 'RdBu_r'  # Better colormap for log-scaled data
+            else:
+                input_slice_processed = input_slice
+                cmap_input = 'viridis'
+            
+            im_input = ax_input.imshow(input_slice_processed, cmap=cmap_input, aspect='equal')
             
             if layer_idx == 0:
                 ax_input.set_title('Input', fontsize=10, weight='bold')
@@ -1667,28 +1697,87 @@ def load_analysis_data(inter_sep, max_samples=MAX_SAMPLES):
 #================================================================
 def load_model_for_analysis():
     """
-    Load the trained model for analysis.
+    Load the trained model for analysis, prioritizing the stage corresponding to L_ANALYSIS.
+    
+    For curricular training, models are saved at different stages corresponding to 
+    different interparticle separations (L values). This function attempts to load
+    the model stage that matches the L_ANALYSIS value for accurate interpretability.
     """
     print(f'Loading model: {MODEL_NAME}')
+    print(f'Target interparticle separation: L={L_ANALYSIS} Mpc/h')
     
-    # Try different model file formats
-    model_paths = [
-        MODEL_PATH + MODEL_NAME + f'_L{L_ANALYSIS}.keras',
-        MODEL_PATH + MODEL_NAME + f'_L{L_ANALYSIS}.h5',
+    # Create prioritized list of model paths
+    # 1. First priority: Model saved for the specific L_ANALYSIS value
+    # 2. Second priority: General model file (might be final stage)
+    model_paths = []
+    
+    # Handle special case for L=0.33 which might be saved as L0.33 or L0_33
+    if L_ANALYSIS == '0.33':
+        model_paths.extend([
+            MODEL_PATH + MODEL_NAME + f'_L{L_ANALYSIS}.keras',
+            MODEL_PATH + MODEL_NAME + f'_L{L_ANALYSIS}.h5',
+            MODEL_PATH + MODEL_NAME + '_L0.33.keras',
+            MODEL_PATH + MODEL_NAME + '_L0.33.h5',
+            MODEL_PATH + MODEL_NAME + '_L0_33.keras',
+            MODEL_PATH + MODEL_NAME + '_L0_33.h5',
+        ])
+    else:
+        model_paths.extend([
+            MODEL_PATH + MODEL_NAME + f'_L{L_ANALYSIS}.keras',
+            MODEL_PATH + MODEL_NAME + f'_L{L_ANALYSIS}.h5',
+        ])
+    
+    # Add fallback paths (general model files)
+    model_paths.extend([
         MODEL_PATH + MODEL_NAME + '.keras',
         MODEL_PATH + MODEL_NAME + '.h5'
-    ]
+    ])
     
-    for model_path in model_paths:
+    # Try to load models in order of priority
+    for i, model_path in enumerate(model_paths):
         if os.path.exists(model_path):
-            print(f'Attempting to load model from {model_path}...')
+            print(f'Found model file: {model_path}')
+            
+            # Determine what stage this represents
+            if f'_L{L_ANALYSIS}' in model_path:
+                stage_info = f"Stage L={L_ANALYSIS} Mpc/h (EXACT MATCH)"
+            elif '_L0.33' in model_path or '_L0_33' in model_path:
+                stage_info = f"Stage L=0.33 Mpc/h (EXACT MATCH for L=0.33)"
+            elif any(f'_L{l}' in model_path for l in ['3', '5', '7', '10']):
+                # Extract the L value from the filename
+                import re
+                l_match = re.search(r'_L(\d+(?:\.\d+)?)', model_path)
+                if l_match:
+                    stage_info = f"Stage L={l_match.group(1)} Mpc/h (different from target L={L_ANALYSIS})"
+                else:
+                    stage_info = "Unknown stage"
+            else:
+                stage_info = f"General model (possibly final stage or L={L_ANALYSIS})"
+            
+            print(f'Attempting to load: {stage_info}')
+            
             try:
                 model = tf.keras.models.load_model(model_path, custom_objects=CUSTOM_OBJECTS, compile=False)
-                print(f'Successfully loaded model from {model_path}')
+                print(f'✓ Successfully loaded model from {model_path}')
+                print(f'✓ Model stage: {stage_info}')
+                
+                # Warn if not exact match
+                if f'_L{L_ANALYSIS}' not in model_path and not (L_ANALYSIS == '0.33' and ('_L0.33' in model_path or '_L0_33' in model_path)):
+                    print(f'⚠️  WARNING: Using model stage that may not match L_ANALYSIS={L_ANALYSIS}')
+                    print(f'⚠️  For best results, ensure model was saved for L={L_ANALYSIS} stage')
+                
                 return model
+                
             except Exception as e:
-                print(f'Failed to load model from {model_path}: {e}')
+                print(f'✗ Failed to load model from {model_path}: {e}')
                 continue
+    
+    # If we get here, no model was found
+    print(f'\n❌ Could not find or load any model for {MODEL_NAME}')
+    print('Searched for the following files:')
+    for path in model_paths:
+        exists = "✓" if os.path.exists(path) else "✗"
+        print(f'  {exists} {path}')
     
     raise FileNotFoundError(f'Could not find or load model: {MODEL_NAME}')
 
@@ -2012,6 +2101,7 @@ def run_interpretability_analysis():
             slice_idx=slice_idx_use,
             void_regions=void_mask[:, :, slice_idx_use],
             input_data=features,  # Pass input data for context
+            log_scale_input=LOG_SCALE_INPUT,  # Use CLI argument for log scaling
             save_path=os.path.join(ANALYSIS_PATH, f'feature_activation_maps_publication_L{L_ANALYSIS}.png')
         )
         plt.close(fig1_pub)
@@ -2024,6 +2114,7 @@ def run_interpretability_analysis():
             slice_idx=slice_idx_use,
             void_regions=void_mask[:, :, slice_idx_use],
             input_data=features,  # Pass input data for context
+            log_scale_input=LOG_SCALE_INPUT,  # Use CLI argument for log scaling
             save_path=os.path.join(ANALYSIS_PATH, f'feature_activation_maps_publication_portrait_L{L_ANALYSIS}.png')
         )
         plt.close(fig1_portrait)
