@@ -196,17 +196,23 @@ def find_log_files(model_name, logs_path):
     for pattern in csv_patterns:
         log_files['csv'].extend(glob.glob(pattern))
     
-    # Search for log files - more comprehensive patterns
+    # Search for log files - focusing on stdout directory
     log_patterns = [
+        # Primary location: logs/stdout/
+        os.path.join(ROOT_DIR, 'logs', 'stdout', f'{model_name}*.log'),
+        os.path.join(ROOT_DIR, 'logs', 'stdout', f'*{model_name}*.log'),
+        os.path.join(ROOT_DIR, 'logs', 'stdout', f'*{model_name[-30:]}*.log'),  # Match end of model name
+        os.path.join(ROOT_DIR, 'logs', 'stdout', '*.log'),  # Any log in stdout directory
+        # Secondary locations (fallback)
         os.path.join(ROOT_DIR, f'{model_name}*.log'),
-        os.path.join(ROOT_DIR, f'*{model_name}*.log'),  # Model name anywhere in filename
-        os.path.join(ROOT_DIR, '_stage', f'*{model_name[-20:]}*.log'),  # Match end of model name
-        os.path.join(ROOT_DIR, '_stage', '*curr_out.log'),  # Generic curricular output logs
-        os.path.join(ROOT_DIR, '_stage', '*.log'),  # Any log file in _stage directory
+        os.path.join(ROOT_DIR, f'*{model_name}*.log'),
+        os.path.join(ROOT_DIR, '_stage', f'*{model_name[-20:]}*.log'),
+        os.path.join(ROOT_DIR, '_stage', '*curr_out.log'),
+        os.path.join(ROOT_DIR, '_stage', '*.log'),
         os.path.join(ROOT_DIR, 'logs', f'{model_name}*.log'),
         os.path.join(ROOT_DIR, 'logs', f'*{model_name}*.log'),
-        os.path.join(ROOT_DIR, '*.log'),  # Any log file in root directory
-        os.path.join(ROOT_DIR, '**', '*.log'),  # Recursive search for any log file
+        os.path.join(ROOT_DIR, '*.log'),
+        os.path.join(ROOT_DIR, '**', '*.log'),  # Recursive search
     ]
     
     print(f'Searching for log files with patterns:')
