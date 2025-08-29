@@ -475,14 +475,14 @@ def plot_metric_subplot(ax, df, metric, title, ylabel, include_val=False, smooth
     
     # Plot training metric
     ax.plot(df['epoch'], train_data, 
-           label=f'Training {metric.replace("_", " ").title()}', 
+           label='Training', 
            linewidth=2.5, alpha=0.9)
     
     # Plot validation metric if available and requested
     if include_val and f'val_{metric}' in df.columns:
         ax.plot(df['epoch'], val_data, 
-               label=f'Validation {metric.replace("_", " ").title()}', 
-               linewidth=2.5, alpha=0.9, linestyle='--')
+               label='Validation', 
+               linewidth=2.5, alpha=0.9)
     
     # Add stage boundaries for curricular training
     if SHOW_STAGES:
