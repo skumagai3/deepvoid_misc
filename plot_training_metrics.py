@@ -200,10 +200,15 @@ def find_log_files(model_name, logs_path):
     log_patterns = [
         os.path.join(ROOT_DIR, f'{model_name}*.log'),
         os.path.join(ROOT_DIR, '_stage', f'*{model_name[-20:]}*.log'),  # Match end of model name
-        os.path.join(ROOT_DIR, 'logs', f'{model_name}*.log')
+        os.path.join(ROOT_DIR, '_stage', '*curr_out.log'),  # Generic curricular output logs
+        os.path.join(ROOT_DIR, 'logs', f'{model_name}*.log'),
+        os.path.join(ROOT_DIR, '*.log')  # Any log file in root directory
     ]
     for pattern in log_patterns:
         log_files['logfile'].extend(glob.glob(pattern))
+    
+    # Remove duplicates
+    log_files['logfile'] = list(set(log_files['logfile']))
     
     return log_files
 
@@ -212,29 +217,46 @@ def parse_tensorboard_logs(event_files):
     print(f'Parsing {len(event_files)} TensorBoard event file(s)...')
     
     all_metrics = {}
+    files_with_data = 0
     
     for event_file in event_files:
         try:
-            ea = event_accumulator.EventAccumulator(event_file)
+            ea = event_accumulator.EventAccumulator(
+                event_file,
+                size_guidance={
+                    event_accumulator.COMPRESSED_HISTOGRAMS: 500,
+                    event_accumulator.IMAGES: 4,
+                    event_accumulator.AUDIO: 4,
+                    event_accumulator.SCALARS: 0,  # 0 means load all
+                    event_accumulator.HISTOGRAMS: 1,
+                }
+            )
             ea.Reload()
             
             # Get available scalar tags
-            scalar_tags = ea.Tags()['scalars']
-            print(f'Available metrics: {scalar_tags}')
-            
-            for tag in scalar_tags:
-                scalar_events = ea.Scalars(tag)
-                epochs = [event.step for event in scalar_events]
-                values = [event.value for event in scalar_events]
+            tags = ea.Tags()
+            if 'scalars' in tags and tags['scalars']:
+                scalar_tags = tags['scalars']
+                print(f'File {os.path.basename(event_file)}: {len(scalar_tags)} metrics found: {scalar_tags}')
+                files_with_data += 1
                 
-                if tag not in all_metrics:
-                    all_metrics[tag] = {'epoch': [], 'value': []}
-                
-                all_metrics[tag]['epoch'].extend(epochs)
-                all_metrics[tag]['value'].extend(values)
+                for tag in scalar_tags:
+                    scalar_events = ea.Scalars(tag)
+                    epochs = [event.step for event in scalar_events]
+                    values = [event.value for event in scalar_events]
+                    
+                    if tag not in all_metrics:
+                        all_metrics[tag] = {'epoch': [], 'value': []}
+                    
+                    all_metrics[tag]['epoch'].extend(epochs)
+                    all_metrics[tag]['value'].extend(values)
+            else:
+                print(f'File {os.path.basename(event_file)}: No scalar metrics found')
         
         except Exception as e:
             print(f'Error parsing {event_file}: {e}')
+    
+    print(f'Successfully parsed {files_with_data}/{len(event_files)} TensorBoard files')
     
     # Convert to DataFrame
     if all_metrics:
@@ -255,6 +277,8 @@ def parse_tensorboard_logs(event_files):
         
         print(f'Loaded TensorBoard data: {len(df)} epochs, {len(df.columns)-1} metrics')
         return df
+    else:
+        print('No metrics data found in TensorBoard files')
     
     return None
 
@@ -281,24 +305,26 @@ def parse_log_file(log_files):
     
     for log_file in log_files:
         try:
-            with open(log_file, 'r') as f:
+            print(f'Checking log file: {log_file}')
+            with open(log_file, 'r', encoding='utf-8', errors='ignore') as f:
                 content = f.read()
             
-            print(f'Parsing log file: {log_file}')
+            print(f'Parsing log file: {log_file} ({len(content)} characters)')
             
             # Parse curricular training stages and epochs
-            # Look for patterns like: "32/32 - 204s - 6s/step - accuracy: 0.5800 - f1_micro: 0.8548 - loss: 1.2559..."
-            epoch_pattern = r'(\d+)/\d+ - \d+s.*?accuracy:\s*([\d.]+).*?f1_micro:\s*([\d.]+).*?loss:\s*([\d.]+).*?mcc:\s*([\d.]+).*?void_f1:\s*([\d.]+)'
-            val_pattern = r'val_accuracy:\s*([\d.]+).*?val_f1_micro:\s*([\d.]+).*?val_loss:\s*([\d.]+).*?val_mcc:\s*([\d.]+).*?val_void_f1:\s*([\d.]+)'
+            # Note: In the log, void_f1 appears AFTER val_void_f1, so we need to handle this order
+            epoch_pattern = r'(\d+)/\d+.*?accuracy:\s*([\d.]+).*?f1_micro:\s*([\d.]+).*?loss:\s*([\d.]+).*?mcc:\s*([\d.-]+e?-?\d*).*?void_f1:\s*([\d.]+)'
+            val_pattern = r'val_accuracy:\s*([\d.]+).*?val_f1_micro:\s*([\d.]+).*?val_loss:\s*([\d.]+).*?val_mcc:\s*([\d.-]+e?-?\d*).*?val_void_f1:\s*([\d.]+)'
             stage_pattern = r'Starting training for interparticle separation L=([\d.]+) Mpc/h \(stage (\d+)/\d+\)'
             
             current_stage = 1
             current_stage_lambda = "0.33"
             global_epoch = 0
+            found_any_metrics = False
             
             lines = content.split('\n')
             
-            for line in lines:
+            for line_num, line in enumerate(lines):
                 # Check for stage transitions
                 stage_match = re.search(stage_pattern, line)
                 if stage_match:
@@ -313,6 +339,13 @@ def parse_log_file(log_files):
                 
                 if epoch_match:
                     global_epoch += 1
+                    found_any_metrics = True
+                    
+                    # Handle potential negative MCC values
+                    mcc_val = float(epoch_match.group(5))
+                    val_mcc_val = None
+                    if val_match:
+                        val_mcc_val = float(val_match.group(4))
                     
                     metrics = {
                         'epoch': global_epoch,
@@ -321,7 +354,7 @@ def parse_log_file(log_files):
                         'accuracy': float(epoch_match.group(2)),
                         'f1_micro': float(epoch_match.group(3)),
                         'loss': float(epoch_match.group(4)),
-                        'mcc': float(epoch_match.group(5)),
+                        'mcc': mcc_val,
                         'void_f1': float(epoch_match.group(6))
                     }
                     
@@ -331,21 +364,43 @@ def parse_log_file(log_files):
                             'val_accuracy': float(val_match.group(1)),
                             'val_f1_micro': float(val_match.group(2)),
                             'val_loss': float(val_match.group(3)),
-                            'val_mcc': float(val_match.group(4)),
+                            'val_mcc': val_mcc_val,
                             'val_void_f1': float(val_match.group(5))
                         })
                     
                     metrics_data.append(metrics)
+                    
+                    if global_epoch <= 5:  # Debug first few epochs
+                        print(f'Epoch {global_epoch}: loss={metrics["loss"]:.4f}, void_f1={metrics["void_f1"]:.4f}, mcc={metrics["mcc"]:.4f}')
             
-            if metrics_data:
-                df = pd.DataFrame(metrics_data)
-                print(f'Parsed {len(df)} epochs from log file')
-                print(f'Stages found: {sorted(df["stage"].unique())}')
-                print(f'Lambda values: {sorted(df["lambda"].unique())}')
-                return df
+            if found_any_metrics:
+                print(f'Successfully parsed {global_epoch} epochs from {log_file}')
+            else:
+                print(f'No training metrics found in {log_file}')
+                # Show a sample of lines for debugging
+                sample_lines = [line for line in lines[:50] if 'accuracy:' in line or 'loss:' in line]
+                if sample_lines:
+                    print(f'Sample lines with metrics (first 3):')
+                    for i, line in enumerate(sample_lines[:3]):
+                        print(f'  {i+1}: {line.strip()}')
                 
         except Exception as e:
             print(f'Error parsing {log_file}: {e}')
+            import traceback
+            traceback.print_exc()
+    
+    if metrics_data:
+        df = pd.DataFrame(metrics_data)
+        print(f'Final result: Parsed {len(df)} epochs from log files')
+        print(f'Stages found: {sorted(df["stage"].unique())}')
+        print(f'Lambda values: {sorted(df["lambda"].unique())}')
+        print(f'Metric ranges:')
+        for metric in ['loss', 'void_f1', 'mcc']:
+            if metric in df.columns:
+                print(f'  {metric}: {df[metric].min():.4f} - {df[metric].max():.4f}')
+        return df
+    else:
+        print('No metrics data found in any log files')
     
     return None
 
@@ -574,12 +629,15 @@ def main():
     if LOG_SOURCE == 'auto':
         # Try in order of preference: TensorBoard -> CSV -> Log file
         if log_files['tensorboard'] and TENSORBOARD_AVAILABLE:
+            print('Trying TensorBoard files first...')
             df = parse_tensorboard_logs(log_files['tensorboard'])
         
         if df is None and log_files['csv']:
+            print('TensorBoard failed, trying CSV files...')
             df = parse_csv_logs(log_files['csv'])
         
         if df is None and log_files['logfile']:
+            print('CSV failed, trying log files...')
             df = parse_log_file(log_files['logfile'])
     
     elif LOG_SOURCE == 'tensorboard':
