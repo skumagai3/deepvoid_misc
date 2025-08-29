@@ -196,33 +196,48 @@ def find_log_files(model_name, logs_path):
     for pattern in csv_patterns:
         log_files['csv'].extend(glob.glob(pattern))
     
-    # Search for log files - focusing on stdout directory
-    log_patterns = [
-        # Primary location: logs/stdout/
-        os.path.join(ROOT_DIR, 'logs', 'stdout', f'{model_name}*.log'),
-        os.path.join(ROOT_DIR, 'logs', 'stdout', f'*{model_name}*.log'),
-        os.path.join(ROOT_DIR, 'logs', 'stdout', f'*{model_name[-30:]}*.log'),  # Match end of model name
-        os.path.join(ROOT_DIR, 'logs', 'stdout', '*.log'),  # Any log in stdout directory
-        # Secondary locations (fallback)
-        os.path.join(ROOT_DIR, f'{model_name}*.log'),
-        os.path.join(ROOT_DIR, f'*{model_name}*.log'),
-        os.path.join(ROOT_DIR, '_stage', f'*{model_name[-20:]}*.log'),
-        os.path.join(ROOT_DIR, '_stage', '*curr_out.log'),
-        os.path.join(ROOT_DIR, '_stage', '*.log'),
-        os.path.join(ROOT_DIR, 'logs', f'{model_name}*.log'),
-        os.path.join(ROOT_DIR, 'logs', f'*{model_name}*.log'),
-        os.path.join(ROOT_DIR, '*.log'),
-        os.path.join(ROOT_DIR, '**', '*.log'),  # Recursive search
-    ]
+    # Extract datetime from model name and find exact matching log file
+    # Model name format: TNG_curricular_SCCE_Proportion_Aware_D4_F16_RSD_RSDrot_attention_g-r_2025-08-18_17-16-07
+    import re
+    datetime_match = re.search(r'(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})$', model_name)
     
-    print(f'Searching for log files with patterns:')
-    for pattern in log_patterns:
-        matches = glob.glob(pattern, recursive=True)
-        print(f'  {pattern}: {len(matches)} matches')
-        log_files['logfile'].extend(matches)
-        if matches:
-            for match in matches[:3]:  # Show first 3 matches
-                print(f'    - {match}')
+    if datetime_match:
+        date_part = datetime_match.group(1)  # 2025-08-18
+        hour = datetime_match.group(2)       # 17
+        minute = datetime_match.group(3)     # 16
+        # Convert to log file format: 2025-08-18_17:16_curr_out.log
+        log_datetime = f'{date_part}_{hour}:{minute}'
+        
+        target_log = os.path.join(ROOT_DIR, 'logs', 'stdout', f'{log_datetime}_curr_out.log')
+        
+        print(f'Looking for specific log file: {target_log}')
+        
+        if os.path.exists(target_log):
+            log_files['logfile'].append(target_log)
+            print(f'Found exact match: {target_log}')
+        else:
+            print(f'Exact match not found. Checking alternative patterns...')
+            # Fallback: check for any log with the same date and hour
+            fallback_patterns = [
+                os.path.join(ROOT_DIR, 'logs', 'stdout', f'{date_part}_{hour}:*_curr_out.log'),
+                os.path.join(ROOT_DIR, 'logs', 'stdout', f'{date_part}_*_curr_out.log'),
+            ]
+            for pattern in fallback_patterns:
+                matches = glob.glob(pattern)
+                if matches:
+                    print(f'Found fallback matches: {matches}')
+                    log_files['logfile'].extend(matches)
+                    break
+    else:
+        print(f'Could not extract datetime from model name: {model_name}')
+        # Fallback to broader search only if datetime extraction failed
+        log_patterns = [
+            os.path.join(ROOT_DIR, 'logs', 'stdout', f'{model_name}*.log'),
+            os.path.join(ROOT_DIR, 'logs', 'stdout', f'*{model_name}*.log'),
+        ]
+        for pattern in log_patterns:
+            matches = glob.glob(pattern)
+            log_files['logfile'].extend(matches)
     
     # Remove duplicates
     log_files['logfile'] = list(set(log_files['logfile']))
