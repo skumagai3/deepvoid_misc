@@ -201,6 +201,7 @@ def find_log_files(model_name, logs_path):
         os.path.join(ROOT_DIR, f'{model_name}*.log'),
         os.path.join(ROOT_DIR, '_stage', f'*{model_name[-20:]}*.log'),  # Match end of model name
         os.path.join(ROOT_DIR, '_stage', '*curr_out.log'),  # Generic curricular output logs
+        os.path.join(ROOT_DIR, '_stage', '*.log'),  # Any log file in _stage directory
         os.path.join(ROOT_DIR, 'logs', f'{model_name}*.log'),
         os.path.join(ROOT_DIR, '*.log')  # Any log file in root directory
     ]
@@ -628,16 +629,22 @@ def main():
     
     if LOG_SOURCE == 'auto':
         # Try in order of preference: TensorBoard -> CSV -> Log file
+        # But skip TensorBoard if no data found and go straight to log files
         if log_files['tensorboard'] and TENSORBOARD_AVAILABLE:
             print('Trying TensorBoard files first...')
             df = parse_tensorboard_logs(log_files['tensorboard'])
         
         if df is None and log_files['csv']:
-            print('TensorBoard failed, trying CSV files...')
+            print('TensorBoard failed or empty, trying CSV files...')
             df = parse_csv_logs(log_files['csv'])
         
         if df is None and log_files['logfile']:
-            print('CSV failed, trying log files...')
+            print('TensorBoard/CSV failed or empty, trying log files...')
+            df = parse_log_file(log_files['logfile'])
+        
+        # If TensorBoard was empty but we have log files, prioritize log files
+        if df is None and log_files['logfile']:
+            print('Forcing log file parsing since TensorBoard was empty...')
             df = parse_log_file(log_files['logfile'])
     
     elif LOG_SOURCE == 'tensorboard':
