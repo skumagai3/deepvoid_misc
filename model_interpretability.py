@@ -482,6 +482,7 @@ def plot_feature_maps_3d(feature_dict, sample_idx=0, slice_idx=None, max_filters
             input_slice_idx = input_data.shape[2] // 2  # Middle slice of input data
         else:
             input_slice_idx = min(slice_idx, input_data.shape[2] - 1)
+        print(f'DEBUG: plot_feature_maps_3d - Input data shape: {input_data.shape}, input_slice_idx: {input_slice_idx}, sample_idx: {sample_idx}')
     
     for layer_idx, layer_name in enumerate(selected_layers):
         if layer_name not in feature_dict:
@@ -506,6 +507,7 @@ def plot_feature_maps_3d(feature_dict, sample_idx=0, slice_idx=None, max_filters
             
             # Show input data slice - use input_slice_idx consistently
             input_slice = input_data[sample_idx, :, :, input_slice_idx, 0]  # First channel
+            print(f'DEBUG: Layer {layer_idx} ({layer_name}) - input_slice shape: {input_slice.shape}, min: {input_slice.min():.3f}, max: {input_slice.max():.3f}, mean: {input_slice.mean():.3f}')
             im_input = ax_input.imshow(input_slice, cmap='viridis', aspect='equal')
             
             if layer_idx == 0:
