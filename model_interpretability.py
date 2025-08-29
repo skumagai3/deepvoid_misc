@@ -483,6 +483,15 @@ def plot_feature_maps_3d(feature_dict, sample_idx=0, slice_idx=None, max_filters
         else:
             input_slice_idx = min(slice_idx, input_data.shape[2] - 1)
         print(f'DEBUG: plot_feature_maps_3d - Input data shape: {input_data.shape}, input_slice_idx: {input_slice_idx}, sample_idx: {sample_idx}')
+        
+        # Calculate consistent color scale for all input visualizations
+        input_slice_data = input_data[sample_idx, :, :, input_slice_idx, 0]  # First channel (density)
+        if LOG_SCALE_INPUT:
+            input_slice_viz = np.log10(input_slice_data + 1e-10)
+        else:
+            input_slice_viz = input_slice_data
+        input_vmin, input_vmax = input_slice_viz.min(), input_slice_viz.max()
+        print(f'DEBUG: Input color scale - vmin: {input_vmin:.3f}, vmax: {input_vmax:.3f}')
     
     for layer_idx, layer_name in enumerate(selected_layers):
         if layer_name not in feature_dict:
@@ -508,7 +517,14 @@ def plot_feature_maps_3d(feature_dict, sample_idx=0, slice_idx=None, max_filters
             # Show input data slice - use input_slice_idx consistently
             input_slice = input_data[sample_idx, :, :, input_slice_idx, 0]  # First channel
             print(f'DEBUG: Layer {layer_idx} ({layer_name}) - input_slice shape: {input_slice.shape}, min: {input_slice.min():.3f}, max: {input_slice.max():.3f}, mean: {input_slice.mean():.3f}')
-            im_input = ax_input.imshow(input_slice, cmap='viridis', aspect='equal')
+            
+            # Apply consistent visualization with fixed color scale
+            if LOG_SCALE_INPUT:
+                input_slice_viz = np.log10(input_slice + 1e-10)
+            else:
+                input_slice_viz = input_slice
+            
+            im_input = ax_input.imshow(input_slice_viz, cmap='viridis', aspect='equal', vmin=input_vmin, vmax=input_vmax)
             
             if layer_idx == 0:
                 ax_input.set_title('Input Data\n(Context)', fontsize=10, weight='bold')
@@ -615,6 +631,15 @@ def plot_feature_maps_3d_publication(feature_dict, sample_idx=0, slice_idx=None,
             input_slice_idx = input_data.shape[2] // 2  # Middle slice of input data
         else:
             input_slice_idx = min(slice_idx, input_data.shape[2] - 1)
+        
+        # Calculate consistent color scale for all input visualizations in publication
+        input_slice_data = input_data[sample_idx, :, :, input_slice_idx, 0]  # First channel (density)
+        if log_scale_input:
+            input_slice_processed_ref = np.log10(np.abs(input_slice_data) + 1e-10)
+            input_slice_processed_ref = np.sign(input_slice_data) * input_slice_processed_ref
+        else:
+            input_slice_processed_ref = input_slice_data
+        input_vmin_pub, input_vmax_pub = input_slice_processed_ref.min(), input_slice_processed_ref.max()
     
     for layer_idx, layer_name in enumerate(selected_layers):
         if layer_name not in feature_dict:
@@ -651,7 +676,8 @@ def plot_feature_maps_3d_publication(feature_dict, sample_idx=0, slice_idx=None,
                 input_slice_processed = input_slice
                 cmap_input = 'viridis'
             
-            im_input = ax_input.imshow(input_slice_processed, cmap=cmap_input, aspect='equal')
+            im_input = ax_input.imshow(input_slice_processed, cmap=cmap_input, aspect='equal', 
+                                     vmin=input_vmin_pub, vmax=input_vmax_pub)
             
             if layer_idx == 0:
                 ax_input.set_title('Input', fontsize=12, weight='bold')
@@ -771,6 +797,15 @@ def plot_feature_maps_3d_publication_portrait(feature_dict, sample_idx=0, slice_
             input_slice_idx = input_data.shape[2] // 2  # Middle slice of input data
         else:
             input_slice_idx = min(slice_idx, input_data.shape[2] - 1)
+        
+        # Calculate consistent color scale for all input visualizations in portrait
+        input_slice_data = input_data[sample_idx, :, :, input_slice_idx, 0]  # First channel (density)
+        if log_scale_input:
+            input_slice_processed_ref = np.log10(np.abs(input_slice_data) + 1e-10)
+            input_slice_processed_ref = np.sign(input_slice_data) * input_slice_processed_ref
+        else:
+            input_slice_processed_ref = input_slice_data
+        input_vmin_portrait, input_vmax_portrait = input_slice_processed_ref.min(), input_slice_processed_ref.max()
     
     for layer_idx, layer_name in enumerate(selected_layers):
         if layer_name not in feature_dict:
@@ -807,7 +842,8 @@ def plot_feature_maps_3d_publication_portrait(feature_dict, sample_idx=0, slice_
                 input_slice_processed = input_slice
                 cmap_input = 'viridis'
             
-            im_input = ax_input.imshow(input_slice_processed, cmap=cmap_input, aspect='equal')
+            im_input = ax_input.imshow(input_slice_processed, cmap=cmap_input, aspect='equal',
+                                     vmin=input_vmin_portrait, vmax=input_vmax_portrait)
             
             if layer_idx == 0:
                 ax_input.set_title('Input', fontsize=10, weight='bold')
