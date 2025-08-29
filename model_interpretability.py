@@ -100,6 +100,8 @@ optional.add_argument('--SLICE_IDX', type=int, default=None,
                       help='Specific Z-slice index to analyze (None = middle slice).')
 optional.add_argument('--LOG_SCALE_INPUT', action='store_true',
                       help='Apply log scaling to input data for better dynamic range visualization.')
+optional.add_argument('--POWER_SCALE_INPUT', action='store_true',
+                      help='Apply power scaling (input**0.2) to input data for better visualization of mass density contrast fields.')
 optional.add_argument('--DPI', type=int, default=300,
                       help='DPI for saved figures. Default is 300.')
 
@@ -117,6 +119,14 @@ if args.PREPROCESSING is None:
     print("\nThis is critical for meaningful results - preprocessing must match training exactly!")
     sys.exit(1)
 
+# Validate scaling options
+if args.LOG_SCALE_INPUT and args.POWER_SCALE_INPUT:
+    print("ERROR: Cannot use both --LOG_SCALE_INPUT and --POWER_SCALE_INPUT at the same time!")
+    print("Choose one scaling method for input visualization:")
+    print("  --LOG_SCALE_INPUT     # Log scaling: log10(input + epsilon)")
+    print("  --POWER_SCALE_INPUT   # Power scaling: input**0.2")
+    sys.exit(1)
+
 ROOT_DIR = args.ROOT_DIR
 MODEL_NAME = args.MODEL_NAME
 L_ANALYSIS = args.L_ANALYSIS
@@ -132,12 +142,13 @@ EXTRA_AUGMENTATION = args.EXTRA_AUGMENTATION
 SAVE_ALL = args.SAVE_ALL
 SLICE_IDX = args.SLICE_IDX
 LOG_SCALE_INPUT = args.LOG_SCALE_INPUT
+POWER_SCALE_INPUT = args.POWER_SCALE_INPUT
 DPI = args.DPI
 
 print(f'Analysis parameters: MODEL={MODEL_NAME}, L={L_ANALYSIS}, SAMPLES={MAX_SAMPLES}')
 print(f'Extra inputs: {EXTRA_INPUTS}, RSD: {ADD_RSD}, Preprocessing: {PREPROCESSING}')
 print(f'Data loading: Overlapping={USE_OVERLAPPING_SUBCUBES}, RSD-preserving={RSD_PRESERVING_ROTATIONS}, Extra-aug={EXTRA_AUGMENTATION}')
-print(f'Visualization: Log-scale input={LOG_SCALE_INPUT}, DPI={DPI}')
+print(f'Visualization: Log-scale input={LOG_SCALE_INPUT}, Power-scale input={POWER_SCALE_INPUT}, DPI={DPI}')
 
 #================================================================
 # Auto-detect model parameters from model name
@@ -488,6 +499,9 @@ def plot_feature_maps_3d(feature_dict, sample_idx=0, slice_idx=None, max_filters
         input_slice_data = input_data[sample_idx, :, :, input_slice_idx, 0]  # First channel (density)
         if LOG_SCALE_INPUT:
             input_slice_viz = np.log10(input_slice_data + 1e-10)
+        elif POWER_SCALE_INPUT:
+            # Apply power scaling for better visualization of mass density contrast fields
+            input_slice_viz = np.sign(input_slice_data) * np.abs(input_slice_data) ** 0.2
         else:
             input_slice_viz = input_slice_data
         input_vmin, input_vmax = input_slice_viz.min(), input_slice_viz.max()
@@ -521,6 +535,8 @@ def plot_feature_maps_3d(feature_dict, sample_idx=0, slice_idx=None, max_filters
             # Apply consistent visualization with fixed color scale
             if LOG_SCALE_INPUT:
                 input_slice_viz = np.log10(input_slice + 1e-10)
+            elif POWER_SCALE_INPUT:
+                input_slice_viz = np.sign(input_slice) * np.abs(input_slice) ** 0.2
             else:
                 input_slice_viz = input_slice
             
@@ -635,8 +651,9 @@ def plot_feature_maps_3d_publication(feature_dict, sample_idx=0, slice_idx=None,
         # Calculate consistent color scale for all input visualizations in publication
         input_slice_data = input_data[sample_idx, :, :, input_slice_idx, 0]  # First channel (density)
         if log_scale_input:
-            input_slice_processed_ref = np.log10(np.abs(input_slice_data) + 1e-10)
-            input_slice_processed_ref = np.sign(input_slice_data) * input_slice_processed_ref
+            input_slice_processed_ref = np.log10(input_slice_data + 1e-10)
+        elif POWER_SCALE_INPUT:
+            input_slice_processed_ref = np.sign(input_slice_data) * np.abs(input_slice_data) ** 0.2
         else:
             input_slice_processed_ref = input_slice_data
         input_vmin_pub, input_vmax_pub = input_slice_processed_ref.min(), input_slice_processed_ref.max()
@@ -665,16 +682,16 @@ def plot_feature_maps_3d_publication(feature_dict, sample_idx=0, slice_idx=None,
             # Show input data slice - use input_slice_idx consistently
             input_slice = input_data[sample_idx, :, :, input_slice_idx, 0]  # First channel
             
-            # Apply log scaling if requested for better dynamic range
+            # Apply scaling if requested for better dynamic range
             if log_scale_input:
-                # Add small epsilon to avoid log(0) and handle negative values
-                input_slice_processed = np.log10(np.abs(input_slice) + 1e-10)
-                # Preserve sign for negative values
-                input_slice_processed = np.sign(input_slice) * input_slice_processed
-                cmap_input = 'RdBu_r'  # Better colormap for log-scaled data
+                # Add small epsilon to avoid log(0)
+                input_slice_processed = np.log10(input_slice + 1e-10)
+            elif POWER_SCALE_INPUT:
+                # Apply power scaling for mass density contrast fields
+                input_slice_processed = np.sign(input_slice) * np.abs(input_slice) ** 0.2
             else:
                 input_slice_processed = input_slice
-                cmap_input = 'viridis'
+            cmap_input = 'viridis'  # Use viridis for consistent, clean visualization
             
             im_input = ax_input.imshow(input_slice_processed, cmap=cmap_input, aspect='equal', 
                                      vmin=input_vmin_pub, vmax=input_vmax_pub)
@@ -801,8 +818,9 @@ def plot_feature_maps_3d_publication_portrait(feature_dict, sample_idx=0, slice_
         # Calculate consistent color scale for all input visualizations in portrait
         input_slice_data = input_data[sample_idx, :, :, input_slice_idx, 0]  # First channel (density)
         if log_scale_input:
-            input_slice_processed_ref = np.log10(np.abs(input_slice_data) + 1e-10)
-            input_slice_processed_ref = np.sign(input_slice_data) * input_slice_processed_ref
+            input_slice_processed_ref = np.log10(input_slice_data + 1e-10)
+        elif POWER_SCALE_INPUT:
+            input_slice_processed_ref = np.sign(input_slice_data) * np.abs(input_slice_data) ** 0.2
         else:
             input_slice_processed_ref = input_slice_data
         input_vmin_portrait, input_vmax_portrait = input_slice_processed_ref.min(), input_slice_processed_ref.max()
@@ -831,16 +849,16 @@ def plot_feature_maps_3d_publication_portrait(feature_dict, sample_idx=0, slice_
             # Show input data slice - use input_slice_idx consistently
             input_slice = input_data[sample_idx, :, :, input_slice_idx, 0]  # First channel
             
-            # Apply log scaling if requested for better dynamic range
+            # Apply scaling if requested for better dynamic range
             if log_scale_input:
-                # Add small epsilon to avoid log(0) and handle negative values
-                input_slice_processed = np.log10(np.abs(input_slice) + 1e-10)
-                # Preserve sign for negative values
-                input_slice_processed = np.sign(input_slice) * input_slice_processed
-                cmap_input = 'RdBu_r'  # Better colormap for log-scaled data
+                # Add small epsilon to avoid log(0)
+                input_slice_processed = np.log10(input_slice + 1e-10)
+            elif POWER_SCALE_INPUT:
+                # Apply power scaling for mass density contrast fields
+                input_slice_processed = np.sign(input_slice) * np.abs(input_slice) ** 0.2
             else:
                 input_slice_processed = input_slice
-                cmap_input = 'viridis'
+            cmap_input = 'viridis'  # Use viridis for consistent, clean visualization
             
             im_input = ax_input.imshow(input_slice_processed, cmap=cmap_input, aspect='equal',
                                      vmin=input_vmin_portrait, vmax=input_vmax_portrait)
