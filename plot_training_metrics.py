@@ -330,11 +330,11 @@ def parse_log_file(log_files):
             
             print(f'Parsing log file: {log_file} ({len(content)} characters)')
             
-            # Parse epoch metrics - separate patterns for training and validation
-            # Training metrics pattern
-            train_pattern = r'(\d+)/\d+.*?loss:\s*([\d.]+).*?accuracy:\s*([\d.]+).*?f1_micro:\s*([\d.]+).*?mcc:\s*([\d.-]+e?-?\d*).*?void_f1:\s*([\d.]+)'
-            # Validation metrics pattern (more flexible)
-            val_pattern = r'val_loss:\s*([\d.]+).*?val_accuracy:\s*([\d.]+).*?val_f1_micro:\s*([\d.]+).*?val_mcc:\s*([\d.-]+e?-?\d*).*?val_void_f1:\s*([\d.]+)'
+            # Parse epoch metrics - this format has both training and validation on same line
+            # Example: "32/32 - 204s - 6s/step - accuracy: 0.5800 - f1_micro: 0.8548 - loss: 1.2559 - mcc: 0.3139 - val_accuracy: 0.4596 - val_f1_micro: 0.3278 - val_loss: 1.4730 - val_mcc: -8.8961e-02 - val_void_f1: 0.6280 - void_f1: 0.7066"
+            
+            # Pattern to capture all metrics from the detailed epoch line
+            epoch_detail_pattern = r'(\d+)/\d+.*?- accuracy:\s*([\d.]+).*?- f1_micro:\s*([\d.]+).*?- loss:\s*([\d.]+).*?- mcc:\s*([\d.-]+e?-?\d*).*?- val_accuracy:\s*([\d.]+).*?- val_f1_micro:\s*([\d.]+).*?- val_loss:\s*([\d.]+).*?- val_mcc:\s*([\d.-]+e?-?\d*).*?- val_void_f1:\s*([\d.]+).*?- void_f1:\s*([\d.]+)'
             
             stage_pattern = r'Starting training for interparticle separation L=([\d.]+) Mpc/h \(stage (\d+)/\d+\)'
             
@@ -355,59 +355,32 @@ def parse_log_file(log_files):
                     print(f'Found stage {current_stage}: L={current_stage_lambda} Mpc/h')
                     continue
                 
-                # Parse training metrics
-                train_match = re.search(train_pattern, line)
-                if train_match:
+                # Parse the detailed epoch line that contains both training and validation metrics
+                epoch_match = re.search(epoch_detail_pattern, line)
+                if epoch_match:
                     global_epoch += 1
                     found_any_metrics = True
                     
-                    current_train_metrics = {
+                    metrics_data = {
                         'epoch': global_epoch,
                         'stage': current_stage,
                         'lambda': current_stage_lambda,
-                        'loss': float(train_match.group(2)),
-                        'accuracy': float(train_match.group(3)),
-                        'f1_micro': float(train_match.group(4)),
-                        'mcc': float(train_match.group(5)),
-                        'void_f1': float(train_match.group(6))
+                        'accuracy': float(epoch_match.group(2)),
+                        'f1_micro': float(epoch_match.group(3)),
+                        'loss': float(epoch_match.group(4)),
+                        'mcc': float(epoch_match.group(5)),
+                        'val_accuracy': float(epoch_match.group(6)),
+                        'val_f1_micro': float(epoch_match.group(7)),
+                        'val_loss': float(epoch_match.group(8)),
+                        'val_mcc': float(epoch_match.group(9)),
+                        'val_void_f1': float(epoch_match.group(10)),
+                        'void_f1': float(epoch_match.group(11))
                     }
                     
-                    # Look for validation metrics in the same line or nearby lines
-                    val_match = re.search(val_pattern, line)
-                    if not val_match:
-                        # Check next few lines for validation metrics
-                        for next_offset in range(1, min(5, len(lines) - line_num)):
-                            next_line = lines[line_num + next_offset]
-                            val_match = re.search(val_pattern, next_line)
-                            if val_match:
-                                break
-                    
-                    if val_match:
-                        current_train_metrics.update({
-                            'val_loss': float(val_match.group(1)),
-                            'val_accuracy': float(val_match.group(2)),
-                            'val_f1_micro': float(val_match.group(3)),
-                            'val_mcc': float(val_match.group(4)),
-                            'val_void_f1': float(val_match.group(5))
-                        })
-                    
-                    all_metrics_data.append(current_train_metrics)
+                    all_metrics_data.append(metrics_data)
                     
                     if global_epoch <= 5:  # Debug first few epochs
-                        val_status = "with validation" if val_match else "no validation"
-                        print(f'Epoch {global_epoch}: loss={current_train_metrics["loss"]:.4f}, void_f1={current_train_metrics["void_f1"]:.4f}, mcc={current_train_metrics["mcc"]:.4f} ({val_status})')
-                
-                # Check for validation metrics on separate lines
-                elif current_train_metrics and re.search(val_pattern, line):
-                    val_match = re.search(val_pattern, line)
-                    if val_match and 'val_loss' not in current_train_metrics:
-                        current_train_metrics.update({
-                            'val_loss': float(val_match.group(1)),
-                            'val_accuracy': float(val_match.group(2)),
-                            'val_f1_micro': float(val_match.group(3)),
-                            'val_mcc': float(val_match.group(4)),
-                            'val_void_f1': float(val_match.group(5))
-                        })
+                        print(f'Epoch {global_epoch}: loss={metrics_data["loss"]:.4f}, void_f1={metrics_data["void_f1"]:.4f}, mcc={metrics_data["mcc"]:.4f} (with validation: val_loss={metrics_data["val_loss"]:.4f})')
             
             if found_any_metrics:
                 print(f'Successfully parsed {global_epoch} epochs from {log_file}')
@@ -518,9 +491,9 @@ def plot_metric_subplot(ax, df, metric, title, ylabel, include_val=False, smooth
             ax.axvline(x=df['epoch'].iloc[boundary], 
                       color='red', linestyle=':', alpha=0.7, linewidth=1.5)
     
-    ax.set_title(title, fontweight='bold', pad=15)
-    ax.set_xlabel('Epoch', fontweight='bold')
-    ax.set_ylabel(ylabel, fontweight='bold')
+    ax.set_title(title, pad=15)
+    ax.set_xlabel('Epoch')
+    ax.set_ylabel(ylabel)
     ax.legend(loc='best', framealpha=0.9)
     ax.grid(True, alpha=0.3)
     
@@ -605,7 +578,7 @@ def create_separate_figures(df):
         else:
             title = f'{config["title"]}: {model_display}'
         
-        fig.suptitle(title, fontsize=16, fontweight='bold')
+        fig.suptitle(title, fontsize=16)
         
         plt.tight_layout()
         figures[metric] = fig
