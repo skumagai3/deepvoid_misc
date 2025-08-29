@@ -343,9 +343,11 @@ def parse_log_file(log_files):
             
             print(f'Parsing log file: {log_file} ({len(content)} characters)')
             
-            # Parse epoch metrics from the end of epoch lines
-            # Look for lines that contain both training and validation metrics
-            epoch_pattern = r'(\d+)/\d+.*?loss:\s*([\d.]+).*?accuracy:\s*([\d.]+).*?f1_micro:\s*([\d.]+).*?mcc:\s*([\d.-]+e?-?\d*).*?void_f1:\s*([\d.]+).*?val_loss:\s*([\d.]+).*?val_accuracy:\s*([\d.]+).*?val_f1_micro:\s*([\d.]+).*?val_mcc:\s*([\d.-]+e?-?\d*).*?val_void_f1:\s*([\d.]+)'
+            # Parse epoch metrics - separate patterns for training and validation
+            # Training metrics pattern
+            train_pattern = r'(\d+)/\d+.*?loss:\s*([\d.]+).*?accuracy:\s*([\d.]+).*?f1_micro:\s*([\d.]+).*?mcc:\s*([\d.-]+e?-?\d*).*?void_f1:\s*([\d.]+)'
+            # Validation metrics pattern  
+            val_pattern = r'val_loss:\s*([\d.]+).*?val_accuracy:\s*([\d.]+).*?val_f1_micro:\s*([\d.]+).*?val_mcc:\s*([\d.-]+e?-?\d*).*?val_void_f1:\s*([\d.]+)'
             
             stage_pattern = r'Starting training for interparticle separation L=([\d.]+) Mpc/h \(stage (\d+)/\d+\)'
             
@@ -355,6 +357,7 @@ def parse_log_file(log_files):
             found_any_metrics = False
             
             lines = content.split('\n')
+            current_train_metrics = None
             
             for line_num, line in enumerate(lines):
                 # Check for stage transitions
@@ -365,44 +368,67 @@ def parse_log_file(log_files):
                     print(f'Found stage {current_stage}: L={current_stage_lambda} Mpc/h')
                     continue
                 
-                # Parse epoch metrics - look for complete epoch lines
-                epoch_match = re.search(epoch_pattern, line)
-                
-                if epoch_match:
+                # Parse training metrics
+                train_match = re.search(train_pattern, line)
+                if train_match:
                     global_epoch += 1
                     found_any_metrics = True
                     
-                    metrics = {
+                    current_train_metrics = {
                         'epoch': global_epoch,
                         'stage': current_stage,
                         'lambda': current_stage_lambda,
-                        'loss': float(epoch_match.group(2)),
-                        'accuracy': float(epoch_match.group(3)),
-                        'f1_micro': float(epoch_match.group(4)),
-                        'mcc': float(epoch_match.group(5)),
-                        'void_f1': float(epoch_match.group(6)),
-                        'val_loss': float(epoch_match.group(7)),
-                        'val_accuracy': float(epoch_match.group(8)),
-                        'val_f1_micro': float(epoch_match.group(9)),
-                        'val_mcc': float(epoch_match.group(10)),
-                        'val_void_f1': float(epoch_match.group(11))
+                        'loss': float(train_match.group(2)),
+                        'accuracy': float(train_match.group(3)),
+                        'f1_micro': float(train_match.group(4)),
+                        'mcc': float(train_match.group(5)),
+                        'void_f1': float(train_match.group(6))
                     }
                     
-                    all_metrics_data.append(metrics)
+                    # Look for validation metrics in the same line or nearby lines
+                    val_match = re.search(val_pattern, line)
+                    if not val_match and line_num < len(lines) - 1:
+                        # Check next line for validation metrics
+                        val_match = re.search(val_pattern, lines[line_num + 1])
+                    
+                    if val_match:
+                        current_train_metrics.update({
+                            'val_loss': float(val_match.group(1)),
+                            'val_accuracy': float(val_match.group(2)),
+                            'val_f1_micro': float(val_match.group(3)),
+                            'val_mcc': float(val_match.group(4)),
+                            'val_void_f1': float(val_match.group(5))
+                        })
+                    
+                    all_metrics_data.append(current_train_metrics)
                     
                     if global_epoch <= 5:  # Debug first few epochs
-                        print(f'Epoch {global_epoch}: loss={metrics["loss"]:.4f}, void_f1={metrics["void_f1"]:.4f}, mcc={metrics["mcc"]:.4f}')
+                        print(f'Epoch {global_epoch}: loss={current_train_metrics["loss"]:.4f}, void_f1={current_train_metrics["void_f1"]:.4f}, mcc={current_train_metrics["mcc"]:.4f}')
+                
+                # Check for validation metrics on separate lines
+                elif current_train_metrics and re.search(val_pattern, line):
+                    val_match = re.search(val_pattern, line)
+                    if val_match and 'val_loss' not in current_train_metrics:
+                        current_train_metrics.update({
+                            'val_loss': float(val_match.group(1)),
+                            'val_accuracy': float(val_match.group(2)),
+                            'val_f1_micro': float(val_match.group(3)),
+                            'val_mcc': float(val_match.group(4)),
+                            'val_void_f1': float(val_match.group(5))
+                        })
             
             if found_any_metrics:
                 print(f'Successfully parsed {global_epoch} epochs from {log_file}')
             else:
                 print(f'No training metrics found in {log_file}')
-                # Try simpler pattern as fallback
-                simple_pattern = r'(\d+)/\d+.*?loss:\s*([\d.]+).*?void_f1:\s*([\d.]+).*?mcc:\s*([\d.-]+e?-?\d*)'
-                for line in lines[:100]:  # Check first 100 lines
-                    if re.search(simple_pattern, line):
-                        print(f'Sample line: {line.strip()}')
-                        break
+                # Show sample lines to help debug the format
+                sample_lines = [line for line in lines if 'loss:' in line or 'accuracy:' in line]
+                if sample_lines:
+                    print(f'Sample lines with metrics (first 3):')
+                    for i, line in enumerate(sample_lines[:3]):
+                        print(f'  {i+1}: {line.strip()}')
+                else:
+                    print('No lines found containing "loss:" or "accuracy:"')
                 
         except Exception as e:
             print(f'Error parsing {log_file}: {e}')
