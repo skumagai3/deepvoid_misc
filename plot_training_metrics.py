@@ -189,6 +189,31 @@ def find_log_files(model_name, logs_path):
             print(f'Found exact match: {target_log}')
         else:
             print(f'Exact match not found: {target_log}')
+            print(f'Searching for any log files with this datetime...')
+            
+            # Check what log files actually exist for this date
+            log_dir = os.path.join(ROOT_DIR, 'logs', 'stdout')
+            if os.path.exists(log_dir):
+                import glob
+                all_logs = glob.glob(os.path.join(log_dir, f'{date_part}_*_curr_out.log'))
+                print(f'Available log files for {date_part}:')
+                for log in sorted(all_logs):
+                    print(f'  - {os.path.basename(log)}')
+                
+                # Check if exact datetime exists with different format
+                alt_formats = [
+                    f'{date_part}_{hour}-{minute}_curr_out.log',  # Different separator
+                    f'{date_part}_{hour}_{minute}_curr_out.log',  # Underscore instead of colon
+                ]
+                for alt_format in alt_formats:
+                    alt_path = os.path.join(log_dir, alt_format)
+                    if os.path.exists(alt_path):
+                        log_files['logfile'].append(alt_path)
+                        print(f'Found alternative format: {alt_path}')
+                        break
+            else:
+                print(f'Log directory does not exist: {log_dir}')
+            
             print(f'No fallback patterns will be used - only exact model name matches allowed')
     else:
         print(f'Could not extract datetime from model name: {model_name}')
