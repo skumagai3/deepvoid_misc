@@ -330,11 +330,19 @@ def parse_log_file(log_files):
             
             print(f'Parsing log file: {log_file} ({len(content)} characters)')
             
-            # Parse epoch metrics - this format has both training and validation on same line
-            # Example: "32/32 - 204s - 6s/step - accuracy: 0.5800 - f1_micro: 0.8548 - loss: 1.2559 - mcc: 0.3139 - val_accuracy: 0.4596 - val_f1_micro: 0.3278 - val_loss: 1.4730 - val_mcc: -8.8961e-02 - val_void_f1: 0.6280 - void_f1: 0.7066"
+            # Parse epoch metrics - try multiple patterns to handle different log formats
             
-            # Pattern to capture all metrics from the detailed epoch line
-            epoch_detail_pattern = r'(\d+)/\d+.*?- accuracy:\s*([\d.]+).*?- f1_micro:\s*([\d.]+).*?- loss:\s*([\d.]+).*?- mcc:\s*([\d.-]+e?-?\d*).*?- val_accuracy:\s*([\d.]+).*?- val_f1_micro:\s*([\d.]+).*?- val_loss:\s*([\d.]+).*?- val_mcc:\s*([\d.-]+e?-?\d*).*?- val_void_f1:\s*([\d.]+).*?- void_f1:\s*([\d.]+)'
+            # Pattern 1: Simple format with direct val_ metrics
+            # Example: "32/32 - 204s - 6s/step - accuracy: 0.5800 - f1_micro: 0.8548 - loss: 1.2559 - mcc: 0.3139 - val_accuracy: 0.4596 - val_f1_micro: 0.3278 - val_loss: 1.4730 - val_mcc: -8.8961e-02 - val_void_f1: 0.6280 - void_f1: 0.7066"
+            simple_pattern = r'(\d+)/\d+.*?- accuracy:\s*([\d.]+).*?- f1_micro:\s*([\d.]+).*?- loss:\s*([\d.]+).*?- mcc:\s*([\d.-]+e?-?\d*).*?- val_accuracy:\s*([\d.]+).*?- val_f1_micro:\s*([\d.]+).*?- val_loss:\s*([\d.]+).*?- val_mcc:\s*([\d.-]+e?-?\d*).*?- val_void_f1:\s*([\d.]+).*?- void_f1:\s*([\d.]+)'
+            
+            # Pattern 2: Hybrid strategy with target/stage validation metrics
+            # Example: "26/26 - 291s - 11s/step - accuracy: 0.4258 - f1_micro: 0.8557 - loss: 1.5350 - mcc: 0.1588 - void_f1: 0.6459 - learning_rate: 6.0000e-05 - val_hybrid_loss: 97.4100 - val_target_loss: 136.2503 - val_stage_loss: 80.7642 - val_hybrid_alpha: 0.3000 - val_target_accuracy: 0.0946 - val_stage_accuracy: 0.0932 - val_target_mcc: -2.4760e-03 - val_stage_mcc: 0.0014 - val_target_f1_micro: 0.7404 - val_stage_f1_micro: 0.7390 - val_target_void_f1: 3.2398e-04 - val_stage_void_f1: 1.6670e-04"
+            hybrid_pattern = r'(\d+)/\d+.*?- accuracy:\s*([\d.]+).*?- f1_micro:\s*([\d.]+).*?- loss:\s*([\d.]+).*?- mcc:\s*([\d.-]+e?-?\d*).*?- void_f1:\s*([\d.]+).*?val_target_accuracy:\s*([\d.]+).*?val_target_f1_micro:\s*([\d.]+).*?val_target_mcc:\s*([\d.-]+e?-?\d*).*?val_target_void_f1:\s*([\d.e-]+).*?val_target_loss:\s*([\d.]+)'
+            
+            # Pattern 3: Training metrics only (no validation)
+            # Example: "32/32 - 204s - 6s/step - accuracy: 0.5800 - f1_micro: 0.8548 - loss: 1.2559 - mcc: 0.3139 - void_f1: 0.6280"
+            train_only_pattern = r'(\d+)/\d+.*?- accuracy:\s*([\d.]+).*?- f1_micro:\s*([\d.]+).*?- loss:\s*([\d.]+).*?- mcc:\s*([\d.-]+e?-?\d*).*?- void_f1:\s*([\d.]+)'
             
             stage_pattern = r'Starting training for interparticle separation L=([\d.]+) Mpc/h \(stage (\d+)/\d+\)'
             
@@ -355,12 +363,30 @@ def parse_log_file(log_files):
                     print(f'Found stage {current_stage}: L={current_stage_lambda} Mpc/h')
                     continue
                 
-                # Parse the detailed epoch line that contains both training and validation metrics
-                epoch_match = re.search(epoch_detail_pattern, line)
+                # Try different patterns to handle various validation strategies
+                epoch_match = None
+                validation_strategy = None
+                
+                # Try simple pattern first (most common)
+                epoch_match = re.search(simple_pattern, line)
+                if epoch_match:
+                    validation_strategy = 'simple'
+                else:
+                    # Try hybrid pattern (target/stage validation)
+                    epoch_match = re.search(hybrid_pattern, line)
+                    if epoch_match:
+                        validation_strategy = 'hybrid'
+                    else:
+                        # Try training-only pattern (no validation)
+                        epoch_match = re.search(train_only_pattern, line)
+                        if epoch_match:
+                            validation_strategy = 'train_only'
+                
                 if epoch_match:
                     global_epoch += 1
                     found_any_metrics = True
                     
+                    # Base training metrics (common to all patterns)
                     metrics_data = {
                         'epoch': global_epoch,
                         'stage': current_stage,
@@ -369,18 +395,36 @@ def parse_log_file(log_files):
                         'f1_micro': float(epoch_match.group(3)),
                         'loss': float(epoch_match.group(4)),
                         'mcc': float(epoch_match.group(5)),
-                        'val_accuracy': float(epoch_match.group(6)),
-                        'val_f1_micro': float(epoch_match.group(7)),
-                        'val_loss': float(epoch_match.group(8)),
-                        'val_mcc': float(epoch_match.group(9)),
-                        'val_void_f1': float(epoch_match.group(10)),
-                        'void_f1': float(epoch_match.group(11))
+                        'void_f1': float(epoch_match.group(6))
                     }
+                    
+                    # Add validation metrics based on strategy
+                    if validation_strategy == 'simple':
+                        metrics_data.update({
+                            'val_accuracy': float(epoch_match.group(6)),
+                            'val_f1_micro': float(epoch_match.group(7)),
+                            'val_loss': float(epoch_match.group(8)),
+                            'val_mcc': float(epoch_match.group(9)),
+                            'val_void_f1': float(epoch_match.group(10))
+                        })
+                        # void_f1 is group 11 for simple pattern
+                        metrics_data['void_f1'] = float(epoch_match.group(11))
+                    elif validation_strategy == 'hybrid':
+                        # Use target validation metrics as the main validation metrics
+                        metrics_data.update({
+                            'val_accuracy': float(epoch_match.group(7)),
+                            'val_f1_micro': float(epoch_match.group(8)),
+                            'val_mcc': float(epoch_match.group(9)),
+                            'val_void_f1': float(epoch_match.group(10)),
+                            'val_loss': float(epoch_match.group(11))
+                        })
+                    # For 'train_only', no validation metrics are added
                     
                     all_metrics_data.append(metrics_data)
                     
                     if global_epoch <= 5:  # Debug first few epochs
-                        print(f'Epoch {global_epoch}: loss={metrics_data["loss"]:.4f}, void_f1={metrics_data["void_f1"]:.4f}, mcc={metrics_data["mcc"]:.4f} (with validation: val_loss={metrics_data["val_loss"]:.4f})')
+                        val_info = f"val_loss={metrics_data.get('val_loss', 'N/A')}" if 'val_loss' in metrics_data else "no validation"
+                        print(f'Epoch {global_epoch}: loss={metrics_data["loss"]:.4f}, void_f1={metrics_data["void_f1"]:.4f}, mcc={metrics_data["mcc"]:.4f} ({validation_strategy} strategy, {val_info})')
             
             if found_any_metrics:
                 print(f'Successfully parsed {global_epoch} epochs from {log_file}')
