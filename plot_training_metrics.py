@@ -82,7 +82,7 @@ optional.add_argument('--metrics', nargs='+', default=['loss', 'void_f1', 'mcc']
                       help='Metrics to plot. Default: loss void_f1 mcc')
 optional.add_argument('--separate_figures', action='store_true',
                       help='Create separate figure for each metric instead of subplots')
-optional.add_argument('--include_validation', action='store_true',
+optional.add_argument('--include_validation', action='store_true', default=True,
                       help='Include validation metrics (if available)')
 optional.add_argument('--title_prefix', type=str, default='',
                       help='Prefix for figure titles. Default: empty')
@@ -318,7 +318,7 @@ def parse_log_file(log_files):
     """Parse structured log files to extract training metrics."""
     print(f'Parsing {len(log_files)} log file(s)...')
     
-    metrics_data = []
+    all_metrics_data = []
     
     for log_file in log_files:
         try:
@@ -328,10 +328,10 @@ def parse_log_file(log_files):
             
             print(f'Parsing log file: {log_file} ({len(content)} characters)')
             
-            # Parse curricular training stages and epochs
-            # Note: In the log, void_f1 appears AFTER val_void_f1, so we need to handle this order
-            epoch_pattern = r'(\d+)/\d+.*?accuracy:\s*([\d.]+).*?f1_micro:\s*([\d.]+).*?loss:\s*([\d.]+).*?mcc:\s*([\d.-]+e?-?\d*).*?void_f1:\s*([\d.]+)'
-            val_pattern = r'val_accuracy:\s*([\d.]+).*?val_f1_micro:\s*([\d.]+).*?val_loss:\s*([\d.]+).*?val_mcc:\s*([\d.-]+e?-?\d*).*?val_void_f1:\s*([\d.]+)'
+            # Parse epoch metrics from the end of epoch lines
+            # Look for lines that contain both training and validation metrics
+            epoch_pattern = r'(\d+)/\d+.*?loss:\s*([\d.]+).*?accuracy:\s*([\d.]+).*?f1_micro:\s*([\d.]+).*?mcc:\s*([\d.-]+e?-?\d*).*?void_f1:\s*([\d.]+).*?val_loss:\s*([\d.]+).*?val_accuracy:\s*([\d.]+).*?val_f1_micro:\s*([\d.]+).*?val_mcc:\s*([\d.-]+e?-?\d*).*?val_void_f1:\s*([\d.]+)'
+            
             stage_pattern = r'Starting training for interparticle separation L=([\d.]+) Mpc/h \(stage (\d+)/\d+\)'
             
             current_stage = 1
@@ -350,42 +350,30 @@ def parse_log_file(log_files):
                     print(f'Found stage {current_stage}: L={current_stage_lambda} Mpc/h')
                     continue
                 
-                # Parse epoch metrics
+                # Parse epoch metrics - look for complete epoch lines
                 epoch_match = re.search(epoch_pattern, line)
-                val_match = re.search(val_pattern, line)
                 
                 if epoch_match:
                     global_epoch += 1
                     found_any_metrics = True
                     
-                    # Handle potential negative MCC values
-                    mcc_val = float(epoch_match.group(5))
-                    val_mcc_val = None
-                    if val_match:
-                        val_mcc_val = float(val_match.group(4))
-                    
                     metrics = {
                         'epoch': global_epoch,
                         'stage': current_stage,
                         'lambda': current_stage_lambda,
-                        'accuracy': float(epoch_match.group(2)),
-                        'f1_micro': float(epoch_match.group(3)),
-                        'loss': float(epoch_match.group(4)),
-                        'mcc': mcc_val,
-                        'void_f1': float(epoch_match.group(6))
+                        'loss': float(epoch_match.group(2)),
+                        'accuracy': float(epoch_match.group(3)),
+                        'f1_micro': float(epoch_match.group(4)),
+                        'mcc': float(epoch_match.group(5)),
+                        'void_f1': float(epoch_match.group(6)),
+                        'val_loss': float(epoch_match.group(7)),
+                        'val_accuracy': float(epoch_match.group(8)),
+                        'val_f1_micro': float(epoch_match.group(9)),
+                        'val_mcc': float(epoch_match.group(10)),
+                        'val_void_f1': float(epoch_match.group(11))
                     }
                     
-                    # Add validation metrics if available
-                    if val_match:
-                        metrics.update({
-                            'val_accuracy': float(val_match.group(1)),
-                            'val_f1_micro': float(val_match.group(2)),
-                            'val_loss': float(val_match.group(3)),
-                            'val_mcc': val_mcc_val,
-                            'val_void_f1': float(val_match.group(5))
-                        })
-                    
-                    metrics_data.append(metrics)
+                    all_metrics_data.append(metrics)
                     
                     if global_epoch <= 5:  # Debug first few epochs
                         print(f'Epoch {global_epoch}: loss={metrics["loss"]:.4f}, void_f1={metrics["void_f1"]:.4f}, mcc={metrics["mcc"]:.4f}')
@@ -394,21 +382,24 @@ def parse_log_file(log_files):
                 print(f'Successfully parsed {global_epoch} epochs from {log_file}')
             else:
                 print(f'No training metrics found in {log_file}')
-                # Show a sample of lines for debugging
-                sample_lines = [line for line in lines[:50] if 'accuracy:' in line or 'loss:' in line]
-                if sample_lines:
-                    print(f'Sample lines with metrics (first 3):')
-                    for i, line in enumerate(sample_lines[:3]):
-                        print(f'  {i+1}: {line.strip()}')
+                # Try simpler pattern as fallback
+                simple_pattern = r'(\d+)/\d+.*?loss:\s*([\d.]+).*?void_f1:\s*([\d.]+).*?mcc:\s*([\d.-]+e?-?\d*)'
+                for line in lines[:100]:  # Check first 100 lines
+                    if re.search(simple_pattern, line):
+                        print(f'Sample line: {line.strip()}')
+                        break
                 
         except Exception as e:
             print(f'Error parsing {log_file}: {e}')
             import traceback
             traceback.print_exc()
     
-    if metrics_data:
-        df = pd.DataFrame(metrics_data)
-        print(f'Final result: Parsed {len(df)} epochs from log files')
+    if all_metrics_data:
+        df = pd.DataFrame(all_metrics_data)
+        # Remove duplicates and sort by epoch
+        df = df.drop_duplicates(subset=['epoch']).sort_values('epoch').reset_index(drop=True)
+        
+        print(f'Final result: Parsed {len(df)} unique epochs from log files')
         print(f'Stages found: {sorted(df["stage"].unique())}')
         print(f'Lambda values: {sorted(df["lambda"].unique())}')
         print(f'Metric ranges:')
@@ -509,24 +500,15 @@ def create_combined_figure(df):
     
     n_metrics = len(plot_metrics)
     
-    # Determine subplot layout
-    if n_metrics <= 2:
-        nrows, ncols = 1, n_metrics
-        figsize = (FIGSIZE[0], FIGSIZE[1] // 2)
-    elif n_metrics <= 4:
-        nrows, ncols = 2, 2
-        figsize = FIGSIZE
-    else:
-        nrows, ncols = 3, 2
-        figsize = (FIGSIZE[0], FIGSIZE[1] * 1.2)
+    # Force 1x3 layout for the three main metrics
+    nrows, ncols = 1, n_metrics
+    figsize = (5 * n_metrics, 4)  # Wider figure for 1x3 layout
     
     fig, axes = plt.subplots(nrows, ncols, figsize=figsize)
     if n_metrics == 1:
         axes = [axes]
-    elif nrows == 1:
-        axes = axes.flatten()
     else:
-        axes = axes.flatten()
+        axes = axes.flatten() if hasattr(axes, 'flatten') else [axes]
     
     # Plot each metric
     for i, metric in enumerate(plot_metrics):
@@ -534,28 +516,7 @@ def create_combined_figure(df):
         plot_metric_subplot(axes[i], df, metric, config['title'], config['ylabel'], 
                           INCLUDE_VALIDATION, SMOOTH_WINDOW)
     
-    # Hide unused subplots
-    for i in range(len(plot_metrics), len(axes)):
-        axes[i].set_visible(False)
-    
-    # Add overall title
-    model_display = MODEL_NAME.replace('_', ' ')
-    if TITLE_PREFIX:
-        title = f'{TITLE_PREFIX}: {model_display}'
-    else:
-        title = f'Training Metrics: {model_display}'
-    
-    fig.suptitle(title, fontsize=18, fontweight='bold', y=0.98)
-    
-    # Add stage information if available
-    if SHOW_STAGES and 'stage' in df.columns:
-        n_stages = df['stage'].nunique()
-        stage_info = f'Curricular Training: {n_stages} stages'
-        if 'lambda' in df.columns:
-            lambdas = sorted(df['lambda'].unique())
-            stage_info += f' (λ: {", ".join(lambdas)} Mpc/h)'
-        
-        fig.text(0.5, 0.02, stage_info, ha='center', fontsize=10, style='italic')
+    # No suptitle - removed as requested
     
     plt.tight_layout()
     return fig
