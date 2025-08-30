@@ -198,13 +198,55 @@ def find_log_files(model_name, logs_path, direct_log_file=None):
     
     # If direct log file is provided, use it directly
     if direct_log_file:
+        print(f'Checking direct log file: {direct_log_file}')
+        
+        # Check if file exists
         if os.path.exists(direct_log_file):
-            log_files['logfile'].append(direct_log_file)
-            print(f'Using direct log file: {direct_log_file}')
-            return log_files
+            # Check if it's actually a file (not a directory)
+            if os.path.isfile(direct_log_file):
+                log_files['logfile'].append(direct_log_file)
+                print(f'Successfully found direct log file: {direct_log_file}')
+                return log_files
+            else:
+                print(f'Path exists but is not a file: {direct_log_file}')
         else:
-            print(f'Direct log file not found: {direct_log_file}')
-            return log_files
+            print(f'Direct log file does not exist: {direct_log_file}')
+            
+            # Try to provide helpful debugging information
+            parent_dir = os.path.dirname(direct_log_file)
+            filename = os.path.basename(direct_log_file)
+            
+            print(f'Parent directory: {parent_dir}')
+            print(f'Target filename: {filename}')
+            
+            if os.path.exists(parent_dir):
+                print(f'Parent directory exists, checking contents...')
+                try:
+                    files_in_dir = os.listdir(parent_dir)
+                    log_files_in_dir = [f for f in files_in_dir if f.endswith('.log')]
+                    
+                    print(f'Found {len(log_files_in_dir)} .log files in directory:')
+                    for log_file in sorted(log_files_in_dir)[:10]:  # Show first 10
+                        print(f'  - {log_file}')
+                    
+                    if len(log_files_in_dir) > 10:
+                        print(f'  ... and {len(log_files_in_dir) - 10} more')
+                    
+                    # Try to find similar named files
+                    similar_files = [f for f in files_in_dir if '2025-08-24' in f or '19_20' in f or '19:20' in f]
+                    if similar_files:
+                        print(f'Found files with similar names:')
+                        for sim_file in sorted(similar_files):
+                            print(f'  - {sim_file}')
+                            
+                except PermissionError:
+                    print(f'Permission denied accessing directory: {parent_dir}')
+                except Exception as e:
+                    print(f'Error listing directory contents: {e}')
+            else:
+                print(f'Parent directory does not exist: {parent_dir}')
+        
+        return log_files
     
     # Search for TensorBoard event files
     if TENSORBOARD_AVAILABLE:
@@ -250,95 +292,6 @@ def find_log_files(model_name, logs_path, direct_log_file=None):
             # Check what log files actually exist for this date
             log_dir = os.path.join(ROOT_DIR, 'logs', 'stdout')
             if os.path.exists(log_dir):
-                all_logs = glob.glob(os.path.join(log_dir, f'{date_part}_*_curr_out.log'))
-                print(f'Available log files for {date_part}:')
-                for log in sorted(all_logs):
-                    print(f'  - {os.path.basename(log)}')
-                
-                # Try to find log files within ±2 minutes tolerance
-                found_within_tolerance = False
-                for time_offset in range(-2, 3):  # -2, -1, 0, 1, 2 minutes
-                    target_minute = minute + time_offset
-                    target_hour = hour
-                    
-                    # Handle minute overflow/underflow
-                    if target_minute >= 60:
-                        target_minute -= 60
-                        target_hour += 1
-                    elif target_minute < 0:
-                        target_minute += 60
-                        target_hour -= 1
-                    
-                    # Handle hour overflow/underflow (basic check)
-                    if target_hour >= 24:
-                        target_hour = 0
-                    elif target_hour < 0:
-                        target_hour = 23
-                    
-                    # Try different time formats
-                    time_formats = [
-                        f'{target_hour:02d}:{target_minute:02d}',  # HH:MM
-                        f'{target_hour:02d}-{target_minute:02d}',  # HH-MM
-                        f'{target_hour:02d}_{target_minute:02d}',  # HH_MM
-                    ]
-                    
-                    for time_format in time_formats:
-                        candidate_log = os.path.join(log_dir, f'{date_part}_{time_format}_curr_out.log')
-                        if os.path.exists(candidate_log):
-                            log_files['logfile'].append(candidate_log)
-                            offset_str = f"+{time_offset}" if time_offset > 0 else str(time_offset)
-                            print(f'Found log file within tolerance ({offset_str} min): {os.path.basename(candidate_log)}')
-                            found_within_tolerance = True
-                            break
-                    
-                    if found_within_tolerance:
-                        break
-                
-                if not found_within_tolerance:
-                    print(f'No log files found within ±2 minutes of {hour:02d}:{minute:02d}')
-            else:
-                print(f'Log directory does not exist: {log_dir}')
-    else:
-        print(f'Could not extract datetime from model name: {model_name}')
-        # Fallback to broader search only if datetime extraction failed
-        log_patterns = [
-            os.path.join(ROOT_DIR, 'logs', 'stdout', f'{model_name}*.log'),
-            os.path.join(ROOT_DIR, 'logs', 'stdout', f'*{model_name}*.log'),
-        ]
-        for pattern in log_patterns:
-            matches = glob.glob(pattern)
-            log_files['logfile'].extend(matches)
-    
-    # Remove duplicates
-    log_files['logfile'] = list(set(log_files['logfile']))
-    
-    return log_files
-    # Model name format: TNG_curricular_SCCE_Proportion_Aware_D4_F16_RSD_RSDrot_attention_g-r_2025-08-18_17-16-07
-    import re
-    datetime_match = re.search(r'(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})$', model_name)
-    
-    if datetime_match:
-        date_part = datetime_match.group(1)  # 2025-08-18
-        hour = int(datetime_match.group(2))  # 17
-        minute = int(datetime_match.group(3))  # 16
-        
-        # Convert to log file format: 2025-08-18_17:16_curr_out.log
-        log_datetime = f'{date_part}_{hour:02d}:{minute:02d}'
-        target_log = os.path.join(ROOT_DIR, 'logs', 'stdout', f'{log_datetime}_curr_out.log')
-        
-        print(f'Looking for specific log file: {target_log}')
-        
-        if os.path.exists(target_log):
-            log_files['logfile'].append(target_log)
-            print(f'Found exact match: {target_log}')
-        else:
-            print(f'Exact match not found: {target_log}')
-            print(f'Searching for log files within ±2 minutes...')
-            
-            # Check what log files actually exist for this date
-            log_dir = os.path.join(ROOT_DIR, 'logs', 'stdout')
-            if os.path.exists(log_dir):
-                import glob
                 all_logs = glob.glob(os.path.join(log_dir, f'{date_part}_*_curr_out.log'))
                 print(f'Available log files for {date_part}:')
                 for log in sorted(all_logs):
