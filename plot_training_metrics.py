@@ -238,6 +238,35 @@ def find_log_files(model_name, logs_path, direct_log_file=None):
                         print(f'Found files with similar names:')
                         for sim_file in sorted(similar_files):
                             print(f'  - {sim_file}')
+                        
+                        # Try to find an exact match with different time format
+                        base_name = filename.replace('_curr_out.log', '').replace('_out.log', '')
+                        date_time_parts = base_name.split('_')
+                        if len(date_time_parts) >= 2:
+                            date_part = date_time_parts[0]  # 2025-08-24
+                            time_part = date_time_parts[1]  # 19_20 or 19:20
+                            
+                            # Try different time separators
+                            time_variations = [
+                                time_part,  # Original format
+                                time_part.replace('_', ':'),  # 19_20 -> 19:20
+                                time_part.replace(':', '_'),  # 19:20 -> 19_20
+                                time_part.replace('-', ':'),  # 19-20 -> 19:20
+                                time_part.replace('-', '_'),  # 19-20 -> 19_20
+                            ]
+                            
+                            for time_var in time_variations:
+                                candidate_names = [
+                                    f'{date_part}_{time_var}_curr_out.log',
+                                    f'{date_part}_{time_var}_out.log',
+                                ]
+                                
+                                for candidate_name in candidate_names:
+                                    candidate_path = os.path.join(parent_dir, candidate_name)
+                                    if os.path.exists(candidate_path):
+                                        print(f'Found matching file with different format: {candidate_name}')
+                                        log_files['logfile'].append(candidate_path)
+                                        return log_files
                             
                 except PermissionError:
                     print(f'Permission denied accessing directory: {parent_dir}')
