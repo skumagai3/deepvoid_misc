@@ -9,6 +9,7 @@ Supports multiple input formats:
 - TensorBoard event files (optional, often empty/useless)
 - CSV files from TensorBoard exports
 - Training log files with structured output (preferred)
+- Direct log file input
 
 Supports multiple validation strategies:
 - gradual: Uses standard val_* metrics (most common)
@@ -16,9 +17,11 @@ Supports multiple validation strategies:
 
 Usage:
 python plot_training_metrics.py MODEL_NAME ROOT_DIR [options]
+python plot_training_metrics.py --log_file /path/to/log_file.log [options]
 
 Example:
 python plot_training_metrics.py TNG_curricular_SCCE_Proportion_Aware_D4_F16_attention_g-r_2025-08-28_22-28-37 /content/drive/MyDrive/ --save_format png pdf --dpi 300
+python plot_training_metrics.py --log_file /content/drive/MyDrive/logs/stdout/2025-08-19_02:09_curr_out.log --save_format png
 
 Features:
 - Automatic detection of training log format and validation strategy
@@ -27,6 +30,7 @@ Features:
 - Customizable figure layout and styling
 - Multiple output formats (PNG, PDF, SVG)
 - Comprehensive metric tracking (loss, accuracy, F1, MCC, void F1)
+- Direct log file input support
 """
 
 import os
@@ -40,6 +44,8 @@ from pathlib import Path
 import re
 from datetime import datetime
 import warnings
+import glob
+import traceback
 warnings.filterwarnings('ignore')
 
 # Try importing TensorBoard for event file reading
@@ -57,9 +63,16 @@ print('>>> Running plot_training_metrics.py')
 # Parse command line arguments
 #================================================================
 parser = argparse.ArgumentParser(description='Generate publication-ready training metrics plots.')
-required = parser.add_argument_group('required arguments')
-required.add_argument('MODEL_NAME', type=str, help='Name of the trained model.')
-required.add_argument('ROOT_DIR', type=str, help='Root directory containing logs and figures.')
+
+# Create mutually exclusive group for input methods
+input_group = parser.add_mutually_exclusive_group(required=True)
+input_group.add_argument('--log_file', type=str, 
+                        help='Direct path to log file to parse')
+input_group.add_argument('MODEL_NAME', nargs='?', type=str, 
+                        help='Name of the trained model (requires ROOT_DIR)')
+
+parser.add_argument('ROOT_DIR', nargs='?', type=str, 
+                   help='Root directory containing logs and figures (required with MODEL_NAME)')
 
 optional = parser.add_argument_group('optional arguments')
 optional.add_argument('--log_source', type=str, default='auto',
@@ -90,11 +103,33 @@ optional.add_argument('--include_validation', action='store_true', default=True,
                       help='Include validation metrics (if available)')
 optional.add_argument('--title_prefix', type=str, default='',
                       help='Prefix for figure titles. Default: empty')
+optional.add_argument('--output_dir', type=str, default=None,
+                      help='Output directory for figures (default: same as log file or ROOT_DIR/figs/training_metrics)')
 
 args = parser.parse_args()
 
-MODEL_NAME = args.MODEL_NAME
-ROOT_DIR = args.ROOT_DIR
+# Validate arguments
+if args.MODEL_NAME and not args.ROOT_DIR:
+    parser.error("ROOT_DIR is required when using MODEL_NAME")
+if args.log_file and args.ROOT_DIR:
+    parser.error("Cannot specify both --log_file and ROOT_DIR")
+
+# Set up variables based on input method
+if args.log_file:
+    # Direct log file mode
+    LOG_FILE_PATH = args.log_file
+    MODEL_NAME = os.path.splitext(os.path.basename(LOG_FILE_PATH))[0]
+    ROOT_DIR = os.path.dirname(os.path.dirname(LOG_FILE_PATH))  # Go up two levels from logs/stdout
+    print(f"Direct log file mode: {LOG_FILE_PATH}")
+    print(f"Inferred model name: {MODEL_NAME}")
+    print(f"Inferred root directory: {ROOT_DIR}")
+else:
+    # Model name mode
+    MODEL_NAME = args.MODEL_NAME
+    ROOT_DIR = args.ROOT_DIR
+    LOG_FILE_PATH = None
+    print(f"Model name mode: {MODEL_NAME}")
+
 LOG_SOURCE = args.log_source
 SAVE_FORMAT = args.save_format
 DPI = args.dpi
@@ -108,7 +143,6 @@ SEPARATE_FIGURES = args.separate_figures
 INCLUDE_VALIDATION = args.include_validation
 TITLE_PREFIX = args.title_prefix
 
-print(f'Model: {MODEL_NAME}')
 print(f'Root directory: {ROOT_DIR}')
 print(f'Log source: {LOG_SOURCE}')
 print(f'Output formats: {SAVE_FORMAT}')
@@ -119,8 +153,19 @@ print(f'Metrics to plot: {METRICS}')
 # Set up paths
 #================================================================
 LOGS_PATH = os.path.join(ROOT_DIR, 'logs', 'fit')
-FIG_PATH = os.path.join(ROOT_DIR, 'figs', 'training_metrics')
+
+# Set up output directory
+if args.output_dir:
+    FIG_PATH = args.output_dir
+elif LOG_FILE_PATH:
+    # For direct log file mode, save figures next to the log file
+    FIG_PATH = os.path.join(os.path.dirname(LOG_FILE_PATH), 'figures')
+else:
+    # For model name mode, use standard path
+    FIG_PATH = os.path.join(ROOT_DIR, 'figs', 'training_metrics')
+
 os.makedirs(FIG_PATH, exist_ok=True)
+print(f'Figures will be saved to: {FIG_PATH}')
 
 #================================================================
 # Publication-ready styling
@@ -143,18 +188,27 @@ def setup_publication_style():
 #================================================================
 # Data loading functions
 #================================================================
-def find_log_files(model_name, logs_path):
-    """Find all possible log file locations for a model."""
+def find_log_files(model_name, logs_path, direct_log_file=None):
+    """Find all possible log file locations for a model or use direct log file."""
     log_files = {
         'tensorboard': [],
         'csv': [],
         'logfile': []
     }
     
+    # If direct log file is provided, use it directly
+    if direct_log_file:
+        if os.path.exists(direct_log_file):
+            log_files['logfile'].append(direct_log_file)
+            print(f'Using direct log file: {direct_log_file}')
+            return log_files
+        else:
+            print(f'Direct log file not found: {direct_log_file}')
+            return log_files
+    
     # Search for TensorBoard event files
     if TENSORBOARD_AVAILABLE:
         tb_pattern = os.path.join(logs_path, f'{model_name}*')
-        import glob
         for tb_dir in glob.glob(tb_pattern):
             if os.path.isdir(tb_dir):
                 for root, dirs, files in os.walk(tb_dir):
@@ -168,11 +222,97 @@ def find_log_files(model_name, logs_path):
         os.path.join(ROOT_DIR, f'{model_name}*metrics*.csv'),
         os.path.join(ROOT_DIR, 'training_logs', f'{model_name}*.csv')
     ]
-    import glob
     for pattern in csv_patterns:
         log_files['csv'].extend(glob.glob(pattern))
     
     # Extract datetime from model name and find exact matching log file
+    # Model name format: TNG_curricular_SCCE_Proportion_Aware_D4_F16_RSD_RSDrot_attention_g-r_2025-08-18_17-16-07
+    datetime_match = re.search(r'(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})$', model_name)
+    
+    if datetime_match:
+        date_part = datetime_match.group(1)  # 2025-08-18
+        hour = int(datetime_match.group(2))  # 17
+        minute = int(datetime_match.group(3))  # 16
+        
+        # Convert to log file format: 2025-08-18_17:16_curr_out.log
+        log_datetime = f'{date_part}_{hour:02d}:{minute:02d}'
+        target_log = os.path.join(ROOT_DIR, 'logs', 'stdout', f'{log_datetime}_curr_out.log')
+        
+        print(f'Looking for specific log file: {target_log}')
+        
+        if os.path.exists(target_log):
+            log_files['logfile'].append(target_log)
+            print(f'Found exact match: {target_log}')
+        else:
+            print(f'Exact match not found: {target_log}')
+            print(f'Searching for log files within ±2 minutes...')
+            
+            # Check what log files actually exist for this date
+            log_dir = os.path.join(ROOT_DIR, 'logs', 'stdout')
+            if os.path.exists(log_dir):
+                all_logs = glob.glob(os.path.join(log_dir, f'{date_part}_*_curr_out.log'))
+                print(f'Available log files for {date_part}:')
+                for log in sorted(all_logs):
+                    print(f'  - {os.path.basename(log)}')
+                
+                # Try to find log files within ±2 minutes tolerance
+                found_within_tolerance = False
+                for time_offset in range(-2, 3):  # -2, -1, 0, 1, 2 minutes
+                    target_minute = minute + time_offset
+                    target_hour = hour
+                    
+                    # Handle minute overflow/underflow
+                    if target_minute >= 60:
+                        target_minute -= 60
+                        target_hour += 1
+                    elif target_minute < 0:
+                        target_minute += 60
+                        target_hour -= 1
+                    
+                    # Handle hour overflow/underflow (basic check)
+                    if target_hour >= 24:
+                        target_hour = 0
+                    elif target_hour < 0:
+                        target_hour = 23
+                    
+                    # Try different time formats
+                    time_formats = [
+                        f'{target_hour:02d}:{target_minute:02d}',  # HH:MM
+                        f'{target_hour:02d}-{target_minute:02d}',  # HH-MM
+                        f'{target_hour:02d}_{target_minute:02d}',  # HH_MM
+                    ]
+                    
+                    for time_format in time_formats:
+                        candidate_log = os.path.join(log_dir, f'{date_part}_{time_format}_curr_out.log')
+                        if os.path.exists(candidate_log):
+                            log_files['logfile'].append(candidate_log)
+                            offset_str = f"+{time_offset}" if time_offset > 0 else str(time_offset)
+                            print(f'Found log file within tolerance ({offset_str} min): {os.path.basename(candidate_log)}')
+                            found_within_tolerance = True
+                            break
+                    
+                    if found_within_tolerance:
+                        break
+                
+                if not found_within_tolerance:
+                    print(f'No log files found within ±2 minutes of {hour:02d}:{minute:02d}')
+            else:
+                print(f'Log directory does not exist: {log_dir}')
+    else:
+        print(f'Could not extract datetime from model name: {model_name}')
+        # Fallback to broader search only if datetime extraction failed
+        log_patterns = [
+            os.path.join(ROOT_DIR, 'logs', 'stdout', f'{model_name}*.log'),
+            os.path.join(ROOT_DIR, 'logs', 'stdout', f'*{model_name}*.log'),
+        ]
+        for pattern in log_patterns:
+            matches = glob.glob(pattern)
+            log_files['logfile'].extend(matches)
+    
+    # Remove duplicates
+    log_files['logfile'] = list(set(log_files['logfile']))
+    
+    return log_files
     # Model name format: TNG_curricular_SCCE_Proportion_Aware_D4_F16_RSD_RSDrot_attention_g-r_2025-08-18_17-16-07
     import re
     datetime_match = re.search(r'(\d{4}-\d{2}-\d{2})_(\d{2})-(\d{2})-(\d{2})$', model_name)
@@ -697,7 +837,7 @@ def main():
     setup_publication_style()
     
     print('Searching for training log files...')
-    log_files = find_log_files(MODEL_NAME, LOGS_PATH)
+    log_files = find_log_files(MODEL_NAME, LOGS_PATH, direct_log_file=LOG_FILE_PATH)
     
     print(f'Found log files:')
     for log_type, files in log_files.items():
@@ -745,7 +885,10 @@ def main():
         df = parse_log_file(log_files['logfile'])
     
     if df is None or df.empty:
-        raise ValueError(f"No training data could be loaded for model: {MODEL_NAME}")
+        if LOG_FILE_PATH:
+            raise ValueError(f"No training data could be loaded from log file: {LOG_FILE_PATH}")
+        else:
+            raise ValueError(f"No training data could be loaded for model: {MODEL_NAME}")
     
     print(f'Successfully loaded training data: {len(df)} epochs')
     print(f'Available metrics: {list(df.columns)}')
@@ -758,16 +901,24 @@ def main():
     # Create figures
     print('Creating publication-ready figures...')
     
+    # Create a clean base name for the figures
+    if LOG_FILE_PATH:
+        # Extract a meaningful name from the log file
+        log_basename = os.path.splitext(os.path.basename(LOG_FILE_PATH))[0]
+        base_name = log_basename.replace('_curr_out', '').replace('_out', '')
+    else:
+        base_name = MODEL_NAME
+    
     if SEPARATE_FIGURES:
         figures = create_separate_figures(df)
-        base_name = f'{MODEL_NAME}_metrics'
+        final_base_name = f'{base_name}_metrics'
     else:
         figures = create_combined_figure(df)
-        base_name = f'{MODEL_NAME}_training_metrics'
+        final_base_name = f'{base_name}_training_metrics'
     
     # Save figures
     print('Saving figures...')
-    save_figures(figures, base_name)
+    save_figures(figures, final_base_name)
     
     print(f'All figures saved to: {FIG_PATH}')
     print('Training metrics visualization complete!')
