@@ -6,9 +6,13 @@ This script reads training logs from curricular training runs and generates
 publication-quality figures showing loss, void F1, and MCC metrics over epochs.
 
 Supports multiple input formats:
-- TensorBoard event files (preferred)
+- TensorBoard event files (optional, often empty/useless)
 - CSV files from TensorBoard exports
-- Training log files with structured output
+- Training log files with structured output (preferred)
+
+Supports multiple validation strategies:
+- gradual: Uses standard val_* metrics (most common)
+- hybrid: Uses val_target_* metrics as main validation (has both target and stage)
 
 Usage:
 python plot_training_metrics.py MODEL_NAME ROOT_DIR [options]
@@ -17,7 +21,7 @@ Example:
 python plot_training_metrics.py TNG_curricular_SCCE_Proportion_Aware_D4_F16_attention_g-r_2025-08-28_22-28-37 /content/drive/MyDrive/ --save_format png pdf --dpi 300
 
 Features:
-- Automatic detection of training log format
+- Automatic detection of training log format and validation strategy
 - Publication-ready matplotlib styling
 - Curricular training stage visualization
 - Customizable figure layout and styling
@@ -330,19 +334,20 @@ def parse_log_file(log_files):
             
             print(f'Parsing log file: {log_file} ({len(content)} characters)')
             
-            # Parse epoch metrics - try multiple patterns to handle different log formats
+            # Parse epoch metrics - handle different validation strategies based on actual log formats
             
-            # Pattern 1: Simple format with direct val_ metrics
-            # Example: "32/32 - 204s - 6s/step - accuracy: 0.5800 - f1_micro: 0.8548 - loss: 1.2559 - mcc: 0.3139 - val_accuracy: 0.4596 - val_f1_micro: 0.3278 - val_loss: 1.4730 - val_mcc: -8.8961e-02 - val_void_f1: 0.6280 - void_f1: 0.7066"
-            simple_pattern = r'(\d+)/\d+.*?- accuracy:\s*([\d.]+).*?- f1_micro:\s*([\d.]+).*?- loss:\s*([\d.]+).*?- mcc:\s*([\d.-]+e?-?\d*).*?- val_accuracy:\s*([\d.]+).*?- val_f1_micro:\s*([\d.]+).*?- val_loss:\s*([\d.]+).*?- val_mcc:\s*([\d.-]+e?-?\d*).*?- val_void_f1:\s*([\d.]+).*?- void_f1:\s*([\d.]+)'
+            # Pattern 1: Gradual validation strategy (standard val_ metrics)
+            # Example: "32/32 - 85s - 3s/step - accuracy: 0.2058 - f1_micro: 0.5748 - loss: 1.8958 - mcc: 0.0693 - val_accuracy: 0.0901 - val_f1_micro: 0.7293 - val_loss: 5.2175 - val_mcc: -6.0898e-03 - val_void_f1: 4.5386e-04 - void_f1: 0.0068 - learning_rate: 6.0000e-05"
+            gradual_pattern = r'(\d+)/\d+.*?- accuracy:\s*([\d.]+).*?- f1_micro:\s*([\d.]+).*?- loss:\s*([\d.]+).*?- mcc:\s*([\d.-]+e?-?\d*).*?- val_accuracy:\s*([\d.]+).*?- val_f1_micro:\s*([\d.]+).*?- val_loss:\s*([\d.]+).*?- val_mcc:\s*([\d.-]+e?-?\d*).*?- val_void_f1:\s*([\d.e-]+).*?- void_f1:\s*([\d.]+)'
             
-            # Pattern 2: Hybrid strategy with target/stage validation metrics
-            # Example: "26/26 - 291s - 11s/step - accuracy: 0.4258 - f1_micro: 0.8557 - loss: 1.5350 - mcc: 0.1588 - void_f1: 0.6459 - learning_rate: 6.0000e-05 - val_hybrid_loss: 97.4100 - val_target_loss: 136.2503 - val_stage_loss: 80.7642 - val_hybrid_alpha: 0.3000 - val_target_accuracy: 0.0946 - val_stage_accuracy: 0.0932 - val_target_mcc: -2.4760e-03 - val_stage_mcc: 0.0014 - val_target_f1_micro: 0.7404 - val_stage_f1_micro: 0.7390 - val_target_void_f1: 3.2398e-04 - val_stage_void_f1: 1.6670e-04"
-            hybrid_pattern = r'(\d+)/\d+.*?- accuracy:\s*([\d.]+).*?- f1_micro:\s*([\d.]+).*?- loss:\s*([\d.]+).*?- mcc:\s*([\d.-]+e?-?\d*).*?- void_f1:\s*([\d.]+).*?val_target_accuracy:\s*([\d.]+).*?val_target_f1_micro:\s*([\d.]+).*?val_target_mcc:\s*([\d.-]+e?-?\d*).*?val_target_void_f1:\s*([\d.e-]+).*?val_target_loss:\s*([\d.]+)'
+            # Pattern 2: Hybrid validation strategy (has both target and stage metrics)
+            # Example: "13/13 - 308s - 24s/step - accuracy: 0.5031 - f1_micro: 0.8952 - loss: 1.4201 - mcc: 0.2255 - void_f1: 0.6919 - learning_rate: 6.0000e-05 - val_hybrid_loss: 42.3378 - val_target_loss: 41.8492 - val_stage_loss: 42.5472 - val_hybrid_alpha: 0.3000 - val_target_accuracy: 0.0939 - val_stage_accuracy: 0.0812 - val_target_mcc: -7.6302e-03 - val_stage_mcc: 1.8706e-04 - val_target_f1_micro: 0.7365 - val_stage_f1_micro: 0.7314 - val_target_void_f1: 2.2051e-04 - val_stage_void_f1: 1.2425e-04 - val_loss_divergence: 0.0164"
+            hybrid_pattern = r'(\d+)/\d+.*?- accuracy:\s*([\d.]+).*?- f1_micro:\s*([\d.]+).*?- loss:\s*([\d.]+).*?- mcc:\s*([\d.-]+e?-?\d*).*?- void_f1:\s*([\d.]+).*?val_target_accuracy:\s*([\d.]+).*?val_target_f1_micro:\s*([\d.]+).*?val_target_loss:\s*([\d.]+).*?val_target_mcc:\s*([\d.-]+e?-?\d*).*?val_target_void_f1:\s*([\d.e-]+)'
             
-            # Pattern 3: Training metrics only (no validation)
-            # Example: "32/32 - 204s - 6s/step - accuracy: 0.5800 - f1_micro: 0.8548 - loss: 1.2559 - mcc: 0.3139 - void_f1: 0.6280"
-            train_only_pattern = r'(\d+)/\d+.*?- accuracy:\s*([\d.]+).*?- f1_micro:\s*([\d.]+).*?- loss:\s*([\d.]+).*?- mcc:\s*([\d.-]+e?-?\d*).*?- void_f1:\s*([\d.]+)'
+            # Note: Based on the log files examined, there appear to be only two validation strategies:
+            # 1. Gradual: standard val_* metrics
+            # 2. Hybrid: both val_target_* and val_stage_* metrics (always together)
+            # Pure "target" or "stage" validation strategies were not found in the actual logs.
             
             stage_pattern = r'Starting training for interparticle separation L=([\d.]+) Mpc/h \(stage (\d+)/\d+\)'
             
@@ -363,24 +368,19 @@ def parse_log_file(log_files):
                     print(f'Found stage {current_stage}: L={current_stage_lambda} Mpc/h')
                     continue
                 
-                # Try different patterns to handle various validation strategies
+                # Try different patterns to handle the two main validation strategies
                 epoch_match = None
                 validation_strategy = None
                 
-                # Try simple pattern first (most common)
-                epoch_match = re.search(simple_pattern, line)
+                # Try gradual strategy first (most common - standard val_ metrics)
+                epoch_match = re.search(gradual_pattern, line)
                 if epoch_match:
-                    validation_strategy = 'simple'
+                    validation_strategy = 'gradual'
                 else:
-                    # Try hybrid pattern (target/stage validation)
+                    # Try hybrid strategy (target + stage validation)
                     epoch_match = re.search(hybrid_pattern, line)
                     if epoch_match:
                         validation_strategy = 'hybrid'
-                    else:
-                        # Try training-only pattern (no validation)
-                        epoch_match = re.search(train_only_pattern, line)
-                        if epoch_match:
-                            validation_strategy = 'train_only'
                 
                 if epoch_match:
                     global_epoch += 1
@@ -399,7 +399,8 @@ def parse_log_file(log_files):
                     }
                     
                     # Add validation metrics based on strategy
-                    if validation_strategy == 'simple':
+                    if validation_strategy == 'gradual':
+                        # Standard val_ metrics
                         metrics_data.update({
                             'val_accuracy': float(epoch_match.group(6)),
                             'val_f1_micro': float(epoch_match.group(7)),
@@ -407,24 +408,28 @@ def parse_log_file(log_files):
                             'val_mcc': float(epoch_match.group(9)),
                             'val_void_f1': float(epoch_match.group(10))
                         })
-                        # void_f1 is group 11 for simple pattern
+                        # void_f1 is group 11 for gradual pattern
                         metrics_data['void_f1'] = float(epoch_match.group(11))
                     elif validation_strategy == 'hybrid':
-                        # Use target validation metrics as the main validation metrics
+                        # Use target validation metrics as the main validation metrics for hybrid
+                        # (this gives us the most relevant validation performance)
                         metrics_data.update({
                             'val_accuracy': float(epoch_match.group(7)),
                             'val_f1_micro': float(epoch_match.group(8)),
-                            'val_mcc': float(epoch_match.group(9)),
-                            'val_void_f1': float(epoch_match.group(10)),
-                            'val_loss': float(epoch_match.group(11))
+                            'val_loss': float(epoch_match.group(9)),
+                            'val_mcc': float(epoch_match.group(10)),
+                            'val_void_f1': float(epoch_match.group(11))
                         })
-                    # For 'train_only', no validation metrics are added
                     
                     all_metrics_data.append(metrics_data)
                     
                     if global_epoch <= 5:  # Debug first few epochs
                         val_info = f"val_loss={metrics_data.get('val_loss', 'N/A')}" if 'val_loss' in metrics_data else "no validation"
                         print(f'Epoch {global_epoch}: loss={metrics_data["loss"]:.4f}, void_f1={metrics_data["void_f1"]:.4f}, mcc={metrics_data["mcc"]:.4f} ({validation_strategy} strategy, {val_info})')
+                    
+                    if validation_strategy and global_epoch == 1:
+                        print(f'Detected validation strategy: {validation_strategy}')
+                        print(f'Validation metrics available: {[k for k in metrics_data.keys() if k.startswith("val_")]}')
             
             if found_any_metrics:
                 print(f'Successfully parsed {global_epoch} epochs from {log_file}')
@@ -672,32 +677,29 @@ def main():
     df = None
     
     if LOG_SOURCE == 'auto':
-        # Try in order of preference: TensorBoard -> CSV -> Log file
-        # But prioritize log files if TensorBoard is empty
+        # Try in order of preference: Log file -> CSV -> TensorBoard
+        # Skip TensorBoard by default as they're often empty/useless
         
-        # First try TensorBoard if available
-        if log_files['tensorboard'] and TENSORBOARD_AVAILABLE:
-            print('Trying TensorBoard files first...')
+        # First try log files (most reliable)
+        if log_files['logfile']:
+            print('Trying log files first...')
+            df = parse_log_file(log_files['logfile'])
+            if df is not None and not df.empty:
+                print('Successfully loaded data from log files')
+        
+        # If log files failed, try CSV files
+        if (df is None or df.empty) and log_files['csv']:
+            print('Log files failed/empty, trying CSV files...')
+            df = parse_csv_logs(log_files['csv'])
+        
+        # Last resort: try TensorBoard (often empty/useless but retain functionality)
+        if (df is None or df.empty) and log_files['tensorboard'] and TENSORBOARD_AVAILABLE:
+            print('Log and CSV files failed, trying TensorBoard as last resort...')
             df = parse_tensorboard_logs(log_files['tensorboard'])
             if df is not None and not df.empty:
                 print('Successfully loaded data from TensorBoard')
             else:
                 print('TensorBoard files found but no metrics extracted')
-        
-        # If TensorBoard failed or was empty, try log files
-        if df is None or df.empty:
-            if log_files['logfile']:
-                print('TensorBoard failed/empty, trying log files...')
-                df = parse_log_file(log_files['logfile'])
-                if df is not None and not df.empty:
-                    print('Successfully loaded data from log files')
-            else:
-                print('No log files found for fallback')
-        
-        # Last resort: try CSV files
-        if (df is None or df.empty) and log_files['csv']:
-            print('Log files failed/empty, trying CSV files...')
-            df = parse_csv_logs(log_files['csv'])
     
     elif LOG_SOURCE == 'tensorboard':
         if not TENSORBOARD_AVAILABLE:
