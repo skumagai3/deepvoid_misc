@@ -242,11 +242,38 @@ def find_log_files(model_name, logs_path, direct_log_file=None):
                         # Try to find an exact match with different time format
                         base_name = filename.replace('_curr_out.log', '').replace('_out.log', '')
                         date_time_parts = base_name.split('_')
-                        if len(date_time_parts) >= 2:
+                        if len(date_time_parts) >= 3:  # Should be ['2025-08-24', '19', '20']
                             date_part = date_time_parts[0]  # 2025-08-24
-                            time_part = date_time_parts[1]  # 19_20 or 19:20
+                            hour_part = date_time_parts[1]  # 19
+                            minute_part = date_time_parts[2]  # 20
                             
                             # Try different time separators
+                            time_variations = [
+                                f'{hour_part}_{minute_part}',  # Original: 19_20
+                                f'{hour_part}:{minute_part}',  # Colon: 19:20
+                                f'{hour_part}-{minute_part}',  # Dash: 19-20
+                            ]
+                            
+                            for time_var in time_variations:
+                                candidate_names = [
+                                    f'{date_part}_{time_var}_curr_out.log',
+                                    f'{date_part}_{time_var}_out.log',
+                                ]
+                                
+                                for candidate_name in candidate_names:
+                                    candidate_path = os.path.join(parent_dir, candidate_name)
+                                    print(f'Testing candidate: {candidate_name}')
+                                    if os.path.exists(candidate_path):
+                                        print(f'✓ Found matching file with different format: {candidate_name}')
+                                        log_files['logfile'].append(candidate_path)
+                                        return log_files
+                                    else:
+                                        print(f'✗ Candidate not found: {candidate_name}')
+                        elif len(date_time_parts) >= 2:  # Handle format like ['2025-08-24', '19:20']
+                            date_part = date_time_parts[0]  # 2025-08-24
+                            time_part = date_time_parts[1]  # Could be 19:20, 19_20, etc.
+                            
+                            # Try different time separators by converting existing format
                             time_variations = [
                                 time_part,  # Original format
                                 time_part.replace('_', ':'),  # 19_20 -> 19:20
@@ -263,10 +290,13 @@ def find_log_files(model_name, logs_path, direct_log_file=None):
                                 
                                 for candidate_name in candidate_names:
                                     candidate_path = os.path.join(parent_dir, candidate_name)
+                                    print(f'Testing candidate: {candidate_name}')
                                     if os.path.exists(candidate_path):
-                                        print(f'Found matching file with different format: {candidate_name}')
+                                        print(f'✓ Found matching file with different format: {candidate_name}')
                                         log_files['logfile'].append(candidate_path)
                                         return log_files
+                                    else:
+                                        print(f'✗ Candidate not found: {candidate_name}')
                             
                 except PermissionError:
                     print(f'Permission denied accessing directory: {parent_dir}')
