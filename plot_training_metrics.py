@@ -70,8 +70,8 @@ optional.add_argument('--save_format', nargs='+', default=['png'],
                       help='Output format(s) for figures. Default: png')
 optional.add_argument('--dpi', type=int, default=300,
                       help='DPI for raster output formats. Default: 300')
-optional.add_argument('--figsize', nargs=2, type=float, default=[15, 10],
-                      help='Figure size in inches (width height). Default: 15 10')
+optional.add_argument('--figsize', nargs=2, type=float, default=[12, 4],
+                      help='Figure size in inches (width height). Default: 12 4')
 optional.add_argument('--style', type=str, default='publication',
                       choices=['publication', 'seaborn', 'ggplot', 'classic'],
                       help='Plot style. Default: publication')
@@ -549,12 +549,16 @@ def plot_metric_subplot(ax, df, metric, title, ylabel, include_val=False, smooth
     # Set axis limits
     if MAX_EPOCHS:
         ax.set_xlim(0, MAX_EPOCHS)
+    
+    # Cap loss y-axis to 0-3 for better visualization
+    if metric == 'loss':
+        ax.set_ylim(0, 3)
 
 def create_combined_figure(df):
     """Create a combined figure with multiple metric subplots."""
     
     metrics_config = {
-        'loss': {'title': 'Training Loss', 'ylabel': 'Loss'},
+        'loss': {'title': 'Loss', 'ylabel': 'Loss'},
         'accuracy': {'title': 'Accuracy', 'ylabel': 'Accuracy'},
         'f1_micro': {'title': 'Micro F1 Score', 'ylabel': 'F1 Score'},
         'mcc': {'title': 'Matthews Correlation Coefficient', 'ylabel': 'MCC'},
@@ -597,7 +601,7 @@ def create_separate_figures(df):
     """Create separate figures for each metric."""
     
     metrics_config = {
-        'loss': {'title': 'Training Loss', 'ylabel': 'Loss'},
+        'loss': {'title': 'Loss', 'ylabel': 'Loss'},
         'accuracy': {'title': 'Accuracy', 'ylabel': 'Accuracy'},
         'f1_micro': {'title': 'Micro F1 Score', 'ylabel': 'F1 Score'},
         'mcc': {'title': 'Matthews Correlation Coefficient', 'ylabel': 'MCC'},
